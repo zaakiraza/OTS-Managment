@@ -1,0 +1,136 @@
+import mongoose from "mongoose";
+
+const employeeSchema = new mongoose.Schema(
+  {
+    employeeId: {
+      type: String,
+      required: [true, "Employee ID is required"],
+      unique: true,
+      uppercase: true,
+    },
+    biometricId: {
+      type: String,
+      unique: true,
+      sparse: true,
+      trim: true,
+    },
+    name: {
+      type: String,
+      required: [true, "Name is required"],
+      trim: true,
+    },
+    email: {
+      type: String,
+      required: [true, "Email is required"],
+      unique: true,
+      lowercase: true,
+      trim: true,
+    },
+    phone: {
+      type: String,
+      required: [true, "Phone is required"],
+      trim: true,
+    },
+    cnic: {
+      type: String,
+      required: [true, "CNIC is required"],
+      unique: true,
+      trim: true,
+      validate: {
+        validator: function(v) {
+          return /^\d{5}-\d{7}-\d{1}$/.test(v);
+        },
+        message: props => `${props.value} is not a valid CNIC format! Use format: XXXXX-XXXXXXX-X`
+      }
+    },
+    department: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Department",
+      required: [true, "Department is required"],
+    },
+    position: {
+      type: String,
+      required: [true, "Position is required"],
+    },
+    salary: {
+      monthlySalary: {
+        type: Number,
+        required: [true, "Monthly salary is required"],
+        min: 0,
+      },
+      currency: {
+        type: String,
+        default: "PKR",
+      },
+    },
+    workSchedule: {
+      checkInTime: {
+        type: String,
+        required: [true, "Check-in time is required"],
+        default: "09:00",
+      },
+      checkOutTime: {
+        type: String,
+        required: [true, "Check-out time is required"],
+        default: "17:00",
+      },
+      workingDaysPerWeek: {
+        type: Number,
+        default: 5,
+        min: 1,
+        max: 7,
+      },
+      weeklyOffs: {
+        type: [String],
+        default: ["Saturday", "Sunday"],
+        enum: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
+      },
+      workingHoursPerWeek: {
+        type: Number,
+        default: 40,
+      },
+    },
+    joiningDate: {
+      type: Date,
+      required: [true, "Joining date is required"],
+    },
+    address: {
+      street: String,
+      city: String,
+      state: String,
+      country: String,
+      zipCode: String,
+    },
+    emergencyContact: {
+      name: String,
+      relationship: String,
+      phone: String,
+    },
+    documents: {
+      idProof: String,
+      photo: String,
+      resume: String,
+    },
+    isActive: {
+      type: Boolean,
+      default: true,
+    },
+    createdBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+    modifiedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+  },
+  {
+    timestamps: true,
+  }
+);
+
+const Employee = mongoose.model("Employee", employeeSchema);
+
+export default Employee;
