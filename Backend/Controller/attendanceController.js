@@ -2,6 +2,117 @@ import Attendance from "../Model/Attendance.js";
 import User from "../Model/User.js";
 import Employee from "../Model/Employee.js";
 
+// Biometric Device Check-in (ZKTeco SDK Integration)
+export const deviceCheckIn = async (req, res) => {
+  try {
+    const { biometricId, timestamp, deviceId } = req.body;
+
+    if (!biometricId) {
+      return res.status(400).json({
+        success: false,
+        message: "Biometric ID is required",
+      });
+    }
+
+    // Find employee by biometric ID
+    const employee = await Employee.findOne({ 
+      biometricId: biometricId.toString().trim(),
+      isActive: true 
+    }).populate('department', 'name leverageTime')
+      .populate('workSchedule');
+
+    if (!employee) {
+      return res.status(404).json({
+        success: false,
+        message: `Employee with biometric ID ${biometricId} not found`,
+      });
+    }
+
+    // Use provided timestamp or current time
+    const punchTime = timestamp ? new Date(timestamp) : new Date();
+    
+    // Get date at midnight in UTC for consistent storage
+    // Extract year, month, day from local time but create UTC date
+    const localYear = punchTime.getFullYear();
+    const localMonth = punchTime.getMonth();
+    const localDay = punchTime.getDate();
+    const dateOnly = new Date(Date.UTC(localYear, localMonth, localDay, 0, 0, 0, 0));
+
+    // Find today's attendance record
+    let attendance = await Attendance.findOne({
+      userId: employee.employeeId,
+      date: {
+        $gte: dateOnly,
+        $lt: new Date(dateOnly.getTime() + 24 * 60 * 60 * 1000),
+      },
+    });
+
+    let punchType = '';
+    
+    if (!attendance) {
+      // First punch of the day - create new record with check-in
+      attendance = await Attendance.create({
+        employee: employee._id,
+        userId: employee.employeeId,
+        date: dateOnly,
+        checkIn: punchTime,
+        checkOut: null,
+        deviceId: deviceId || '',
+        isManualEntry: false,
+      });
+      punchType = 'CHECK-IN';
+    } else if (!attendance.checkIn) {
+      // Has record but no check-in (edge case)
+      attendance.checkIn = punchTime;
+      if (deviceId) attendance.deviceId = deviceId;
+      await attendance.save();
+      punchType = 'CHECK-IN';
+    } else if (!attendance.checkOut) {
+      // Already has check-in, this is check-out
+      attendance.checkOut = punchTime;
+      await attendance.save();
+      punchType = 'CHECK-OUT';
+    } else {
+      // Already checked in and out today
+      return res.status(400).json({
+        success: false,
+        message: "Already checked in and checked out for today",
+        data: {
+          employeeName: employee.name,
+          employeeId: employee.employeeId,
+          checkIn: attendance.checkIn,
+          checkOut: attendance.checkOut,
+        },
+      });
+    }
+
+    // Populate the response
+    const populatedAttendance = await Attendance.findById(attendance._id)
+      .populate("employee", "name employeeId email department position");
+
+    res.status(200).json({
+      success: true,
+      message: `${punchType} recorded successfully`,
+      punchType,
+      data: {
+        employee: {
+          name: employee.name,
+          employeeId: employee.employeeId,
+          department: employee.department?.name,
+        },
+        attendance: populatedAttendance,
+        timestamp: punchTime,
+      },
+    });
+  } catch (error) {
+    console.error("Device check-in error:", error);
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
 // Mark attendance (from biometric device or manual)
 export const markAttendance = async (req, res) => {
   try {

@@ -95,6 +95,7 @@ function Organization() {
   const [employeeForm, setEmployeeForm] = useState({
     name: "",
     employeeId: "",
+    biometricId: "",
     department: "",
     email: "",
     phone: "",
@@ -605,6 +606,7 @@ function Organization() {
     setEmployeeForm({
       department: employee.department?._id || "",
       employeeId: employee.employeeId,
+      biometricId: employee.biometricId || "",
       name: employee.name,
       email: employee.email,
       phone: employee.phone || "",
@@ -634,6 +636,7 @@ function Organization() {
     setEmployeeForm({
       name: "",
       employeeId: "",
+      biometricId: "",
       department: "",
       email: "",
       phone: "",
@@ -2013,6 +2016,22 @@ function Organization() {
                     }
                     placeholder="Auto-generated if empty"
                   />
+                </div>
+                <div className="form-group">
+                  <label>Biometric ID *</label>
+                  <input
+                    required
+                    type="text"
+                    value={employeeForm.biometricId}
+                    onChange={(e) =>
+                      setEmployeeForm({
+                        ...employeeForm,
+                        biometricId: e.target.value.trim(),
+                      })
+                    }
+                    placeholder="ID from biometric device (e.g., 123)"
+                  />
+                  <small>Enter the enrollment number from ZKTeco device</small>
                 </div>
                 <div className="form-group">
                   <label>Name *</label>

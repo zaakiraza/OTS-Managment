@@ -17,6 +17,7 @@ import reportRoutes from "./Routes/reportRoutes.js";
 import biometricRoutes from "./Routes/biometricRoutes.js";
 import importRoutes from "./Routes/importRoutes.js";
 import assetRoutes from "./Routes/assetRoutes.js";
+import iclockRoutes from "./Routes/iclockRoutes.js";
 import { connectToDevice, startPolling } from "./Utils/zktecoDevice.js";
 
 dotenv.config();
@@ -30,14 +31,16 @@ connectDB();
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true })); // For form-data
+app.use(express.text({ type: 'application/octet-stream' })); // For iClock protocol
+app.use(express.raw({ type: 'application/octet-stream', limit: '10mb' })); // Raw data
 
 // Log all incoming requests
-// app.use((req, res, next) => {
-//   console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
-//   console.log("Headers:", req.headers);
-//   console.log("Body:", req.body);
-//   next();
-// });
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+  console.log("Headers:", req.headers);
+  console.log("Body:", req.body);
+  next();
+});
 
 // Health check
 app.get("/health", (req, res) => {
@@ -60,6 +63,7 @@ app.use("/api/reports", reportRoutes);
 app.use("/api/biometric", biometricRoutes);
 app.use("/api/import", importRoutes);
 app.use("/api/assets", assetRoutes);
+app.use("/iclock", iclockRoutes);
 
 // 404 Handler
 app.use((req, res) => {

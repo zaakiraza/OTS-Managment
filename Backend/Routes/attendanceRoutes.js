@@ -8,10 +8,14 @@ import {
   updateAttendance,
   deleteAttendance,
   getAttendanceStats,
+  deviceCheckIn,
 } from "../Controller/attendanceController.js";
 import { verifyToken, hasRole } from "../Middleware/auth.js";
 
 const router = express.Router();
+
+// Public endpoint for ZKTeco biometric device SDK
+router.post("/device-checkin", deviceCheckIn);
 
 // Public endpoint for biometric device to mark attendance
 router.post("/mark", markAttendance);
