@@ -20,6 +20,7 @@ import assetRoutes from "./Routes/assetRoutes.js";
 import iclockRoutes from "./Routes/iclockRoutes.js";
 import { connectToDevice, startPolling } from "./Utils/zktecoDevice.js";
 import { scheduleAbsenteeCheck } from "./Utils/markAbsentees.js";
+import logger from "./Utils/logger.js";
 
 dotenv.config();
 
@@ -76,7 +77,7 @@ app.use((req, res) => {
 
 // Error Handler
 app.use((err, req, res, next) => {
-  console.error(err.stack);
+  logger.error(`Unhandled error: ${err.message}`, { stack: err.stack });
   res.status(500).json({
     success: false,
     message: "Internal server error",
@@ -85,20 +86,20 @@ app.use((err, req, res, next) => {
 });
 
 app.listen(process.env.PORT, async () => {
-  console.log(`Server is running on port ${process.env.PORT}`);
+  logger.info(`Server is running on port ${process.env.PORT}`);
   
   // Connect to ZKTeco biometric device and start polling
-  console.log('\n🔧 Initializing ZKTeco biometric integration...');
+  logger.info('Initializing ZKTeco biometric integration...');
   const connected = await connectToDevice();
   if (connected) {
     startPolling();
   } else {
-    console.log('⚠️ ZKTeco device not connected. Will retry...\n');
+    logger.warn('ZKTeco device not connected. Will retry...');
   }
   
   // Schedule daily absentee check at 11:59 PM
   scheduleAbsenteeCheck("23:59");
-  console.log('✅ Daily absentee check scheduled\n');
+  logger.info('Daily absentee check scheduled');
 });
 
 export default app;

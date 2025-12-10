@@ -170,13 +170,20 @@ function Attendance() {
     });
   };
 
-  const formatTime = (date) => {
-    if (!date) return "-";
-    // Extract time directly from UTC string without timezone conversion
-    const dateStr = new Date(date).toISOString(); // e.g., "2025-12-09T06:57:27.000Z"
-    const timePart = dateStr.split('T')[1]; // "06:57:27.000Z"
-    const [hours, minutes] = timePart.split(':');
-    return `${hours}:${minutes}`;
+  const formatTime = (time) => {
+    if (!time) return "-";
+    
+    try {
+      const date = new Date(time);
+      // Use toLocaleTimeString to get local time in HH:MM format
+      return date.toLocaleTimeString("en-US", {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+      });
+    } catch (error) {
+      return "-";
+    }
   };
 
   const formatDate = (date) => {
@@ -216,12 +223,25 @@ function Attendance() {
 
   const handleEdit = (record) => {
     setSelectedRecord(record);
-    const checkInTime = record.checkIn
-      ? new Date(record.checkIn).toTimeString().slice(0, 5)
-      : "";
-    const checkOutTime = record.checkOut
-      ? new Date(record.checkOut).toTimeString().slice(0, 5)
-      : "";
+    
+    // Extract time in HH:MM format from Date objects
+    let checkInTime = "";
+    let checkOutTime = "";
+    
+    if (record.checkIn) {
+      const date = new Date(record.checkIn);
+      const hours = String(date.getHours()).padStart(2, '0');
+      const minutes = String(date.getMinutes()).padStart(2, '0');
+      checkInTime = `${hours}:${minutes}`;
+    }
+    
+    if (record.checkOut) {
+      const date = new Date(record.checkOut);
+      const hours = String(date.getHours()).padStart(2, '0');
+      const minutes = String(date.getMinutes()).padStart(2, '0');
+      checkOutTime = `${hours}:${minutes}`;
+    }
+    
     const workingHours = record.workingHours || "";
     setEditFormData({
       checkIn: checkInTime,
@@ -243,10 +263,14 @@ function Attendance() {
       };
 
       if (editFormData.checkIn) {
-        submitData.checkIn = `${dateStr}T${editFormData.checkIn}:00`;
+        // Create full ISO datetime string (YYYY-MM-DDTHH:MM:SS)
+        const timeStr = editFormData.checkIn.length === 5 ? `${editFormData.checkIn}:00` : editFormData.checkIn;
+        submitData.checkIn = `${dateStr}T${timeStr}`;
       }
       if (editFormData.checkOut) {
-        submitData.checkOut = `${dateStr}T${editFormData.checkOut}:00`;
+        // Create full ISO datetime string (YYYY-MM-DDTHH:MM:SS)
+        const timeStr = editFormData.checkOut.length === 5 ? `${editFormData.checkOut}:00` : editFormData.checkOut;
+        submitData.checkOut = `${dateStr}T${timeStr}`;
       }
       if (editFormData.workingHours) {
         submitData.workingHours = parseFloat(editFormData.workingHours);
@@ -277,14 +301,13 @@ function Attendance() {
     try {
       setLoading(true);
 
-      // Construct proper datetime strings without timezone conversion
       const submitData = {
         userId: manualFormData.userId,
         date: `${manualFormData.date}T00:00:00`,
         remarks: manualFormData.remarks,
       };
 
-      // Only add checkIn/checkOut if provided (keep as local time)
+      // Send full ISO datetime strings (YYYY-MM-DDTHH:MM:SS)
       if (manualFormData.checkIn) {
         submitData.checkIn = `${manualFormData.date}T${manualFormData.checkIn}:00`;
       }

@@ -129,6 +129,11 @@ const employeeSchema = new mongoose.Schema(
   }
 );
 
+// Indexes for better query performance
+employeeSchema.index({ department: 1, isActive: 1 }); // For department-based queries
+employeeSchema.index({ isActive: 1 }); // For filtering active employees
+// Note: biometricId already has unique index from schema definition
+
 const Employee = mongoose.model("Employee", employeeSchema);
 
 export default Employee;

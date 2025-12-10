@@ -2,6 +2,7 @@ import mongoose from "mongoose";
 import dotenv from "dotenv";
 import Role from "../Model/Role.js";
 import User from "../Model/User.js";
+import logger from "./logger.js";
 
 dotenv.config();
 
@@ -64,7 +65,7 @@ const seedRoles = async () => {
 
     process.exit(0);
   } catch (error) {
-    console.error("Error seeding roles:", error);
+    logger.error(`Error seeding roles: ${error.message}`, { stack: error.stack });
     process.exit(1);
   }
 };

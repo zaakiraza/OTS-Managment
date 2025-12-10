@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { TIME, ATTENDANCE } from "../Config/constants.js";
 
 const attendanceSchema = new mongoose.Schema(
   {
@@ -57,14 +58,37 @@ const attendanceSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
+    toJSON: { 
+      virtuals: true,
+      getters: true,
+      transform: function(doc, ret) {
+        // Always include checkIn and checkOut fields, even if null/undefined
+        ret.checkIn = doc.checkIn || null;
+        ret.checkOut = doc.checkOut || null;
+        return ret;
+      }
+    },
+    toObject: { 
+      virtuals: true,
+      getters: true,
+      transform: function(doc, ret) {
+        ret.checkIn = doc.checkIn || null;
+        ret.checkOut = doc.checkOut || null;
+        return ret;
+      }
+    }
   }
 );
 
 // Calculate working hours before saving
 attendanceSchema.pre("save", async function () {
   if (this.checkIn && this.checkOut) {
-    const diffMs = this.checkOut - this.checkIn;
-    this.workingHours = diffMs / (1000 * 60 * 60); // Convert to hours
+    // Ensure checkIn and checkOut are Date objects
+    const checkInDate = this.checkIn instanceof Date ? this.checkIn : new Date(this.checkIn);
+    const checkOutDate = this.checkOut instanceof Date ? this.checkOut : new Date(this.checkOut);
+    
+    const diffMs = checkOutDate - checkInDate;
+    this.workingHours = diffMs / TIME.ONE_HOUR; // Convert to hours
     
     // Find the employee to get their scheduled times and daily working hours
     let employee = null;
@@ -74,26 +98,26 @@ attendanceSchema.pre("save", async function () {
     
     if (employee) {
       // Get department leverage time settings
-      const checkInLeverage = employee.department?.leverageTime?.checkInMinutes || 15;
-      const checkOutLeverage = employee.department?.leverageTime?.checkOutMinutes || 10;
+      const checkInLeverage = employee.department?.leverageTime?.checkInMinutes || ATTENDANCE.DEFAULT_CHECK_IN_LEVERAGE;
+      const checkOutLeverage = employee.department?.leverageTime?.checkOutMinutes || ATTENDANCE.DEFAULT_CHECK_OUT_LEVERAGE;
       
       // Calculate daily working hours (weekly hours / working days per week)
       const dailyHours = employee.workSchedule.workingHoursPerWeek / employee.workSchedule.workingDaysPerWeek;
-      const halfDayThreshold = dailyHours / 2;
+      const halfDayThreshold = dailyHours * ATTENDANCE.HALF_DAY_MULTIPLIER;
       
       // Get scheduled check-in and check-out times
       const [scheduleInHour, scheduleInMinute] = employee.workSchedule.checkInTime.split(":").map(Number);
       const [scheduleOutHour, scheduleOutMinute] = employee.workSchedule.checkOutTime.split(":").map(Number);
       
-      const scheduledCheckIn = new Date(this.checkIn);
+      const scheduledCheckIn = new Date();
       scheduledCheckIn.setHours(scheduleInHour, scheduleInMinute, 0, 0);
       
-      const scheduledCheckOut = new Date(this.checkOut);
+      const scheduledCheckOut = new Date();
       scheduledCheckOut.setHours(scheduleOutHour, scheduleOutMinute, 0, 0);
       
       // Calculate time differences in minutes
-      const checkInDiffMinutes = (this.checkIn - scheduledCheckIn) / (1000 * 60);
-      const checkOutDiffMinutes = (scheduledCheckOut - this.checkOut) / (1000 * 60);
+      const checkInDiffMinutes = (checkInDate - scheduledCheckIn) / TIME.ONE_MINUTE;
+      const checkOutDiffMinutes = (scheduledCheckOut - checkOutDate) / TIME.ONE_MINUTE;
       
       // Check if employee arrived late or left early based on leverage time
       const arrivedLate = checkInDiffMinutes > checkInLeverage;
@@ -125,6 +149,12 @@ attendanceSchema.pre("save", async function () {
     }
   }
 });
+
+// Indexes for better query performance
+attendanceSchema.index({ userId: 1, date: 1 }); // For quick lookup by user and date
+attendanceSchema.index({ employee: 1, date: 1 }); // For employee-based queries
+attendanceSchema.index({ date: 1, status: 1 }); // For status-based reporting
+attendanceSchema.index({ date: 1 }); // For date range queries
 
 const Attendance = mongoose.model("Attendance", attendanceSchema);
 

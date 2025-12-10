@@ -1,6 +1,8 @@
 import Attendance from "../Model/Attendance.js";
 import User from "../Model/User.js";
 import Employee from "../Model/Employee.js";
+import logger from "../Utils/logger.js";
+import { TIME } from "../Config/constants.js";
 
 // Biometric Device Check-in (ZKTeco SDK Integration)
 export const deviceCheckIn = async (req, res) => {
@@ -43,7 +45,7 @@ export const deviceCheckIn = async (req, res) => {
       userId: employee.employeeId,
       date: {
         $gte: dateOnly,
-        $lt: new Date(dateOnly.getTime() + 24 * 60 * 60 * 1000),
+        $lt: new Date(dateOnly.getTime() + TIME.ONE_DAY),
       },
     });
 
@@ -105,7 +107,7 @@ export const deviceCheckIn = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("Device check-in error:", error);
+    logger.error(`Device check-in error: ${error.message}`, { stack: error.stack });
     res.status(500).json({
       success: false,
       message: error.message,
@@ -140,7 +142,7 @@ export const markAttendance = async (req, res) => {
       userId,
       date: {
         $gte: today,
-        $lt: new Date(today.getTime() + 24 * 60 * 60 * 1000),
+        $lt: new Date(today.getTime() + TIME.ONE_DAY),
       },
     });
 
@@ -226,6 +228,7 @@ export const getAllAttendance = async (req, res) => {
     }
 
     const attendanceRecords = await Attendance.find(filter)
+      .select('+checkIn +checkOut') // Explicitly include these fields
       .populate("user", "name userId email phone role")
       .populate("employee", "name employeeId email phone department")
       .populate("modifiedBy", "name")
@@ -288,8 +291,10 @@ export const getTodayAttendance = async (req, res) => {
         $lt: tomorrow
       }
     })
+      .select('+checkIn +checkOut') // Explicitly include these fields
       .populate("user", "name userId email phone role")
       .populate("employee", "name employeeId email phone department")
+      .populate("modifiedBy", "name")
       .sort({ checkIn: -1 });
 
     res.status(200).json({
@@ -319,9 +324,33 @@ export const updateAttendance = async (req, res) => {
       });
     }
 
-    // Update fields
-    if (checkIn) attendance.checkIn = new Date(checkIn);
-    if (checkOut) attendance.checkOut = new Date(checkOut);
+    // Update fields - Convert time strings to Date objects
+    if (checkIn) {
+      // If checkIn is a time string (HH:MM:SS or HH:MM), combine with date
+      if (typeof checkIn === 'string' && /^\d{1,2}:\d{2}(:\d{2})?$/.test(checkIn)) {
+        const attendanceDate = new Date(attendance.date);
+        const [hours, minutes, seconds = 0] = checkIn.split(':').map(Number);
+        attendanceDate.setHours(hours, minutes, seconds, 0);
+        attendance.checkIn = attendanceDate;
+      } else {
+        // It's already a full datetime string or Date object
+        attendance.checkIn = new Date(checkIn);
+      }
+    }
+    
+    if (checkOut) {
+      // If checkOut is a time string (HH:MM:SS or HH:MM), combine with date
+      if (typeof checkOut === 'string' && /^\d{1,2}:\d{2}(:\d{2})?$/.test(checkOut)) {
+        const attendanceDate = new Date(attendance.date);
+        const [hours, minutes, seconds = 0] = checkOut.split(':').map(Number);
+        attendanceDate.setHours(hours, minutes, seconds, 0);
+        attendance.checkOut = attendanceDate;
+      } else {
+        // It's already a full datetime string or Date object
+        attendance.checkOut = new Date(checkOut);
+      }
+    }
+    
     if (status) attendance.status = status;
     if (remarks !== undefined) attendance.remarks = remarks;
     if (workingHours !== undefined) attendance.workingHours = workingHours;
@@ -413,18 +442,30 @@ export const createManualAttendance = async (req, res) => {
       });
     }
 
-    // Parse checkIn and checkOut times - keep as local times by NOT using UTC
+    // Convert checkIn and checkOut to proper Date objects
     let checkInDate = null;
     let checkOutDate = null;
     
     if (checkIn) {
-      // Simply parse the ISO string which will be treated as local time
-      checkInDate = new Date(checkIn);
+      // If checkIn is a time string (HH:MM:SS or HH:MM), combine with attendance date
+      if (typeof checkIn === 'string' && /^\d{1,2}:\d{2}(:\d{2})?$/.test(checkIn)) {
+        const [hours, minutes, seconds = 0] = checkIn.split(':').map(Number);
+        checkInDate = new Date(Date.UTC(year, month - 1, day, hours, minutes, seconds, 0));
+      } else {
+        // It's already a full datetime string or Date object
+        checkInDate = new Date(checkIn);
+      }
     }
     
     if (checkOut) {
-      // Simply parse the ISO string which will be treated as local time
-      checkOutDate = new Date(checkOut);
+      // If checkOut is a time string (HH:MM:SS or HH:MM), combine with attendance date
+      if (typeof checkOut === 'string' && /^\d{1,2}:\d{2}(:\d{2})?$/.test(checkOut)) {
+        const [hours, minutes, seconds = 0] = checkOut.split(':').map(Number);
+        checkOutDate = new Date(Date.UTC(year, month - 1, day, hours, minutes, seconds, 0));
+      } else {
+        // It's already a full datetime string or Date object
+        checkOutDate = new Date(checkOut);
+      }
     }
 
     const attendanceData = {

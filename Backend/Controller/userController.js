@@ -1,5 +1,6 @@
 import User from "../Model/User.js";
 import Role from "../Model/Role.js";
+import { SECURITY, PAGINATION } from "../Config/constants.js";
 
 // Create a new user
 export const createUser = async (req, res) => {
@@ -161,7 +162,7 @@ export const updateUser = async (req, res) => {
     // Hash password if provided
     if (password) {
       const bcrypt = await import("bcrypt");
-      updateData.password = await bcrypt.hash(password, 10);
+      updateData.password = await bcrypt.hash(password, SECURITY.BCRYPT_SALT_ROUNDS);
     }
 
     const user = await User.findByIdAndUpdate(

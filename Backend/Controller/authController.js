@@ -2,6 +2,7 @@ import User from "../Model/User.js";
 import Role from "../Model/Role.js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import { SECURITY } from "../Config/constants.js";
 
 // Login user
 export const login = async (req, res) => {
@@ -121,7 +122,7 @@ export const changePassword = async (req, res) => {
     }
 
     // Hash and update new password
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    const hashedPassword = await bcrypt.hash(newPassword, SECURITY.BCRYPT_SALT_ROUNDS);
     user.password = hashedPassword;
     await user.save();
 

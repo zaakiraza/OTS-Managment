@@ -1,8 +1,48 @@
+import { useState, useEffect } from "react";
 import SideBar from "../../Components/SideBar/SideBar";
+import api from "../../Config/Api";
 import "./Dashboard.css";
 
 function Dashboard() {
   const user = JSON.parse(localStorage.getItem("user") || "{}");
+  const [stats, setStats] = useState({
+    totalUsers: 0,
+    totalRoles: 0,
+    attendanceToday: 0,
+    activeUsers: 0,
+    loading: true,
+  });
+
+  useEffect(() => {
+    fetchDashboardStats();
+  }, []);
+
+  const fetchDashboardStats = async () => {
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      
+      // Fetch all stats in parallel
+      const [usersRes, rolesRes, attendanceRes] = await Promise.all([
+        api.get("/users"),
+        api.get("/roles"),
+        api.get(`/attendance?date=${today}`),
+      ]);
+
+      const users = usersRes.data.data || [];
+      const activeUsersCount = users.filter(u => u.isActive).length;
+
+      setStats({
+        totalUsers: users.length,
+        totalRoles: rolesRes.data.data?.length || 0,
+        attendanceToday: attendanceRes.data.data?.length || 0,
+        activeUsers: activeUsersCount,
+        loading: false,
+      });
+    } catch (error) {
+      console.error("Error fetching dashboard stats:", error);
+      setStats(prev => ({ ...prev, loading: false }));
+    }
+  };
 
   return (
     <div className="dashboard-layout">
@@ -19,7 +59,9 @@ function Dashboard() {
               <div className="stat-icon">👥</div>
               <div className="stat-info">
                 <h3>Total Users</h3>
-                <p className="stat-value">0</p>
+                <p className="stat-value">
+                  {stats.loading ? "..." : stats.totalUsers}
+                </p>
               </div>
             </div>
 
@@ -27,7 +69,9 @@ function Dashboard() {
               <div className="stat-icon">🔑</div>
               <div className="stat-info">
                 <h3>Total Roles</h3>
-                <p className="stat-value">2</p>
+                <p className="stat-value">
+                  {stats.loading ? "..." : stats.totalRoles}
+                </p>
               </div>
             </div>
 
@@ -35,7 +79,9 @@ function Dashboard() {
               <div className="stat-icon">📋</div>
               <div className="stat-info">
                 <h3>Attendance Today</h3>
-                <p className="stat-value">0</p>
+                <p className="stat-value">
+                  {stats.loading ? "..." : stats.attendanceToday}
+                </p>
               </div>
             </div>
 
@@ -43,7 +89,9 @@ function Dashboard() {
               <div className="stat-icon">✅</div>
               <div className="stat-info">
                 <h3>Active Users</h3>
-                <p className="stat-value">1</p>
+                <p className="stat-value">
+                  {stats.loading ? "..." : stats.activeUsers}
+                </p>
               </div>
             </div>
           </div>

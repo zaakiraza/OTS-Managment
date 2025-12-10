@@ -1,11 +1,13 @@
 import Salary from "../Model/Salary.js";
 import Employee from "../Model/Employee.js";
 import Attendance from "../Model/Attendance.js";
+import logger from "../Utils/logger.js";
+import { SALARY, ATTENDANCE } from "../Config/constants.js";
 
 // Calculate salary for a specific month
 export const calculateSalary = async (req, res) => {
   try {
-    const { employeeId, month, year } = req.body;
+    const { employeeId, month, year, criteria } = req.body;
 
     // Find employee
     const employee = await Employee.findOne({ employeeId, isActive: true });
@@ -16,18 +18,11 @@ export const calculateSalary = async (req, res) => {
       });
     }
 
-    // Check if salary already calculated
-    const existingSalary = await Salary.findOne({
-      employee: employee._id,
-      month,
-      year,
-    });
-
-    if (existingSalary) {
+    // Check if employee has salary information
+    if (!employee.salary || !employee.salary.monthlySalary || employee.salary.monthlySalary <= 0) {
       return res.status(400).json({
         success: false,
-        message: "Salary already calculated for this month",
-        data: existingSalary,
+        message: `Employee ${employeeId} has no salary set (${employee.salary?.monthlySalary || 0}). Please update employee salary first.`,
       });
     }
 
@@ -53,39 +48,96 @@ export const calculateSalary = async (req, res) => {
       date: { $gte: startDate, $lte: endDate },
     });
 
+    logger.info(`Salary calculation for ${employeeId} - Month: ${month}/${year}, Found ${attendanceRecords.length} attendance records`);
+    logger.debug(`Date range: ${startDate.toISOString()} to ${endDate.toISOString()}`);
+    if (attendanceRecords.length > 0) {
+      logger.debug(`Sample records: ${JSON.stringify(attendanceRecords.slice(0, 3).map(r => ({
+        date: r.date,
+        status: r.status,
+        userId: r.userId
+      })))}`);
+    }
+
     // Calculate attendance statistics
     let presentDays = 0;
     let absentDays = 0;
     let halfDays = 0;
     let lateDays = 0;
+    let earlyArrivals = 0;
 
     attendanceRecords.forEach((record) => {
-      if (record.status === "present") presentDays++;
+      if (record.status === "present" || record.status === "early-arrival") {
+        presentDays++;
+        if (record.status === "early-arrival") earlyArrivals++;
+      }
       else if (record.status === "absent") absentDays++;
       else if (record.status === "half-day") halfDays++;
-      else if (record.status === "late") lateDays++;
+      else if (record.status === "late" || record.status === "late-early-arrival") {
+        lateDays++;
+        presentDays++; // Late is still considered present
+        if (record.status === "late-early-arrival") earlyArrivals++;
+      }
     });
 
-    // Calculate total worked days (half-day counts as 0.5)
-    const totalWorkedDays = presentDays + halfDays * 0.5 + lateDays;
+    logger.debug(`Attendance stats: Present=${presentDays}, Absent=${absentDays}, Late=${lateDays}, HalfDays=${halfDays}, EarlyArrivals=${earlyArrivals}`);
 
-    // Calculate per day salary
-    const perDaySalary = employee.salary.monthlySalary / totalWorkingDays;
+    let totalDeductions = 0;
+    let bonus = 0;
+    const baseSalary = employee.salary.monthlySalary;
 
-    // Calculate deductions
-    const absentDeduction = (totalWorkingDays - presentDays - halfDays * 0.5 - lateDays) * perDaySalary;
-    const lateDeduction = lateDays * (perDaySalary * 0.1); // 10% deduction for late days
-    const totalDeductions = absentDeduction + lateDeduction;
+    // Calculate based on attendance marking method
+    if (criteria.attendanceMarkingMethod === 'weeklyHours') {
+      // Weekly hours method - deduct per missing hour
+      // This would require tracking actual hours worked
+      // For now, using a simplified calculation
+      const expectedWeeklyHours = 40; // Standard work week
+      const expectedMonthlyHours = expectedWeeklyHours * 4; // Approximate
+      // You'd need to calculate actual hours from attendance records
+      // For now, assume 8 hours per present day
+      const actualHours = presentDays * 8 + halfDays * 4;
+      const missingHours = Math.max(0, expectedMonthlyHours - actualHours);
+      totalDeductions = missingHours * (criteria.hourlyDeductionRate || 0);
+    } else {
+      // Check-in/checkout method
+      // Apply late penalty
+      const lateAsAbsent = Math.floor(lateDays / (criteria.lateThreshold || SALARY.DEFAULT_LATE_THRESHOLD));
+      const totalAbsents = absentDays + lateAsAbsent;
+      
+      // Apply early arrival bonus
+      const earlyBonus = criteria.earlyArrivalBonus > 0 
+        ? Math.floor(earlyArrivals / criteria.earlyArrivalBonus) 
+        : 0;
+      
+      // Calculate deductions
+      const perDaySalary = baseSalary / totalWorkingDays;
+      const absentDeduction = totalAbsents * (criteria.absentDeduction || perDaySalary);
+      totalDeductions = absentDeduction;
+      
+      // Add bonus days to present
+      presentDays += earlyBonus;
+    }
+
+    // Perfect attendance bonus
+    if (criteria.perfectAttendanceBonusEnabled) {
+      const attendancePercentage = (presentDays / totalWorkingDays) * SALARY.PERCENTAGE_MULTIPLIER;
+      if (attendancePercentage >= (criteria.perfectAttendanceThreshold || SALARY.DEFAULT_PERFECT_ATTENDANCE_THRESHOLD)) {
+        bonus = criteria.perfectAttendanceBonusAmount || 0;
+      }
+    }
+
+    // Calculate total worked days
+    const totalWorkedDays = presentDays + halfDays * ATTENDANCE.HALF_DAY_MULTIPLIER;
+    const perDaySalary = baseSalary / totalWorkingDays;
 
     // Calculate net salary
-    const netSalary = employee.salary.monthlySalary - totalDeductions;
+    const netSalary = baseSalary - totalDeductions + bonus;
 
-    const salary = await Salary.create({
+    const salaryData = {
       employee: employee._id,
       employeeId: employee.employeeId,
       month,
       year,
-      baseSalary: employee.salary.monthlySalary,
+      baseSalary: baseSalary,
       calculations: {
         totalWorkingDays,
         presentDays,
@@ -96,33 +148,54 @@ export const calculateSalary = async (req, res) => {
         perDaySalary,
       },
       deductions: {
-        absentDeduction,
-        lateDeduction,
+        absentDeduction: totalDeductions,
+        lateDeduction: 0,
         otherDeductions: 0,
         totalDeductions,
       },
       additions: {
         overtime: 0,
-        bonus: 0,
+        bonus: bonus,
         allowances: 0,
-        totalAdditions: 0,
+        totalAdditions: bonus,
       },
       netSalary,
-      status: "calculated",
+      status: "paid",
       calculatedBy: req.user._id,
-    });
+    };
 
-    const populatedSalary = await Salary.findById(salary._id).populate(
-      "employee",
-      "employeeId name email department position"
-    );
+    // Use findOneAndUpdate with upsert to prevent race conditions
+    // This atomically checks if salary exists and creates/updates in one operation
+    const salary = await Salary.findOneAndUpdate(
+      {
+        employee: employee._id,
+        month,
+        year,
+      },
+      {
+        $set: salaryData,
+      },
+      {
+        new: true,
+        upsert: true,
+        runValidators: true,
+      }
+    ).populate("employee", "employeeId name email department position");
 
     res.status(201).json({
       success: true,
       message: "Salary calculated successfully",
-      data: populatedSalary,
+      data: salary,
     });
   } catch (error) {
+    // Handle duplicate key error specifically
+    if (error.code === 11000) {
+      return res.status(400).json({
+        success: false,
+        message: "Salary already calculated for this employee and month",
+      });
+    }
+    logger.error(`Salary calculation error: ${error.message}`, { stack: error.stack });
     res.status(500).json({
       success: false,
       message: error.message,
@@ -133,30 +206,29 @@ export const calculateSalary = async (req, res) => {
 // Calculate salary for all employees
 export const calculateAllSalaries = async (req, res) => {
   try {
-    const { month, year } = req.body;
+    const { month, year, departmentId, criteria } = req.body;
 
-    const employees = await Employee.find({ isActive: true });
+    let query = { isActive: true };
+    if (departmentId) {
+      query.department = departmentId;
+    }
+
+    const employees = await Employee.find(query);
     const results = [];
     const errors = [];
 
     for (const employee of employees) {
       try {
-        // Check if already calculated
-        const existingSalary = await Salary.findOne({
-          employee: employee._id,
-          month,
-          year,
-        });
-
-        if (existingSalary) {
+        // Check if employee has salary information
+        if (!employee.salary || !employee.salary.monthlySalary || employee.salary.monthlySalary <= 0) {
           errors.push({
             employeeId: employee.employeeId,
-            message: "Already calculated",
+            message: `No salary set (${employee.salary?.monthlySalary || 0}). Update employee record first.`,
           });
           continue;
         }
 
-        // Same calculation logic as above
+        // Calculate total working days in the month
         const totalDaysInMonth = new Date(year, month, 0).getDate();
         const weeklyOffs = employee.workSchedule.weeklyOffs;
         
@@ -177,31 +249,76 @@ export const calculateAllSalaries = async (req, res) => {
           date: { $gte: startDate, $lte: endDate },
         });
 
+        logger.debug(`${employee.employeeId}: Found ${attendanceRecords.length} records`);
+
         let presentDays = 0;
         let absentDays = 0;
         let halfDays = 0;
         let lateDays = 0;
+        let earlyArrivals = 0;
 
         attendanceRecords.forEach((record) => {
-          if (record.status === "present") presentDays++;
+          if (record.status === "present" || record.status === "early-arrival") {
+            presentDays++;
+            if (record.status === "early-arrival") earlyArrivals++;
+          }
           else if (record.status === "absent") absentDays++;
           else if (record.status === "half-day") halfDays++;
-          else if (record.status === "late") lateDays++;
+          else if (record.status === "late" || record.status === "late-early-arrival") {
+            lateDays++;
+            presentDays++; // Late is still considered present
+            if (record.status === "late-early-arrival") earlyArrivals++;
+          }
         });
 
-        const totalWorkedDays = presentDays + halfDays * 0.5 + lateDays;
-        const perDaySalary = employee.salary.monthlySalary / totalWorkingDays;
-        const absentDeduction = (totalWorkingDays - presentDays - halfDays * 0.5 - lateDays) * perDaySalary;
-        const lateDeduction = lateDays * (perDaySalary * 0.1);
-        const totalDeductions = absentDeduction + lateDeduction;
-        const netSalary = employee.salary.monthlySalary - totalDeductions;
+        logger.debug(`${employee.employeeId}: Present=${presentDays}, Absent=${absentDays}, Late=${lateDays}`);
 
-        const salary = await Salary.create({
+        let totalDeductions = 0;
+        let bonus = 0;
+        const baseSalary = employee.salary.monthlySalary;
+
+        // Calculate based on attendance marking method
+        if (criteria.attendanceMarkingMethod === 'weeklyHours') {
+          // Weekly hours method
+          const expectedWeeklyHours = 40;
+          const expectedMonthlyHours = expectedWeeklyHours * 4;
+          const actualHours = presentDays * 8 + halfDays * 4;
+          const missingHours = Math.max(0, expectedMonthlyHours - actualHours);
+          totalDeductions = missingHours * (criteria.hourlyDeductionRate || 0);
+        } else {
+          // Check-in/checkout method
+          const lateAsAbsent = Math.floor(lateDays / (criteria.lateThreshold || SALARY.DEFAULT_LATE_THRESHOLD));
+          const totalAbsents = absentDays + lateAsAbsent;
+          
+          const earlyBonus = criteria.earlyArrivalBonus > 0 
+            ? Math.floor(earlyArrivals / criteria.earlyArrivalBonus) 
+            : 0;
+          
+          const perDaySalary = baseSalary / totalWorkingDays;
+          const absentDeduction = totalAbsents * (criteria.absentDeduction || perDaySalary);
+          totalDeductions = absentDeduction;
+          
+          presentDays += earlyBonus;
+        }
+
+        // Perfect attendance bonus
+        if (criteria.perfectAttendanceBonusEnabled) {
+          const attendancePercentage = (presentDays / totalWorkingDays) * SALARY.PERCENTAGE_MULTIPLIER;
+          if (attendancePercentage >= (criteria.perfectAttendanceThreshold || SALARY.DEFAULT_PERFECT_ATTENDANCE_THRESHOLD)) {
+            bonus = criteria.perfectAttendanceBonusAmount || 0;
+          }
+        }
+
+        const totalWorkedDays = presentDays + halfDays * ATTENDANCE.HALF_DAY_MULTIPLIER;
+        const perDaySalary = baseSalary / totalWorkingDays;
+        const netSalary = baseSalary - totalDeductions + bonus;
+
+        const salaryData = {
           employee: employee._id,
           employeeId: employee.employeeId,
           month,
           year,
-          baseSalary: employee.salary.monthlySalary,
+          baseSalary: baseSalary,
           calculations: {
             totalWorkingDays,
             presentDays,
@@ -212,21 +329,38 @@ export const calculateAllSalaries = async (req, res) => {
             perDaySalary,
           },
           deductions: {
-            absentDeduction,
-            lateDeduction,
+            absentDeduction: totalDeductions,
+            lateDeduction: 0,
             otherDeductions: 0,
             totalDeductions,
           },
           additions: {
             overtime: 0,
-            bonus: 0,
+            bonus: bonus,
             allowances: 0,
-            totalAdditions: 0,
+            totalAdditions: bonus,
           },
           netSalary,
-          status: "calculated",
+          status: "paid",
           calculatedBy: req.user._id,
-        });
+        };
+
+        // Use findOneAndUpdate with upsert to prevent race conditions
+        const salary = await Salary.findOneAndUpdate(
+          {
+            employee: employee._id,
+            month,
+            year,
+          },
+          {
+            $set: salaryData,
+          },
+          {
+            new: true,
+            upsert: true,
+            runValidators: true,
+          }
+        );
 
         results.push({
           employeeId: employee.employeeId,
@@ -234,10 +368,18 @@ export const calculateAllSalaries = async (req, res) => {
           netSalary,
         });
       } catch (err) {
-        errors.push({
-          employeeId: employee.employeeId,
-          message: err.message,
-        });
+        // Skip duplicate key errors (salary already exists)
+        if (err.code === 11000) {
+          errors.push({
+            employeeId: employee.employeeId,
+            message: "Already calculated",
+          });
+        } else {
+          errors.push({
+            employeeId: employee.employeeId,
+            message: err.message,
+          });
+        }
       }
     }
 
@@ -248,7 +390,6 @@ export const calculateAllSalaries = async (req, res) => {
         calculated: results.length,
         errors: errors.length,
         results,
-        errors,
       },
     });
   } catch (error) {

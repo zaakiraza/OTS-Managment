@@ -22,11 +22,14 @@ const Salaries = () => {
     year: new Date().getFullYear(),
   });
   const [criteriaData, setCriteriaData] = useState({
+    attendanceMarkingMethod: 'checkinCheckout',
+    hourlyDeductionRate: 0,
     lateThreshold: 3,
-    lateAsAbsent: true,
-    perfectAttendanceBonus: 0,
-    halfDayDeduction: 0.5,
-    customDeductions: 0,
+    earlyArrivalBonus: 0,
+    absentDeduction: 0,
+    perfectAttendanceBonusEnabled: false,
+    perfectAttendanceThreshold: 100,
+    perfectAttendanceBonusAmount: 0,
   });
 
   const user = JSON.parse(localStorage.getItem("user"));
@@ -107,6 +110,10 @@ const Salaries = () => {
 
         attendanceRecords.forEach((record) => {
           const empId = record.employee?.employeeId || record.userId;
+          if (!empId) {
+            return;
+          }
+          
           if (!statsByEmployee[empId]) {
             statsByEmployee[empId] = {
               present: 0,
@@ -144,12 +151,38 @@ const Salaries = () => {
   };
 
   const calculateWorkingDaysForEmployee = (employee) => {
-    const daysInMonth = new Date(selectedYear, selectedMonth, 0).getDate();
-    const workingDaysPerWeek = employee.workSchedule?.workingDaysPerWeek || 5;
+    const year = selectedYear;
+    const month = selectedMonth;
+    const daysInMonth = new Date(year, month, 0).getDate();
     
-    // Calculate approximately how many weeks in the month
-    const weeksInMonth = daysInMonth / 7;
-    const workingDays = Math.round(weeksInMonth * workingDaysPerWeek);
+    // Get employee's weekly offs (default to Saturday and Sunday)
+    const weeklyOffs = employee.workSchedule?.weeklyOffs || ["Saturday", "Sunday"];
+    
+    // Day name to number mapping (0 = Sunday, 6 = Saturday)
+    const dayNameToNumber = {
+      'Sunday': 0,
+      'Monday': 1,
+      'Tuesday': 2,
+      'Wednesday': 3,
+      'Thursday': 4,
+      'Friday': 5,
+      'Saturday': 6
+    };
+    
+    // Convert weekly offs to day numbers
+    const offDayNumbers = weeklyOffs.map(day => dayNameToNumber[day]);
+    
+    // Count actual working days in the month
+    let workingDays = 0;
+    for (let day = 1; day <= daysInMonth; day++) {
+      const date = new Date(year, month - 1, day);
+      const dayOfWeek = date.getDay();
+      
+      // If this day is NOT a weekly off, count it as a working day
+      if (!offDayNumbers.includes(dayOfWeek)) {
+        workingDays++;
+      }
+    }
     
     return workingDays;
   };
@@ -185,23 +218,18 @@ const Salaries = () => {
     setDisplayData(combined);
   };
 
-  const handleCalculateSingle = async (e) => {
-    e.preventDefault();
+  const handleCalculateSingle = async (employeeId) => {
     try {
       setLoading(true);
       const response = await salaryAPI.calculate({
-        ...formData,
+        employeeId,
+        month: selectedMonth,
+        year: selectedYear,
         criteria: criteriaData,
       });
       if (response.data.success) {
         alert("Salary calculated successfully!");
-        setShowModal(false);
         setShowCriteriaModal(false);
-        setFormData({
-          employeeId: "",
-          month: new Date().getMonth() + 1,
-          year: new Date().getFullYear(),
-        });
         fetchSalaries();
         fetchAttendanceForMonth();
       }
@@ -219,10 +247,11 @@ const Salaries = () => {
       const response = await salaryAPI.calculateAll({
         month: selectedMonth,
         year: selectedYear,
+        departmentId: selectedDepartment || undefined,
         criteria: criteriaData,
       });
       if (response.data.success) {
-        alert(`Calculated: ${response.data.data.calculated}, Errors: ${response.data.data.errors}`);
+        alert(`Calculated! ${response.data.data.calculated} salaries saved successfully.`);
         setShowCriteriaModal(false);
         fetchSalaries();
         fetchAttendanceForMonth();
@@ -235,39 +264,24 @@ const Salaries = () => {
     }
   };
 
-  const openCriteriaModal = (type) => {
+  const openCriteriaModal = (type, employeeId = null) => {
     setCalculationType(type);
+    if (employeeId) {
+      setFormData({
+        employeeId,
+        month: selectedMonth,
+        year: selectedYear,
+      });
+    }
     setShowCriteriaModal(true);
   };
 
   const handleCriteriaSubmit = (e) => {
     e.preventDefault();
     if (calculationType === 'single') {
-      handleCalculateSingle(e);
+      handleCalculateSingle(formData.employeeId);
     } else {
       handleCalculateAll();
-    }
-  };
-
-  const handleApprove = async (id) => {
-    if (!confirm("Approve this salary?")) return;
-    try {
-      await salaryAPI.approve(id);
-      fetchSalaries();
-    } catch (error) {
-      console.error("Error approving salary:", error);
-      alert(error.response?.data?.message || "Failed to approve salary");
-    }
-  };
-
-  const handleMarkPaid = async (id) => {
-    if (!confirm("Mark this salary as paid?")) return;
-    try {
-      await salaryAPI.markPaid(id);
-      fetchSalaries();
-    } catch (error) {
-      console.error("Error marking salary as paid:", error);
-      alert(error.response?.data?.message || "Failed to mark as paid");
     }
   };
 
@@ -335,11 +349,8 @@ const Salaries = () => {
               </option>
             ))}
           </select>
-          <button className="btn-primary" onClick={() => openCriteriaModal('all')}>
+          <button className="btn-primary" onClick={() => openCriteriaModal('all')} disabled={loading}>
             Calculate All
-          </button>
-          <button className="btn-primary" onClick={() => setShowModal(true)}>
-            + Calculate Single
           </button>
         </div>
       </div>
@@ -441,32 +452,10 @@ const Salaries = () => {
                       {!item.salary && (
                         <button
                           className="btn-calculate"
-                          onClick={() => {
-                            setFormData({
-                              employeeId: item.employee.employeeId,
-                              month: selectedMonth,
-                              year: selectedYear,
-                            });
-                            openCriteriaModal('single');
-                          }}
+                          onClick={() => openCriteriaModal('single', item.employee.employeeId)}
+                          disabled={loading}
                         >
                           Calculate
-                        </button>
-                      )}
-                      {isSuperAdmin && item.salary?.status === "calculated" && (
-                        <button
-                          className="btn-approve"
-                          onClick={() => handleApprove(item.salary._id)}
-                        >
-                          Approve
-                        </button>
-                      )}
-                      {isSuperAdmin && item.salary?.status === "approved" && (
-                        <button
-                          className="btn-paid"
-                          onClick={() => handleMarkPaid(item.salary._id)}
-                        >
-                          Mark Paid
                         </button>
                       )}
                     </div>
@@ -568,113 +557,204 @@ const Salaries = () => {
             </div>
             <form onSubmit={handleCriteriaSubmit}>
               <div className="criteria-section">
-                <h3>Late Penalty Rules</h3>
-                <div className="form-row">
-                  <div className="form-group">
-                    <label>
+                <h3>Attendance Marking Method</h3>
+                <div className="form-group">
+                  <label>How should attendance be marked?</label>
+                  <div style={{ marginTop: '10px' }}>
+                    <label style={{ display: 'block', marginBottom: '10px' }}>
                       <input
-                        type="checkbox"
-                        checked={criteriaData.lateAsAbsent}
+                        type="radio"
+                        name="attendanceMethod"
+                        value="checkinCheckout"
+                        checked={criteriaData.attendanceMarkingMethod === 'checkinCheckout'}
                         onChange={(e) =>
                           setCriteriaData({
                             ...criteriaData,
-                            lateAsAbsent: e.target.checked,
+                            attendanceMarkingMethod: e.target.value,
                           })
                         }
                       />
-                      {' '}Count late days as absent
+                      {' '}Mark by check-in/check-out timings each day
+                    </label>
+                    <label style={{ display: 'block' }}>
+                      <input
+                        type="radio"
+                        name="attendanceMethod"
+                        value="weeklyHours"
+                        checked={criteriaData.attendanceMarkingMethod === 'weeklyHours'}
+                        onChange={(e) =>
+                          setCriteriaData({
+                            ...criteriaData,
+                            attendanceMarkingMethod: e.target.value,
+                          })
+                        }
+                      />
+                      {' '}Mark by weekly hours
                     </label>
                   </div>
-                  {criteriaData.lateAsAbsent && (
+                </div>
+              </div>
+
+              {criteriaData.attendanceMarkingMethod === 'weeklyHours' && (
+                <div className="criteria-section">
+                  <h3>Hourly Deduction</h3>
+                  <div className="form-group">
+                    <label>Deduction per missing hour (PKR)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="10"
+                      value={criteriaData.hourlyDeductionRate}
+                      onChange={(e) =>
+                        setCriteriaData({
+                          ...criteriaData,
+                          hourlyDeductionRate: parseFloat(e.target.value) || 0,
+                        })
+                      }
+                      placeholder="e.g., 50"
+                      required
+                    />
+                    <small className="help-text">
+                      Amount to deduct from salary for each hour short of required weekly hours
+                    </small>
+                  </div>
+                </div>
+              )}
+
+              {criteriaData.attendanceMarkingMethod === 'checkinCheckout' && (
+                <>
+                  <div className="criteria-section">
+                    <h3>Late Penalty Rules</h3>
                     <div className="form-group">
                       <label>How many lates = 1 absent?</label>
                       <input
                         type="number"
                         min="1"
-                        max="10"
+                        max="30"
                         value={criteriaData.lateThreshold}
                         onChange={(e) =>
                           setCriteriaData({
                             ...criteriaData,
-                            lateThreshold: parseInt(e.target.value),
+                            lateThreshold: parseInt(e.target.value) || 1,
                           })
                         }
+                        required
                       />
                       <small className="help-text">
                         Example: 3 lates = 1 absent day
                       </small>
                     </div>
-                  )}
-                </div>
-              </div>
+                  </div>
 
-              <div className="criteria-section">
-                <h3>Half Day Deduction</h3>
-                <div className="form-group">
-                  <label>Deduction per half day (in days)</label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    min="0"
-                    max="1"
-                    value={criteriaData.halfDayDeduction}
-                    onChange={(e) =>
-                      setCriteriaData({
-                        ...criteriaData,
-                        halfDayDeduction: parseFloat(e.target.value),
-                      })
-                    }
-                  />
-                  <small className="help-text">
-                    Default: 0.5 (half day = 50% deduction)
-                  </small>
-                </div>
-              </div>
+                  <div className="criteria-section">
+                    <h3>Early Arrival Bonus</h3>
+                    <div className="form-group">
+                      <label>How many early arrivals = 1 bonus day?</label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="30"
+                        value={criteriaData.earlyArrivalBonus}
+                        onChange={(e) =>
+                          setCriteriaData({
+                            ...criteriaData,
+                            earlyArrivalBonus: parseInt(e.target.value) || 0,
+                          })
+                        }
+                      />
+                      <small className="help-text">
+                        Example: 5 early arrivals = 1 bonus day (0 = disabled)
+                      </small>
+                    </div>
+                  </div>
+
+                  <div className="criteria-section">
+                    <h3>Absent Deduction</h3>
+                    <div className="form-group">
+                      <label>Salary deduction per absent day (PKR)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="10"
+                        value={criteriaData.absentDeduction}
+                        onChange={(e) =>
+                          setCriteriaData({
+                            ...criteriaData,
+                            absentDeduction: parseFloat(e.target.value) || 0,
+                          })
+                        }
+                        placeholder="e.g., 500"
+                        required
+                      />
+                      <small className="help-text">
+                        Amount to deduct from salary for each absent day
+                      </small>
+                    </div>
+                  </div>
+                </>
+              )}
 
               <div className="criteria-section">
                 <h3>Perfect Attendance Bonus</h3>
                 <div className="form-group">
-                  <label>Bonus for 100% attendance (PKR)</label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="100"
-                    value={criteriaData.perfectAttendanceBonus}
-                    onChange={(e) =>
-                      setCriteriaData({
-                        ...criteriaData,
-                        perfectAttendanceBonus: parseFloat(e.target.value),
-                      })
-                    }
-                    placeholder="e.g., 5000"
-                  />
-                  <small className="help-text">
-                    Awarded to employees with 100% present days (no absents, no half-days)
-                  </small>
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={criteriaData.perfectAttendanceBonusEnabled}
+                      onChange={(e) =>
+                        setCriteriaData({
+                          ...criteriaData,
+                          perfectAttendanceBonusEnabled: e.target.checked,
+                        })
+                      }
+                    />
+                    {' '}Enable perfect attendance bonus
+                  </label>
                 </div>
-              </div>
-
-              <div className="criteria-section">
-                <h3>Additional Deductions</h3>
-                <div className="form-group">
-                  <label>Custom deductions (PKR)</label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="100"
-                    value={criteriaData.customDeductions}
-                    onChange={(e) =>
-                      setCriteriaData({
-                        ...criteriaData,
-                        customDeductions: parseFloat(e.target.value),
-                      })
-                    }
-                    placeholder="e.g., 1000"
-                  />
-                  <small className="help-text">
-                    Additional flat deductions (taxes, advances, etc.)
-                  </small>
-                </div>
+                {criteriaData.perfectAttendanceBonusEnabled && (
+                  <>
+                    <div className="form-group">
+                      <label>Minimum attendance percentage for bonus (%)</label>
+                      <input
+                        type="number"
+                        min="50"
+                        max="100"
+                        step="1"
+                        value={criteriaData.perfectAttendanceThreshold}
+                        onChange={(e) =>
+                          setCriteriaData({
+                            ...criteriaData,
+                            perfectAttendanceThreshold: parseFloat(e.target.value) || 100,
+                          })
+                        }
+                        required
+                      />
+                      <small className="help-text">
+                        Example: 95% means employee must have 95% or higher attendance
+                      </small>
+                    </div>
+                    <div className="form-group">
+                      <label>Bonus amount (PKR)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="100"
+                        value={criteriaData.perfectAttendanceBonusAmount}
+                        onChange={(e) =>
+                          setCriteriaData({
+                            ...criteriaData,
+                            perfectAttendanceBonusAmount: parseFloat(e.target.value) || 0,
+                          })
+                        }
+                        placeholder="e.g., 5000"
+                        required
+                      />
+                      <small className="help-text">
+                        Bonus awarded when attendance threshold is met
+                      </small>
+                    </div>
+                  </>
+                )}
               </div>
 
               <div className="modal-actions">
@@ -686,7 +766,7 @@ const Salaries = () => {
                   Cancel
                 </button>
                 <button type="submit" className="btn-primary" disabled={loading}>
-                  {loading ? "Calculating..." : `Calculate ${calculationType === 'all' ? 'All' : 'Salary'}`}
+                  {loading ? "Calculating..." : calculationType === 'single' ? "Calculate Salary" : "Calculate & Save All Salaries"}
                 </button>
               </div>
             </form>

@@ -2,9 +2,12 @@
 Scripts
 AttendanceREADME.md
 node_modules
+logs/
+*.log
 ZKTECO_INTEGRATION.md
 zkteco-integration-example.js
 sync-attendance.bat
 ATTENDANCE_POLLING_IMPLEMENTATION.md
 DATA_FLOW_ARCHITECTURE.md
 QUICK_START.md
+Config/CONSTANTS_README.md

@@ -2,6 +2,7 @@ import Attendance from "../Model/Attendance.js";
 import Employee from "../Model/Employee.js";
 import fs from "fs";
 import path from "path";
+import logger from "../Utils/logger.js";
 
 // Process attendance data from USB export file
 export const processAttendanceFile = async (fileContent) => {
@@ -129,7 +130,7 @@ export const importAttendance = async (req, res) => {
       results
     });
   } catch (error) {
-    console.error("Import error:", error);
+    logger.error(`Import error: ${error.message}`, { stack: error.stack });
     res.status(500).json({
       success: false,
       message: error.message
@@ -157,7 +158,7 @@ export const importAttendanceText = async (req, res) => {
       results
     });
   } catch (error) {
-    console.error("Import error:", error);
+    logger.error(`Import error: ${error.message}`, { stack: error.stack });
     res.status(500).json({
       success: false,
       message: error.message

@@ -1,6 +1,8 @@
 import express from 'express';
 import Attendance from '../Model/Attendance.js';
 import Employee from '../Model/Employee.js';
+import logger from '../Utils/logger.js';
+import { DEVICE, TIME, SALARY } from '../Config/constants.js';
 
 const router = express.Router();
 
@@ -15,12 +17,11 @@ const deviceLogsFetched = new Set();
 // Device registration/polling endpoint
 router.get('/cdata', async (req, res) => {
   const { SN, options, Stamp } = req.query;
-  console.log(`📱 Device cdata: SN=${SN}, options=${options}`);
+  logger.debug(`Device cdata: SN=${SN}, options=${options}`);
   
   // Check if attendance data is in query params (some devices send via GET)
   if (Stamp) {
-    console.log(`📥 Attendance via GET - Stamp: ${Stamp}`);
-    console.log(`   Full query:`, req.query);
+    logger.debug(`Attendance via GET - Stamp: ${Stamp}, Full query: ${JSON.stringify(req.query)}`);
   }
   
   res.send('OK');
@@ -29,14 +30,11 @@ router.get('/cdata', async (req, res) => {
 // Device getrequest endpoint
 router.get('/getrequest', async (req, res) => {
   const { SN, INFO } = req.query;
-  console.log(`📱 Device getrequest: SN=${SN}`);
-  if (INFO) {
-    console.log(`   Device INFO: ${INFO}`);
-  }
+  logger.debug(`Device getrequest: SN=${SN}${INFO ? `, INFO: ${INFO}` : ''}`);
   
   // Check if we've already fetched logs from this device
   if (!deviceLogsFetched.has(SN)) {
-    console.log(`🔄 Requesting all attendance logs from device ${SN}`);
+    logger.info(`Requesting all attendance logs from device ${SN}`);
     deviceLogsFetched.add(SN);
     // Request all attendance logs from device
     return res.send('C:1:ATTLOG');
@@ -49,11 +47,8 @@ router.get('/getrequest', async (req, res) => {
 // Device sending attendance data (POST)
 router.post('/cdata', async (req, res) => {
   try {
-    console.log('📥 ========== ATTENDANCE DATA RECEIVED ==========');
-    console.log('   Body type:', typeof req.body);
-    console.log('   Body:', req.body);
-    console.log('   Raw:', req.body ? req.body.toString() : 'empty');
-    console.log('================================================');
+    logger.debug(`Attendance data received - Body type: ${typeof req.body}`);
+    logger.debug(`Raw data: ${req.body ? req.body.toString().substring(0, 200) : 'empty'}`);
     
     // Respond OK to device
     res.send('OK');
@@ -64,24 +59,21 @@ router.post('/cdata', async (req, res) => {
     }
     
   } catch (error) {
-    console.error('❌ Error processing attendance:', error);
+    logger.error(`Error processing attendance: ${error.message}`, { stack: error.stack });
     res.send('OK'); // Still respond OK to device
   }
 });
 
 // Handle device commands
 router.post('/devicecmd', async (req, res) => {
-  console.log('📨 Device command received');
-  console.log('   Body type:', typeof req.body);
-  console.log('   Body:', req.body);
-  console.log('   Raw body:', req.body ? req.body.toString() : 'empty');
+  logger.debug(`Device command received - Body type: ${typeof req.body}, Raw: ${req.body ? req.body.toString().substring(0, 200) : 'empty'}`);
   res.send('OK');
 });
 
 // Process attendance data
 async function processAttendanceData(data) {
   try {
-    console.log('🔍 Processing attendance data...');
+    logger.info('Processing iClock attendance data...');
     
     // Parse the attendance data
     // iClock format: PIN\tDateTime\tStatus\tVerify\tDeviceID
@@ -105,14 +97,14 @@ async function processAttendanceData(data) {
         const employee = await Employee.findOne({ biometricId: biometricId.trim() });
         
         if (!employee) {
-          console.log(`⚠️  Employee not found for biometricId: ${biometricId}`);
+          logger.debug(`Employee not found for biometricId: ${biometricId}`);
           continue;
         }
         
         // Parse date and time
         const checkTime = new Date(dateTime);
         if (isNaN(checkTime.getTime())) {
-          console.log(`⚠️  Invalid date format: ${dateTime}`);
+          logger.warn(`Invalid date format: ${dateTime}`);
           continue;
         }
         
@@ -138,7 +130,7 @@ async function processAttendanceData(data) {
           });
           await attendance.save();
           saved++;
-          console.log(`✅ New attendance created for ${employee.name} at ${checkTime}`);
+          logger.info(`New attendance created for ${employee.name} at ${checkTime}`);
         } else {
           // Update existing record
           let updated = false;
@@ -159,25 +151,25 @@ async function processAttendanceData(data) {
           
           // Calculate working hours if both checkIn and checkOut exist
           if (attendance.checkIn && attendance.checkOut) {
-            const hours = (attendance.checkOut - attendance.checkIn) / (1000 * 60 * 60);
-            attendance.workingHours = Math.round(hours * 100) / 100;
+            const hours = (attendance.checkOut - attendance.checkIn) / TIME.ONE_HOUR;
+            attendance.workingHours = Math.round(hours * SALARY.HOURS_DECIMAL_PRECISION) / SALARY.HOURS_DECIMAL_PRECISION;
           }
           
           if (updated) {
             await attendance.save();
             saved++;
-            console.log(`✅ Updated attendance for ${employee.name} at ${checkTime}`);
+            logger.info(`Updated attendance for ${employee.name} at ${checkTime}`);
           }
         }
       } catch (err) {
-        console.error(`❌ Error processing line: ${line}`, err.message);
+        logger.error(`Error processing line: ${line} - ${err.message}`);
       }
     }
     
-    console.log(`📊 Processed ${processed} records, saved/updated ${saved} attendance entries`);
+    logger.info(`Processed ${processed} iClock records, saved/updated ${saved} attendance entries`);
     
   } catch (error) {
-    console.error('❌ Error processing attendance:', error);
+    logger.error(`Error processing iClock attendance: ${error.message}`, { stack: error.stack });
   }
 }
 

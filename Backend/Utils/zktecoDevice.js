@@ -2,11 +2,13 @@ import Zkteco from 'zkteco-js';
 import AttendanceLog from '../Model/AttendanceLog.js';
 import Employee from '../Model/Employee.js';
 import Attendance from '../Model/Attendance.js';
+import logger from './logger.js';
+import { DEVICE, TIME } from '../Config/constants.js';
 
 // Device configuration
-const DEVICE_IP = process.env.DEVICE_IP || '192.168.30.201';
-const DEVICE_PORT = Number(process.env.DEVICE_PORT || 4370);
-const POLL_INTERVAL_MS = Number(process.env.POLL_INTERVAL_MS || 30000); // 30 seconds
+const DEVICE_IP = process.env.DEVICE_IP || DEVICE.DEFAULT_IP;
+const DEVICE_PORT = Number(process.env.DEVICE_PORT || DEVICE.DEFAULT_PORT);
+const POLL_INTERVAL_MS = Number(process.env.POLL_INTERVAL_MS || DEVICE.DEFAULT_POLL_INTERVAL);
 
 let isPolling = false;
 let firstLogShapePrinted = false;
@@ -18,7 +20,7 @@ let isInitialized = false; // Track if we've initialized the lastProcessedSN
  * Create a fresh device instance to avoid socket reuse issues
  */
 function createDeviceInstance() {
-  return new Zkteco(DEVICE_IP, DEVICE_PORT, 5200, 5000);
+  return new Zkteco(DEVICE_IP, DEVICE_PORT, DEVICE.DEFAULT_INPORT, DEVICE.DEFAULT_TIMEOUT);
 }
 
 /**
@@ -82,7 +84,7 @@ async function processAttendanceLog(doc) {
     }).populate('department', 'name leverageTime');
 
     if (!employee) {
-      // console.log(`⚠️  Employee with biometric ID ${doc.userId} not found in system`);
+      logger.debug(`Employee with biometric ID ${doc.userId} not found in system`);
       return;
     }
 
@@ -98,12 +100,12 @@ async function processAttendanceLog(doc) {
       userId: employee.employeeId,
       date: {
         $gte: dateOnly,
-        $lt: new Date(dateOnly.getTime() + 24 * 60 * 60 * 1000),
+        $lt: new Date(dateOnly.getTime() + TIME.ONE_DAY),
       },
     });
 
     let punchType = '';
-    const RAPID_PUNCH_THRESHOLD_MS = 3 * 60 * 60 * 1000; // 3 hours in milliseconds
+    const RAPID_PUNCH_THRESHOLD_MS = DEVICE.RAPID_PUNCH_THRESHOLD || (3 * TIME.ONE_HOUR);
     
     if (!attendance) {
       // First punch of the day - create new record with check-in
@@ -117,14 +119,14 @@ async function processAttendanceLog(doc) {
         isManualEntry: false,
       });
       punchType = 'CHECK-IN';
-      // console.log(`   → ${employee.name} (${employee.employeeId}) - ${punchType}`);
+      logger.debug(`${employee.name} (${employee.employeeId}) - ${punchType}`);
     } else if (!attendance.checkIn) {
       // Has record but no check-in (edge case)
       attendance.checkIn = punchTime;
       attendance.deviceId = doc.deviceIp;
       await attendance.save();
       punchType = 'CHECK-IN';
-      // console.log(`   → ${employee.name} (${employee.employeeId}) - ${punchType}`);
+      logger.debug(`${employee.name} (${employee.employeeId}) - ${punchType}`);
     } else if (!attendance.checkOut) {
       // Already has check-in, this might be check-out
       // But first check if it's a rapid punch (within 30 minutes of check-in)
@@ -132,7 +134,7 @@ async function processAttendanceLog(doc) {
       
       if (timeSinceCheckIn < RAPID_PUNCH_THRESHOLD_MS) {
         // Rapid punch detected - ignore it
-        // console.log(`   ⚠️  ${employee.name} (${employee.employeeId}) - IGNORED (rapid punch: ${Math.round(timeSinceCheckIn / 60000)} min after check-in)`);
+        logger.debug(`${employee.name} (${employee.employeeId}) - IGNORED (rapid punch: ${Math.round(timeSinceCheckIn / 60000)} min after check-in)`);
         return; // Skip this punch
       }
       
@@ -140,13 +142,13 @@ async function processAttendanceLog(doc) {
       attendance.checkOut = punchTime;
       await attendance.save();
       punchType = 'CHECK-OUT';
-      // console.log(`   → ${employee.name} (${employee.employeeId}) - ${punchType}`);
+      logger.debug(`${employee.name} (${employee.employeeId}) - ${punchType}`);
     } else {
       // Already checked in and out today - ignore additional punches
-      // console.log(`   → ${employee.name} (${employee.employeeId}) - Skipped (already complete)`);
+      logger.debug(`${employee.name} (${employee.employeeId}) - Skipped (already complete)`);
     }
   } catch (error) {
-    console.error(`❌ Error processing attendance for user ${doc.userId}:`, error.message);
+    logger.error(`Error processing attendance for user ${doc.userId}: ${error.message}`, { stack: error.stack });
   }
 }
 
@@ -155,7 +157,7 @@ async function processAttendanceLog(doc) {
  */
 async function pollDeviceOnce() {
   if (isPolling) {
-    // console.log('Poll already in progress, skipping this interval.');
+    logger.debug('Poll already in progress, skipping this interval.');
     return;
   }
   isPolling = true;
@@ -163,18 +165,16 @@ async function pollDeviceOnce() {
   const device = createDeviceInstance();
 
   try {
-    // console.log('\n[Poll] Connecting to device:', DEVICE_IP, 'port', DEVICE_PORT);
+    logger.debug(`Connecting to device: ${DEVICE_IP}:${DEVICE_PORT}`);
     await device.createSocket();
 
     // Get device info first
     const info = await device.getInfo();
-    // console.log('[Poll] Device info:', JSON.stringify(info, null, 2));
+    logger.debug(`Device info: ${JSON.stringify(info)}`);
 
     // Try different methods to get attendance
-    // console.log('\n[Poll] Trying device.getAttendances()...');
+    logger.debug('Getting attendance logs from device...');
     let response = await device.getAttendances();
-    // console.log('[Poll] Type of response:', typeof response);
-    // console.log('[Poll] Is array?:', Array.isArray(response));
     
     // Extract the actual logs array
     let logs = [];
@@ -183,17 +183,17 @@ async function pollDeviceOnce() {
     } else if (response && Array.isArray(response.data)) {
       // Response is object with data property
       logs = response.data;
-      // console.log('[Poll] Extracted logs from response.data');
+      logger.debug('Extracted logs from response.data');
     } else if (response) {
-      // console.log('[Poll] Unexpected response format:', JSON.stringify(response).substring(0, 200));
+      logger.warn(`Unexpected response format: ${JSON.stringify(response).substring(0, 200)}`);
     }
     
-    // console.log('[Poll] ✅ Total logs on device:', logs.length);
+    logger.debug(`Total logs on device: ${logs.length}`);
 
     // On first poll, process ALL existing logs (one-time fetch)
     if (!isInitialized && logs.length > 0) {
       isInitialized = true;
-      // console.log(`[Init] 🔄 Processing ${logs.length} existing logs from device (one-time fetch)...`);
+      logger.info(`Processing ${logs.length} existing logs from device (one-time fetch)...`);
       
       let inserted = 0;
       let skipped = 0;
@@ -230,8 +230,8 @@ async function pollDeviceOnce() {
         }
       }
       
-      // console.log(`[Init] ✅ Initial fetch complete. Processed: ${inserted}, Skipped: ${skipped}`);
-      // console.log(`[Init] Starting from SN: ${lastProcessedSN} - monitoring for new punches`);
+      logger.info(`Initial fetch complete. Processed: ${inserted}, Skipped: ${skipped}`);
+      logger.info(`Starting from SN: ${lastProcessedSN} - monitoring for new punches`);
       await device.disconnect();
       isPolling = false;
       return;
@@ -239,11 +239,10 @@ async function pollDeviceOnce() {
 
     // Filter to only NEW logs (sn > lastProcessedSN)
     const newLogs = logs.filter(log => log.sn > lastProcessedSN);
-    // console.log(`[Poll] 🆕 New logs since last poll: ${newLogs.length} (last SN was ${lastProcessedSN})`);
+    logger.debug(`New logs since last poll: ${newLogs.length} (last SN was ${lastProcessedSN})`);
 
     if (newLogs.length > 0 && !firstLogShapePrinted) {
-      // console.log('[Poll] Example log object (for field names):');
-      console.dir(newLogs[newLogs.length - 1], { depth: null });
+      logger.debug(`Example log object: ${JSON.stringify(newLogs[newLogs.length - 1], null, 2)}`);
       firstLogShapePrinted = true;
     }
 
@@ -276,7 +275,7 @@ async function pollDeviceOnce() {
         }
         
         // Log each new attendance in real-time
-        // console.log(`✅ NEW PUNCH: User ${doc.userId} at ${doc.date} ${doc.time}`);
+        logger.info(`NEW PUNCH: User ${doc.userId} at ${doc.date} ${doc.time}`);
         
         // Process into Attendance record
         await processAttendanceLog(doc);
@@ -287,15 +286,12 @@ async function pollDeviceOnce() {
     }
 
     if (newLogs.length > 0) {
-      // console.log(
-      //   `[Poll] Processed logs. Inserted: ${inserted}, Skipped (existing/invalid): ${skipped}`
-      // );
-      // console.log(`[Poll] Last processed SN: ${lastProcessedSN}`);
+      logger.debug(`Processed logs. Inserted: ${inserted}, Skipped (existing/invalid): ${skipped}, Last SN: ${lastProcessedSN}`);
     }
 
     await device.disconnect();
   } catch (err) {
-    console.error('[Poll] Error talking to device:', err.message || err);
+    logger.error(`Error talking to device: ${err.message || err}`, { stack: err.stack });
     // try to safely disconnect in case of error
     try {
       await device.disconnect();
@@ -311,17 +307,17 @@ async function pollDeviceOnce() {
 export const syncDeviceTime = async () => {
   const device = createDeviceInstance();
   try {
-    console.log('🕐 Syncing device time with server...');
+    logger.info('Syncing device time with server...');
     await device.createSocket();
     
     // Set device time to current server time
     const result = await device.setTime(new Date());
     
-    console.log('✅ Device time synced successfully');
+    logger.info('Device time synced successfully');
     await device.disconnect();
     return true;
   } catch (error) {
-    console.error('❌ Failed to sync device time:', error.message);
+    logger.error(`Failed to sync device time: ${error.message}`, { stack: error.stack });
     try {
       await device.disconnect();
     } catch (_) {}
@@ -334,16 +330,14 @@ export const syncDeviceTime = async () => {
  */
 export const connectToDevice = async () => {
   try {
-    // console.log('📡 Initializing ZKTeco device connection...');
-    // console.log(`   Device IP: ${DEVICE_IP}:${DEVICE_PORT}`);
-    // console.log(`   Poll Interval: ${POLL_INTERVAL_MS / 1000} seconds`);
+    logger.info(`Initializing ZKTeco device connection - Device IP: ${DEVICE_IP}:${DEVICE_PORT}, Poll Interval: ${POLL_INTERVAL_MS / 1000}s`);
     
     // Sync device time with server on connection
     await syncDeviceTime();
     
     return true;
   } catch (error) {
-    console.error('❌ Failed to initialize device:', error.message);
+    logger.error(`Failed to initialize device: ${error.message}`, { stack: error.stack });
     return false;
   }
 };
@@ -353,8 +347,7 @@ export const connectToDevice = async () => {
  */
 export const startPolling = async () => {
   try {
-    // console.log('✅ Starting attendance polling...');
-    // console.log(`   Polling interval: ${POLL_INTERVAL_MS / 1000} seconds`);
+    logger.info(`Starting attendance polling - Polling interval: ${POLL_INTERVAL_MS / 1000}s`);
     
     // Do an initial poll immediately to initialize lastProcessedSN
     await pollDeviceOnce();
@@ -362,9 +355,9 @@ export const startPolling = async () => {
     // Then schedule recurring polls
     pollingInterval = setInterval(pollDeviceOnce, POLL_INTERVAL_MS);
     
-    // console.log('✅ ZKTeco biometric integration active - monitoring for new punches\n');
+    logger.info('ZKTeco biometric integration active - monitoring for new punches');
   } catch (error) {
-    console.error('❌ Failed to start polling:', error.message);
+    logger.error(`Failed to start polling: ${error.message}`, { stack: error.stack });
   }
 };
 
@@ -377,8 +370,8 @@ export const disconnectFromDevice = async () => {
       clearInterval(pollingInterval);
       pollingInterval = null;
     }
-    // console.log('🔌 Device polling stopped');
+    logger.info('Device polling stopped');
   } catch (error) {
-    console.error('⚠️  Disconnect error:', error.message);
+    logger.error(`Disconnect error: ${error.message}`, { stack: error.stack });
   }
 };

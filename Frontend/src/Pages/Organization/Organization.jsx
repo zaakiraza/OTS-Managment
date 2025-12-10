@@ -762,13 +762,13 @@ function Organization() {
               <table className="data-table">
                 <thead>
                   <tr>
-                    <th>Code</th>
-                    <th>Name</th>
-                    <th>City</th>
-                    <th>Country</th>
-                    <th>Total Area</th>
-                    <th>Status</th>
-                    <th>Actions</th>
+                    <th style={{width: '12%'}}>Code</th>
+                    <th style={{width: '25%'}}>Name</th>
+                    <th style={{width: '15%'}}>City</th>
+                    <th style={{width: '15%'}}>Address</th>
+                    <th style={{width: '13%'}}>Status</th>
+                    <th style={{width: '10%'}}>Created By</th>
+                    <th style={{width: '10%'}}>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -779,10 +779,7 @@ function Organization() {
                       </td>
                       <td>{campus.name}</td>
                       <td>{campus.city}</td>
-                      <td>{campus.country}</td>
-                      <td>
-                        {campus.totalArea ? `${campus.totalArea} sq ft` : "-"}
-                      </td>
+                      <td>{campus.address || "-"}</td>
                       <td>
                         <span
                           className={`status-badge ${
@@ -792,6 +789,7 @@ function Organization() {
                           {campus.isActive ? "Active" : "Inactive"}
                         </span>
                       </td>
+                      <td>{campus.createdBy?.name || "-"}</td>
                       <td>
                         <div className="action-buttons">
                           <button
@@ -862,12 +860,11 @@ function Organization() {
               <table className="data-table">
                 <thead>
                   <tr>
-                    <th>Code</th>
-                    <th>Name</th>
-                    <th>Campus</th>
-                    <th>Total Floors</th>
-                    <th>Status</th>
-                    <th>Actions</th>
+                    <th style={{width: '15%'}}>Code</th>
+                    <th style={{width: '30%'}}>Name</th>
+                    <th style={{width: '30%'}}>Campus</th>
+                    <th style={{width: '15%'}}>Status</th>
+                    <th style={{width: '10%'}}>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -878,7 +875,6 @@ function Organization() {
                       </td>
                       <td>{building.name}</td>
                       <td>{building.campus?.name || "-"}</td>
-                      <td>{building.totalFloors || "-"}</td>
                       <td>
                         <span
                           className={`status-badge ${
@@ -954,13 +950,11 @@ function Organization() {
               <table className="data-table">
                 <thead>
                   <tr>
-                    <th>Floor #</th>
-                    <th>Name</th>
-                    <th>Building</th>
-                    <th>Capacity</th>
-                    <th>Total Area</th>
-                    <th>Status</th>
-                    <th>Actions</th>
+                    <th style={{width: '15%'}}>Floor #</th>
+                    <th style={{width: '30%'}}>Name</th>
+                    <th style={{width: '30%'}}>Building</th>
+                    <th style={{width: '15%'}}>Status</th>
+                    <th style={{width: '10%'}}>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -971,10 +965,6 @@ function Organization() {
                       </td>
                       <td>{floor.name}</td>
                       <td>{floor.building?.name || "-"}</td>
-                      <td>{floor.capacity || "-"}</td>
-                      <td>
-                        {floor.totalArea ? `${floor.totalArea} sq ft` : "-"}
-                      </td>
                       <td>
                         <span
                           className={`status-badge ${
@@ -1050,14 +1040,12 @@ function Organization() {
               <table className="data-table">
                 <thead>
                   <tr>
-                    <th>Room #</th>
-                    <th>Name</th>
-                    <th>Floor</th>
-                    <th>Type</th>
-                    <th>Capacity</th>
-                    <th>Area</th>
-                    <th>Status</th>
-                    <th>Actions</th>
+                    <th style={{width: '12%'}}>Room #</th>
+                    <th style={{width: '25%'}}>Name</th>
+                    <th style={{width: '25%'}}>Floor</th>
+                    <th style={{width: '18%'}}>Type</th>
+                    <th style={{width: '12%'}}>Status</th>
+                    <th style={{width: '8%'}}>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1069,8 +1057,6 @@ function Organization() {
                       <td>{room.name}</td>
                       <td>{room.floor?.name || "-"}</td>
                       <td>{room.roomType}</td>
-                      <td>{room.capacity || "-"}</td>
-                      <td>{room.area ? `${room.area} sq ft` : "-"}</td>
                       <td>
                         <span
                           className={`status-badge ${

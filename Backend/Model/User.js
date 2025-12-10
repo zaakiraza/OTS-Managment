@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
-import bcrypt from "bcryptjs";
+import bcrypt from "bcrypt";
+import { SECURITY } from "../Config/constants.js";
 
 const userSchema = new mongoose.Schema(
   {
@@ -57,10 +58,13 @@ userSchema.pre("save", async function () {
   if (!this.isModified("password")) {
     return;
   }
-  this.password = await bcrypt.hash(this.password, 10);
+  this.password = await bcrypt.hash(this.password, SECURITY.BCRYPT_SALT_ROUNDS);
 });
 
-// Index for faster queries
+// Indexes for faster queries
+userSchema.index({ role: 1, isActive: 1 }); // For role-based queries
+userSchema.index({ isActive: 1 }); // For filtering active users
+
 const User = mongoose.model("User", userSchema);
 
 export default User;

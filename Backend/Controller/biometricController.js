@@ -1,5 +1,7 @@
 import Attendance from "../Model/Attendance.js";
 import Employee from "../Model/Employee.js";
+import logger from "../Utils/logger.js";
+import { PAGINATION } from "../Config/constants.js";
 
 // Receive attendance data from ZKTeco biometric device
 export const receiveBiometricData = async (req, res) => {
@@ -25,7 +27,7 @@ export const receiveBiometricData = async (req, res) => {
       }
     });
   } catch (error) {
-    console.error("Biometric data error:", error);
+    logger.error(`Biometric data error: ${error.message}`, { stack: error.stack });
     res.status(200).json({
       success: true,
       message: "OK",
@@ -63,7 +65,7 @@ export const getBiometricLogs = async (req, res) => {
     const logs = await Attendance.find(filter)
       .populate('employee', 'name employeeId email department')
       .sort({ date: -1, createdAt: -1 })
-      .limit(100);
+      .limit(PAGINATION.DEFAULT_LIMIT);
     
     res.status(200).json({
       success: true,
@@ -107,7 +109,7 @@ export const receiveBiometricDataAlt = async (req, res) => {
     
     return receiveBiometricData(req, res);
   } catch (error) {
-    console.error("Alternative biometric endpoint error:", error);
+    logger.error(`Alternative biometric endpoint error: ${error.message}`, { stack: error.stack });
     res.status(200).send("OK"); // Return OK to prevent device errors
   }
 };
