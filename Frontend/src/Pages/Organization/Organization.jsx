@@ -24,7 +24,6 @@ function Organization() {
     city: "",
     country: "Pakistan",
     address: "",
-    totalArea: "",
     description: "",
   });
 
@@ -36,8 +35,6 @@ function Organization() {
     campus: "",
     name: "",
     code: "",
-    address: "",
-    totalFloors: "",
     description: "",
   });
   const [campusFilter, setCampusFilter] = useState("");
@@ -51,8 +48,6 @@ function Organization() {
     floorNumber: "",
     name: "",
     code: "",
-    totalArea: "",
-    capacity: "",
     description: "",
   });
   const [buildingFilter, setBuildingFilter] = useState("");
@@ -67,8 +62,6 @@ function Organization() {
     name: "",
     code: "",
     roomType: "Office",
-    capacity: "",
-    area: "",
     description: "",
   });
   const [floorFilter, setFloorFilter] = useState("");
@@ -202,7 +195,8 @@ function Organization() {
 
   const fetchRooms = async () => {
     try {
-      const params = floorFilter ? { floor: floorFilter } : {};
+      // Only apply floor filter when on the "room" tab
+      const params = (activeTab === "room" && floorFilter) ? { floor: floorFilter } : {};
       const response = await roomAPI.getAll(params);
       if (response.data.success) {
         setRooms(response.data.data);
@@ -247,11 +241,24 @@ function Organization() {
     e.preventDefault();
     try {
       setLoading(true);
+      
+      // Auto-generate code if empty
+      const submissionData = { ...campusForm };
+      if (!submissionData.code || submissionData.code.trim() === "") {
+        // Generate code from name (first 3 letters + random number)
+        const namePrefix = submissionData.name
+          .substring(0, 3)
+          .toUpperCase()
+          .replace(/[^A-Z]/g, "");
+        const randomNum = Math.floor(1000 + Math.random() * 9000);
+        submissionData.code = `${namePrefix}${randomNum}`;
+      }
+      
       if (selectedCampus) {
-        await campusAPI.update(selectedCampus._id, campusForm);
+        await campusAPI.update(selectedCampus._id, submissionData);
         alert("Campus updated successfully!");
       } else {
-        await campusAPI.create(campusForm);
+        await campusAPI.create(submissionData);
         alert("Campus created successfully!");
       }
       setShowCampusModal(false);
@@ -272,7 +279,6 @@ function Organization() {
       city: campus.city,
       country: campus.country || "Pakistan",
       address: campus.address || "",
-      totalArea: campus.totalArea || "",
       description: campus.description || "",
     });
     setShowCampusModal(true);
@@ -296,7 +302,6 @@ function Organization() {
       city: "",
       country: "Pakistan",
       address: "",
-      totalArea: "",
       description: "",
     });
     setSelectedCampus(null);
@@ -307,11 +312,24 @@ function Organization() {
     e.preventDefault();
     try {
       setLoading(true);
+      
+      // Auto-generate code if empty
+      const submissionData = { ...buildingForm };
+      if (!submissionData.code || submissionData.code.trim() === "") {
+        // Generate code from name (first 3 letters + random number)
+        const namePrefix = submissionData.name
+          .substring(0, 3)
+          .toUpperCase()
+          .replace(/[^A-Z]/g, "");
+        const randomNum = Math.floor(1000 + Math.random() * 9000);
+        submissionData.code = `${namePrefix}${randomNum}`;
+      }
+      
       if (selectedBuilding) {
-        await buildingAPI.update(selectedBuilding._id, buildingForm);
+        await buildingAPI.update(selectedBuilding._id, submissionData);
         alert("Building updated successfully!");
       } else {
-        await buildingAPI.create(buildingForm);
+        await buildingAPI.create(submissionData);
         alert("Building created successfully!");
       }
       setShowBuildingModal(false);
@@ -330,8 +348,6 @@ function Organization() {
       campus: building.campus._id,
       name: building.name,
       code: building.code,
-      address: building.address || "",
-      totalFloors: building.totalFloors || "",
       description: building.description || "",
     });
     setShowBuildingModal(true);
@@ -353,8 +369,6 @@ function Organization() {
       campus: "",
       name: "",
       code: "",
-      address: "",
-      totalFloors: "",
       description: "",
     });
     setSelectedBuilding(null);
@@ -365,11 +379,25 @@ function Organization() {
     e.preventDefault();
     try {
       setLoading(true);
+      
+      // Auto-generate code if empty
+      const submissionData = { ...floorForm };
+      if (!submissionData.code || submissionData.code.trim() === "") {
+        // Generate code from name or floor number (first 3 letters + random number)
+        const nameSource = submissionData.name || `Floor${submissionData.floorNumber}`;
+        const namePrefix = nameSource
+          .substring(0, 3)
+          .toUpperCase()
+          .replace(/[^A-Z]/g, "");
+        const randomNum = Math.floor(1000 + Math.random() * 9000);
+        submissionData.code = `${namePrefix}${randomNum}`;
+      }
+      
       if (selectedFloor) {
-        await floorAPI.update(selectedFloor._id, floorForm);
+        await floorAPI.update(selectedFloor._id, submissionData);
         alert("Floor updated successfully!");
       } else {
-        await floorAPI.create(floorForm);
+        await floorAPI.create(submissionData);
         alert("Floor created successfully!");
       }
       setShowFloorModal(false);
@@ -389,8 +417,6 @@ function Organization() {
       floorNumber: floor.floorNumber,
       name: floor.name,
       code: floor.code,
-      totalArea: floor.totalArea || "",
-      capacity: floor.capacity || "",
       description: floor.description || "",
     });
     setShowFloorModal(true);
@@ -413,8 +439,6 @@ function Organization() {
       floorNumber: "",
       name: "",
       code: "",
-      totalArea: "",
-      capacity: "",
       description: "",
     });
     setSelectedFloor(null);
@@ -425,11 +449,25 @@ function Organization() {
     e.preventDefault();
     try {
       setLoading(true);
+      
+      // Auto-generate code if empty
+      const submissionData = { ...roomForm };
+      if (!submissionData.code || submissionData.code.trim() === "") {
+        // Generate code from name or room number (first 3 letters + random number)
+        const nameSource = submissionData.name || `Room${submissionData.roomNumber}`;
+        const namePrefix = nameSource
+          .substring(0, 3)
+          .toUpperCase()
+          .replace(/[^A-Z]/g, "");
+        const randomNum = Math.floor(1000 + Math.random() * 9000);
+        submissionData.code = `${namePrefix}${randomNum}`;
+      }
+      
       if (selectedRoom) {
-        await roomAPI.update(selectedRoom._id, roomForm);
+        await roomAPI.update(selectedRoom._id, submissionData);
         alert("Room updated successfully!");
       } else {
-        await roomAPI.create(roomForm);
+        await roomAPI.create(submissionData);
         alert("Room created successfully!");
       }
       setShowRoomModal(false);
@@ -450,8 +488,6 @@ function Organization() {
       name: room.name,
       code: room.code,
       roomType: room.roomType,
-      capacity: room.capacity || "",
-      area: room.area || "",
       description: room.description || "",
     });
     setShowRoomModal(true);
@@ -475,8 +511,6 @@ function Organization() {
       name: "",
       code: "",
       roomType: "Office",
-      capacity: "",
-      area: "",
       description: "",
     });
     setSelectedRoom(null);
@@ -1334,19 +1368,6 @@ function Organization() {
                   />
                 </div>
                 <div className="form-group">
-                  <label>Total Area (sq ft)</label>
-                  <input
-                    type="number"
-                    value={campusForm.totalArea}
-                    onChange={(e) =>
-                      setCampusForm({
-                        ...campusForm,
-                        totalArea: e.target.value,
-                      })
-                    }
-                  />
-                </div>
-                <div className="form-group">
                   <label>Description</label>
                   <textarea
                     value={campusForm.description}
@@ -1446,34 +1467,9 @@ function Organization() {
                           code: e.target.value,
                         })
                       }
-                      placeholder="Auto-generated"
+                      placeholder="Auto-generated if empty"
                     />
                   </div>
-                </div>
-                <div className="form-group">
-                  <label>Address</label>
-                  <input
-                    value={buildingForm.address}
-                    onChange={(e) =>
-                      setBuildingForm({
-                        ...buildingForm,
-                        address: e.target.value,
-                      })
-                    }
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Total Floors</label>
-                  <input
-                    type="number"
-                    value={buildingForm.totalFloors}
-                    onChange={(e) =>
-                      setBuildingForm({
-                        ...buildingForm,
-                        totalFloors: e.target.value,
-                      })
-                    }
-                  />
                 </div>
                 <div className="form-group">
                   <label>Description</label>
@@ -1579,33 +1575,8 @@ function Organization() {
                     onChange={(e) =>
                       setFloorForm({ ...floorForm, code: e.target.value })
                     }
-                    placeholder="Auto-generated"
+                    placeholder="Auto-generated if empty"
                   />
-                </div>
-                <div className="form-row">
-                  <div className="form-group">
-                    <label>Total Area (sq ft)</label>
-                    <input
-                      type="number"
-                      value={floorForm.totalArea}
-                      onChange={(e) =>
-                        setFloorForm({
-                          ...floorForm,
-                          totalArea: e.target.value,
-                        })
-                      }
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label>Capacity</label>
-                    <input
-                      type="number"
-                      value={floorForm.capacity}
-                      onChange={(e) =>
-                        setFloorForm({ ...floorForm, capacity: e.target.value })
-                      }
-                    />
-                  </div>
                 </div>
                 <div className="form-group">
                   <label>Description</label>
@@ -1707,7 +1678,7 @@ function Organization() {
                     onChange={(e) =>
                       setRoomForm({ ...roomForm, code: e.target.value })
                     }
-                    placeholder="Auto-generated"
+                    placeholder="Auto-generated if empty"
                   />
                 </div>
                 <div className="form-group">
@@ -1725,28 +1696,6 @@ function Organization() {
                       </option>
                     ))}
                   </select>
-                </div>
-                <div className="form-row">
-                  <div className="form-group">
-                    <label>Capacity</label>
-                    <input
-                      type="number"
-                      value={roomForm.capacity}
-                      onChange={(e) =>
-                        setRoomForm({ ...roomForm, capacity: e.target.value })
-                      }
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label>Area (sq ft)</label>
-                    <input
-                      type="number"
-                      value={roomForm.area}
-                      onChange={(e) =>
-                        setRoomForm({ ...roomForm, area: e.target.value })
-                      }
-                    />
-                  </div>
                 </div>
                 <div className="form-group">
                   <label>Description</label>
@@ -2045,9 +1994,8 @@ function Organization() {
                   />
                 </div>
                 <div className="form-group">
-                  <label>Email *</label>
+                  <label>Email</label>
                   <input
-                    required
                     type="email"
                     value={employeeForm.email}
                     onChange={(e) =>
@@ -2060,9 +2008,8 @@ function Organization() {
                   />
                 </div>
                 <div className="form-group">
-                  <label>Phone *</label>
+                  <label>Phone</label>
                   <input
-                    required
                     type="tel"
                     value={employeeForm.phone}
                     onChange={(e) =>
@@ -2075,9 +2022,8 @@ function Organization() {
                   />
                 </div>
                 <div className="form-group">
-                  <label>CNIC *</label>
+                  <label>CNIC</label>
                   <input
-                    required
                     type="text"
                     value={employeeForm.cnic}
                     onChange={(e) => {
@@ -2125,9 +2071,8 @@ function Organization() {
                   />
                 </div>
                 <div className="form-group">
-                  <label>Monthly Salary (PKR) *</label>
+                  <label>Monthly Salary (PKR)</label>
                   <input
-                    required
                     type="number"
                     min="0"
                     value={employeeForm.monthlySalary}
@@ -2141,9 +2086,8 @@ function Organization() {
                   />
                 </div>
                 <div className="form-group">
-                  <label>Joining Date *</label>
+                  <label>Joining Date</label>
                   <input
-                    required
                     type="date"
                     value={employeeForm.joiningDate}
                     onChange={(e) =>

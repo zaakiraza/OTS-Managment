@@ -19,6 +19,7 @@ import importRoutes from "./Routes/importRoutes.js";
 import assetRoutes from "./Routes/assetRoutes.js";
 import iclockRoutes from "./Routes/iclockRoutes.js";
 import { connectToDevice, startPolling } from "./Utils/zktecoDevice.js";
+import { scheduleAbsenteeCheck } from "./Utils/markAbsentees.js";
 
 dotenv.config();
 
@@ -36,9 +37,9 @@ app.use(express.raw({ type: 'application/octet-stream', limit: '10mb' })); // Ra
 
 // Log all incoming requests
 app.use((req, res, next) => {
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
-  console.log("Headers:", req.headers);
-  console.log("Body:", req.body);
+  // console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+  // console.log("Headers:", req.headers);
+  // console.log("Body:", req.body);
   next();
 });
 
@@ -87,14 +88,17 @@ app.listen(process.env.PORT, async () => {
   console.log(`Server is running on port ${process.env.PORT}`);
   
   // Connect to ZKTeco biometric device and start polling
-  // console.log('\n🔧 Initializing ZKTeco biometric integration...');
-  // const connected = await connectToDevice();
-  // if (connected) {
-  //   startPolling();
-  //   console.log('✅ ZKTeco biometric integration active\n');
-  // } else {
-  //   console.log('⚠️ ZKTeco device not connected. Will retry...\n');
-  // }
+  console.log('\n🔧 Initializing ZKTeco biometric integration...');
+  const connected = await connectToDevice();
+  if (connected) {
+    startPolling();
+  } else {
+    console.log('⚠️ ZKTeco device not connected. Will retry...\n');
+  }
+  
+  // Schedule daily absentee check at 11:59 PM
+  scheduleAbsenteeCheck("23:59");
+  console.log('✅ Daily absentee check scheduled\n');
 });
 
 export default app;

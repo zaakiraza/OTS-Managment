@@ -9,6 +9,9 @@ const router = express.Router();
  * Handles device registration and attendance data push
  */
 
+// Track devices that have already fetched logs
+const deviceLogsFetched = new Set();
+
 // Device registration/polling endpoint
 router.get('/cdata', async (req, res) => {
   const { SN, options, Stamp } = req.query;
@@ -30,7 +33,16 @@ router.get('/getrequest', async (req, res) => {
   if (INFO) {
     console.log(`   Device INFO: ${INFO}`);
   }
-  // Just acknowledge - let device push data automatically
+  
+  // Check if we've already fetched logs from this device
+  if (!deviceLogsFetched.has(SN)) {
+    console.log(`🔄 Requesting all attendance logs from device ${SN}`);
+    deviceLogsFetched.add(SN);
+    // Request all attendance logs from device
+    return res.send('C:1:ATTLOG');
+  }
+  
+  // Already fetched, just acknowledge
   res.send('OK');
 });
 
@@ -69,14 +81,103 @@ router.post('/devicecmd', async (req, res) => {
 // Process attendance data
 async function processAttendanceData(data) {
   try {
-    // Data format from iClock protocol might be in req.body or parsed differently
-    console.log('Processing attendance data:', data);
+    console.log('🔍 Processing attendance data...');
     
-    // TODO: Parse and save to database
-    // The data format will be visible in console logs
+    // Parse the attendance data
+    // iClock format: PIN\tDateTime\tStatus\tVerify\tDeviceID
+    // Example: 1\t2024-12-10 09:30:00\t0\t1\tDEV001
+    const lines = data.split('\n').filter(line => line.trim());
+    
+    let processed = 0;
+    let saved = 0;
+    
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      
+      const parts = line.split('\t');
+      if (parts.length < 2) continue;
+      
+      const [biometricId, dateTime, status, verify, deviceId] = parts;
+      processed++;
+      
+      try {
+        // Find employee by biometricId
+        const employee = await Employee.findOne({ biometricId: biometricId.trim() });
+        
+        if (!employee) {
+          console.log(`⚠️  Employee not found for biometricId: ${biometricId}`);
+          continue;
+        }
+        
+        // Parse date and time
+        const checkTime = new Date(dateTime);
+        if (isNaN(checkTime.getTime())) {
+          console.log(`⚠️  Invalid date format: ${dateTime}`);
+          continue;
+        }
+        
+        const dateOnly = new Date(checkTime);
+        dateOnly.setHours(0, 0, 0, 0);
+        
+        // Find or create attendance record for this date
+        let attendance = await Attendance.findOne({
+          employee: employee._id,
+          date: dateOnly
+        });
+        
+        if (!attendance) {
+          // Create new attendance record
+          attendance = new Attendance({
+            employee: employee._id,
+            userId: employee.employeeId,
+            date: dateOnly,
+            checkIn: checkTime,
+            deviceId: deviceId || 'unknown',
+            status: 'present',
+            isManualEntry: false
+          });
+          await attendance.save();
+          saved++;
+          console.log(`✅ New attendance created for ${employee.name} at ${checkTime}`);
+        } else {
+          // Update existing record
+          let updated = false;
+          
+          // Set checkIn if not set or this time is earlier
+          if (!attendance.checkIn || checkTime < attendance.checkIn) {
+            attendance.checkIn = checkTime;
+            updated = true;
+          }
+          
+          // Set checkOut if this time is later than checkIn
+          if (attendance.checkIn && checkTime > attendance.checkIn) {
+            if (!attendance.checkOut || checkTime > attendance.checkOut) {
+              attendance.checkOut = checkTime;
+              updated = true;
+            }
+          }
+          
+          // Calculate working hours if both checkIn and checkOut exist
+          if (attendance.checkIn && attendance.checkOut) {
+            const hours = (attendance.checkOut - attendance.checkIn) / (1000 * 60 * 60);
+            attendance.workingHours = Math.round(hours * 100) / 100;
+          }
+          
+          if (updated) {
+            await attendance.save();
+            saved++;
+            console.log(`✅ Updated attendance for ${employee.name} at ${checkTime}`);
+          }
+        }
+      } catch (err) {
+        console.error(`❌ Error processing line: ${line}`, err.message);
+      }
+    }
+    
+    console.log(`📊 Processed ${processed} records, saved/updated ${saved} attendance entries`);
     
   } catch (error) {
-    console.error('Error processing:', error);
+    console.error('❌ Error processing attendance:', error);
   }
 }
 

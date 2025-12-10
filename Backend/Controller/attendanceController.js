@@ -277,10 +277,17 @@ export const getAttendanceById = async (req, res) => {
 // Get today's attendance
 export const getTodayAttendance = async (req, res) => {
   try {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    // Create UTC date for today at midnight
+    const now = new Date();
+    const today = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0));
+    const tomorrow = new Date(today.getTime() + 24 * 60 * 60 * 1000);
 
-    const attendanceRecords = await Attendance.find({ date: today })
+    const attendanceRecords = await Attendance.find({ 
+      date: {
+        $gte: today,
+        $lt: tomorrow
+      }
+    })
       .populate("user", "name userId email phone role")
       .populate("employee", "name employeeId email phone department")
       .sort({ checkIn: -1 });

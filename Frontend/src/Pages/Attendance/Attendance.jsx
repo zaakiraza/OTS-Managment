@@ -172,10 +172,11 @@ function Attendance() {
 
   const formatTime = (date) => {
     if (!date) return "-";
-    return new Date(date).toLocaleTimeString("en-US", {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+    // Extract time directly from UTC string without timezone conversion
+    const dateStr = new Date(date).toISOString(); // e.g., "2025-12-09T06:57:27.000Z"
+    const timePart = dateStr.split('T')[1]; // "06:57:27.000Z"
+    const [hours, minutes] = timePart.split(':');
+    return `${hours}:${minutes}`;
   };
 
   const formatDate = (date) => {

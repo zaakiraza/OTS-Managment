@@ -99,30 +99,19 @@ attendanceSchema.pre("save", async function () {
       const arrivedLate = checkInDiffMinutes > checkInLeverage;
       const leftEarly = checkOutDiffMinutes > checkOutLeverage;
       
-      // Calculate acceptable minimum hours considering leverage time
-      // If employee uses leverage time on both ends, they might work slightly less than daily hours
-      const leverageTotalMinutes = checkInLeverage + checkOutLeverage;
-      const leverageHours = leverageTotalMinutes / 60;
-      const minimumAcceptableHours = dailyHours - leverageHours;
-      
-      // Determine status based on working hours and arrival/departure times
-      if (this.workingHours >= minimumAcceptableHours) {
-        // Completed acceptable working hours (considering leverage time)
-        if (arrivedLate && leftEarly) {
-          this.status = "late-early-arrival";
-        } else if (leftEarly) {
-          this.status = "early-arrival";
-        } else if (arrivedLate) {
-          this.status = "late";
-        } else {
-          this.status = "present";
-        }
-      } else if (this.workingHours >= halfDayThreshold) {
-        // Completed half day hours
-        this.status = "half-day";
-      } else if (this.workingHours > 0) {
-        // Less than half day
+      // Determine status based on arrival/departure times
+      if (arrivedLate && leftEarly) {
+        // Both late arrival (beyond leverage) and early departure
+        this.status = "late-early-arrival";
+      } else if (arrivedLate) {
+        // Arrived late beyond leverage time
         this.status = "late";
+      } else if (leftEarly) {
+        // Left early beyond leverage time
+        this.status = "early-arrival";
+      } else {
+        // Within acceptable times
+        this.status = "present";
       }
     } else {
       // Fallback logic if employee not found (for Users)

@@ -21,23 +21,23 @@ const employeeSchema = new mongoose.Schema(
     },
     email: {
       type: String,
-      required: [true, "Email is required"],
       unique: true,
+      sparse: true,
       lowercase: true,
       trim: true,
     },
     phone: {
       type: String,
-      required: [true, "Phone is required"],
       trim: true,
     },
     cnic: {
       type: String,
-      required: [true, "CNIC is required"],
       unique: true,
+      sparse: true,
       trim: true,
       validate: {
         validator: function(v) {
+          if (!v) return true; // Allow empty/null values
           return /^\d{5}-\d{7}-\d{1}$/.test(v);
         },
         message: props => `${props.value} is not a valid CNIC format! Use format: XXXXX-XXXXXXX-X`
@@ -55,7 +55,6 @@ const employeeSchema = new mongoose.Schema(
     salary: {
       monthlySalary: {
         type: Number,
-        required: [true, "Monthly salary is required"],
         min: 0,
       },
       currency: {
@@ -92,7 +91,6 @@ const employeeSchema = new mongoose.Schema(
     },
     joiningDate: {
       type: Date,
-      required: [true, "Joining date is required"],
     },
     address: {
       street: String,

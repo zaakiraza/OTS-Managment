@@ -9,6 +9,7 @@ export const createEmployee = async (req, res) => {
       email,
       phone,
       cnic,
+      biometricId,
       department,
       position,
       salary,
@@ -18,13 +19,15 @@ export const createEmployee = async (req, res) => {
       emergencyContact,
     } = req.body;
 
-    // Check if employee with email exists
-    const existingEmployee = await Employee.findOne({ email });
-    if (existingEmployee) {
-      return res.status(400).json({
-        success: false,
-        message: "Employee with this email already exists",
-      });
+    // Check if employee with email exists (only if email is provided)
+    if (email) {
+      const existingEmployee = await Employee.findOne({ email });
+      if (existingEmployee) {
+        return res.status(400).json({
+          success: false,
+          message: "Employee with this email already exists",
+        });
+      }
     }
 
     // Verify department exists
@@ -52,21 +55,27 @@ export const createEmployee = async (req, res) => {
       newEmployeeId = `${deptCode}0001`;
     }
 
-    const employee = await Employee.create({
+    // Prepare employee data, excluding empty optional fields
+    const employeeData = {
       employeeId: newEmployeeId,
       name,
-      email,
-      phone,
-      cnic,
       department,
       position,
       salary,
       workSchedule,
-      joiningDate,
-      address,
-      emergencyContact,
       createdBy: req.user._id,
-    });
+    };
+
+    // Only add optional fields if they have values
+    if (email && email.trim()) employeeData.email = email;
+    if (phone && phone.trim()) employeeData.phone = phone;
+    if (cnic && cnic.trim()) employeeData.cnic = cnic;
+    if (biometricId && biometricId.trim()) employeeData.biometricId = biometricId;
+    if (joiningDate) employeeData.joiningDate = joiningDate;
+    if (address) employeeData.address = address;
+    if (emergencyContact) employeeData.emergencyContact = emergencyContact;
+
+    const employee = await Employee.create(employeeData);
 
     const populatedEmployee = await Employee.findById(employee._id).populate(
       "department",
@@ -146,6 +155,12 @@ export const updateEmployee = async (req, res) => {
   try {
     const updateData = { ...req.body, modifiedBy: req.user._id };
     delete updateData.employeeId; // Don't allow changing employee ID
+
+    // Convert empty strings to undefined for unique sparse fields to avoid duplicate key errors
+    if (updateData.email === '') updateData.email = undefined;
+    if (updateData.phone === '') updateData.phone = undefined;
+    if (updateData.cnic === '') updateData.cnic = undefined;
+    if (updateData.biometricId === '') updateData.biometricId = undefined;
 
     const employee = await Employee.findByIdAndUpdate(
       req.params.id,
