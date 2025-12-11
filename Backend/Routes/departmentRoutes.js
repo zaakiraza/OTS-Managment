@@ -10,14 +10,16 @@ import { verifyToken, hasRole } from "../Middleware/auth.js";
 
 const router = express.Router();
 
-// All routes require authentication and attendanceDepartment or superAdmin role
+// All routes require authentication
 router.use(verifyToken);
-router.use(hasRole("superAdmin", "attendanceDepartment"));
 
-router.post("/", createDepartment);
-router.get("/", getAllDepartments);
-router.get("/:id", getDepartmentById);
-router.put("/:id", updateDepartment);
-router.delete("/:id", deleteDepartment);
+// Write operations - Only superAdmin and attendanceDepartment
+router.post("/", hasRole("superAdmin", "attendanceDepartment"), createDepartment);
+router.put("/:id", hasRole("superAdmin", "attendanceDepartment"), updateDepartment);
+router.delete("/:id", hasRole("superAdmin", "attendanceDepartment"), deleteDepartment);
+
+// Read operations - Allow teamLead as well (for task management)
+router.get("/", hasRole("superAdmin", "attendanceDepartment", "teamLead"), getAllDepartments);
+router.get("/:id", hasRole("superAdmin", "attendanceDepartment", "teamLead"), getDepartmentById);
 
 export default router;

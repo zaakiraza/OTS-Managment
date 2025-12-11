@@ -16,6 +16,10 @@ import Salaries from "./Pages/Salaries/Salaries";
 import Import from "./Pages/Import/Import";
 import Assets from "./Pages/Assets/Assets";
 import Tickets from "./Pages/Tickets/Tickets";
+import Tasks from "./Pages/Tasks/Tasks";
+import MyTasks from "./Pages/MyTasks/MyTasks";
+import MyAssets from "./Pages/MyAssets/MyAssets";
+import Resources from "./Pages/Resources/Resources";
 
 function App() {
   const isAuthenticated = () => {
@@ -46,6 +50,8 @@ function App() {
           superAdmin: "/dashboard",
           attendanceDepartment: "/attendance",
           ITAssetManager: "/assets",
+          teamLead: "/tasks",
+          employee: "/my-tasks",
         };
         return <Navigate to={redirectMap[userRole] || "/login"} />;
       }
@@ -153,8 +159,46 @@ function App() {
         <Route
           path="/tickets"
           element={
-            <ProtectedRoute allowedRoles={["superAdmin", "attendanceDepartment", "ITAssetManager"]}>
+            <ProtectedRoute allowedRoles={["superAdmin", "attendanceDepartment", "ITAssetManager", "teamLead", "employee"]}>
               <Tickets />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Task Management Routes */}
+        <Route
+          path="/tasks"
+          element={
+            <ProtectedRoute allowedRoles={["superAdmin", "teamLead"]}>
+              <Tasks />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/my-tasks"
+          element={
+            <ProtectedRoute allowedRoles={["superAdmin", "attendanceDepartment", "ITAssetManager", "teamLead", "employee"]}>
+              <MyTasks />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Resources Management Routes */}
+        <Route
+          path="/resources"
+          element={
+            <ProtectedRoute allowedRoles={["superAdmin", "teamLead"]}>
+              <Resources />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Employee Asset View */}
+        <Route
+          path="/my-assets"
+          element={
+            <ProtectedRoute allowedRoles={["employee"]}>
+              <MyAssets />
             </ProtectedRoute>
           }
         />

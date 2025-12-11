@@ -1,13 +1,17 @@
 import { NavLink } from "react-router-dom";
 import { useState } from "react";
+import ChangePassword from "../ChangePassword/ChangePassword";
 import "./SideBar.css";
 
 function SideBar() {
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [showChangePassword, setShowChangePassword] = useState(false);
   const user = JSON.parse(localStorage.getItem("user") || "{}");
   const isSuperAdmin = user?.role?.name === "superAdmin";
   const isAttendanceDept = user?.role?.name === "attendanceDepartment";
   const isAssetManager = user?.role?.name === "ITAssetManager";
+  const isTeamLead = user?.role?.name === "teamLead";
+  const isEmployee = user?.role?.name === "employee";
 
   const handleLogout = () => {
     localStorage.clear();
@@ -96,6 +100,16 @@ function SideBar() {
               <span className="nav-icon">🎫</span>
               {!isCollapsed && <span className="nav-text">Tickets</span>}
             </NavLink>
+
+            <NavLink to="/tasks" className="nav-item">
+              <span className="nav-icon">📌</span>
+              {!isCollapsed && <span className="nav-text">Task Board</span>}
+            </NavLink>
+
+            <NavLink to="/my-tasks" className="nav-item">
+              <span className="nav-icon">✓</span>
+              {!isCollapsed && <span className="nav-text">My Tasks</span>}
+            </NavLink>
           </>
         )}
 
@@ -136,6 +150,16 @@ function SideBar() {
               <span className="nav-icon">🎫</span>
               {!isCollapsed && <span className="nav-text">Tickets</span>}
             </NavLink>
+
+            <NavLink to="/tasks" className="nav-item">
+              <span className="nav-icon">📌</span>
+              {!isCollapsed && <span className="nav-text">Task Board</span>}
+            </NavLink>
+
+            <NavLink to="/my-tasks" className="nav-item">
+              <span className="nav-icon">✓</span>
+              {!isCollapsed && <span className="nav-text">My Tasks</span>}
+            </NavLink>
           </>
         )}
 
@@ -151,16 +175,83 @@ function SideBar() {
               <span className="nav-icon">🎫</span>
               {!isCollapsed && <span className="nav-text">Tickets</span>}
             </NavLink>
+
+            <NavLink to="/my-tasks" className="nav-item">
+              <span className="nav-icon">✓</span>
+              {!isCollapsed && <span className="nav-text">My Tasks</span>}
+            </NavLink>
+          </>
+        )}
+
+        {/* Team Lead Menu */}
+        {isTeamLead && (
+          <>
+            <NavLink to="/employees" className="nav-item">
+              <span className="nav-icon">👨‍💼</span>
+              {!isCollapsed && <span className="nav-text">Employees</span>}
+            </NavLink>
+
+            <NavLink to="/tasks" className="nav-item">
+              <span className="nav-icon">📌</span>
+              {!isCollapsed && <span className="nav-text">Task Board</span>}
+            </NavLink>
+
+            <NavLink to="/my-tasks" className="nav-item">
+              <span className="nav-icon">✓</span>
+              {!isCollapsed && <span className="nav-text">My Tasks</span>}
+            </NavLink>
+
+            <NavLink to="/resources" className="nav-item">
+              <span className="nav-icon">📦</span>
+              {!isCollapsed && <span className="nav-text">Resources</span>}
+            </NavLink>
+
+            <NavLink to="/tickets" className="nav-item">
+              <span className="nav-icon">🎫</span>
+              {!isCollapsed && <span className="nav-text">Tickets</span>}
+            </NavLink>
+          </>
+        )}
+
+        {/* Employee Menu */}
+        {isEmployee && (
+          <>
+            <NavLink to="/my-tasks" className="nav-item">
+              <span className="nav-icon">✓</span>
+              {!isCollapsed && <span className="nav-text">My Tasks</span>}
+            </NavLink>
+
+            <NavLink to="/my-assets" className="nav-item">
+              <span className="nav-icon">💼</span>
+              {!isCollapsed && <span className="nav-text">My Assets</span>}
+            </NavLink>
+
+            <NavLink to="/tickets" className="nav-item">
+              <span className="nav-icon">🎫</span>
+              {!isCollapsed && <span className="nav-text">Tickets</span>}
+            </NavLink>
           </>
         )}
       </nav>
 
       <div className="sidebar-footer">
+        <button 
+          onClick={() => setShowChangePassword(true)} 
+          className="nav-item change-password-btn"
+        >
+          <span className="nav-icon">🔐</span>
+          {!isCollapsed && <span className="nav-text">Change Password</span>}
+        </button>
         <button onClick={handleLogout} className="nav-item logout-btn">
           <span className="nav-icon">🚪</span>
           {!isCollapsed && <span className="nav-text">Logout</span>}
         </button>
       </div>
+
+      <ChangePassword 
+        show={showChangePassword} 
+        onClose={() => setShowChangePassword(false)} 
+      />
     </div>
   );
 }

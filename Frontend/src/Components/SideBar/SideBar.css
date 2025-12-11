@@ -142,6 +142,18 @@
 .sidebar-footer {
   padding: 10px;
   border-top: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.change-password-btn {
+  color: #fbbf24;
+}
+
+.change-password-btn:hover {
+  background: rgba(251, 191, 36, 0.1);
+  color: #fcd34d;
 }
 
 .logout-btn {

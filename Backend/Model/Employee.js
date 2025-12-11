@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import bcrypt from "bcrypt";
 
 const employeeSchema = new mongoose.Schema(
   {
@@ -25,6 +26,23 @@ const employeeSchema = new mongoose.Schema(
       sparse: true,
       lowercase: true,
       trim: true,
+    },
+    password: {
+      type: String,
+      select: false,
+      validate: {
+        validator: function(v) {
+          // Allow empty/undefined passwords (will keep existing or auto-generate)
+          if (!v) return true;
+          // If provided, must be at least 6 characters
+          return v.length >= 6;
+        },
+        message: "Password must be at least 6 characters"
+      }
+    },
+    isTeamLead: {
+      type: Boolean,
+      default: false,
     },
     phone: {
       type: String,
@@ -140,6 +158,26 @@ const employeeSchema = new mongoose.Schema(
 employeeSchema.index({ department: 1, isActive: 1 }); // For department-based queries
 employeeSchema.index({ isActive: 1 }); // For filtering active employees
 // Note: biometricId already has unique index from schema definition
+
+// Hash password before saving
+employeeSchema.pre("save", async function () {
+  // Only hash if password is modified or new
+  if (!this.isModified("password")) return;
+  
+  // If no password provided, generate default: Emp@{last4digits}
+  if (!this.password) {
+    const last4 = this.employeeId.slice(-4);
+    this.password = `Emp@${last4}`;
+  }
+  
+  // Hash the password
+  this.password = await bcrypt.hash(this.password, 10);
+});
+
+// Method to compare passwords
+employeeSchema.methods.comparePassword = async function (candidatePassword) {
+  return await bcrypt.compare(candidatePassword, this.password);
+};
 
 const Employee = mongoose.model("Employee", employeeSchema);
 

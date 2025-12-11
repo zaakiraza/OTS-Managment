@@ -18,8 +18,8 @@ router.post("/", hasRole("superAdmin", "attendanceDepartment"), createEmployee);
 router.put("/:id", hasRole("superAdmin", "attendanceDepartment"), updateEmployee);
 router.delete("/:id", hasRole("superAdmin", "attendanceDepartment"), deleteEmployee);
 
-// Read operations - Allow ITAssetManager as well (for asset assignment)
-router.get("/", hasRole("superAdmin", "attendanceDepartment", "ITAssetManager"), getAllEmployees);
-router.get("/:id", hasRole("superAdmin", "attendanceDepartment", "ITAssetManager"), getEmployeeById);
+// Read operations - Allow ITAssetManager and teamLead as well (for asset assignment and task assignment)
+router.get("/", hasRole("superAdmin", "attendanceDepartment", "ITAssetManager", "teamLead"), getAllEmployees);
+router.get("/:id", hasRole("superAdmin", "attendanceDepartment", "ITAssetManager", "teamLead"), getEmployeeById);
 
 export default router;

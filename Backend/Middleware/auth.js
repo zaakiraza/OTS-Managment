@@ -1,7 +1,8 @@
 import jwt from "jsonwebtoken";
 import User from "../Model/User.js";
+import Employee from "../Model/Employee.js";
 
-// Verify JWT token
+// Verify JWT token (supports both User and Employee)
 export const verifyToken = async (req, res, next) => {
   try {
     const token = req.headers.authorization?.split(" ")[1];
@@ -14,13 +15,35 @@ export const verifyToken = async (req, res, next) => {
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const user = await User.findById(decoded.id).populate("role", "name");
+    
+    let user = null;
+    
+    if (decoded.userType === "employee") {
+      // Find employee
+      user = await Employee.findById(decoded.id).populate("department", "name");
+      
+      if (!user || !user.isActive) {
+        return res.status(401).json({
+          success: false,
+          message: "Invalid token or employee not found.",
+        });
+      }
+      
+      // Add virtual role for consistency
+      user.role = { name: user.isTeamLead ? "teamLead" : "employee" };
+      user.userType = "employee";
+    } else {
+      // Find user
+      user = await User.findById(decoded.id).populate("role", "name");
 
-    if (!user || !user.isActive) {
-      return res.status(401).json({
-        success: false,
-        message: "Invalid token or user not found.",
-      });
+      if (!user || !user.isActive) {
+        return res.status(401).json({
+          success: false,
+          message: "Invalid token or user not found.",
+        });
+      }
+      
+      user.userType = "user";
     }
 
     req.user = user;

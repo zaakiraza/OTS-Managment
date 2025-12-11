@@ -78,6 +78,23 @@
   font-weight: 500;
 }
 
+.role-badge {
+  padding: 0.25rem 0.75rem;
+  border-radius: 12px;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.role-badge.team-lead {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.role-badge.employee {
+  background: #e5e7eb;
+  color: #6b7280;
+}
+
 .action-buttons {
   display: flex;
   gap: 0.5rem;

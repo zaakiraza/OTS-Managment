@@ -14,6 +14,8 @@ import biometricRoutes from "./Routes/biometricRoutes.js";
 import importRoutes from "./Routes/importRoutes.js";
 import assetRoutes from "./Routes/assetRoutes.js";
 import ticketRoutes from "./Routes/ticketRoutes.js";
+import taskRoutes from "./Routes/taskRoutes.js";
+import resourceRoutes from "./Routes/resourceRoutes.js";
 import iclockRoutes from "./Routes/iclockRoutes.js";
 import { connectToDevice, startPolling } from "./Utils/zktecoDevice.js";
 import { scheduleAbsenteeCheck } from "./Utils/markAbsentees.js";
@@ -59,6 +61,8 @@ app.use("/api/biometric", biometricRoutes);
 app.use("/api/import", importRoutes);
 app.use("/api/assets", assetRoutes);
 app.use("/api/tickets", ticketRoutes);
+app.use("/api/tasks", taskRoutes);
+app.use("/api/resources", resourceRoutes);
 app.use("/iclock", iclockRoutes);
 
 // 404 Handler

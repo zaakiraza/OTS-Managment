@@ -32,6 +32,8 @@ const Employees = () => {
       workingHoursPerWeek: 40,
     },
     joiningDate: "",
+    password: "",
+    isTeamLead: false,
   });
 
   useEffect(() => {
@@ -96,6 +98,8 @@ const Employees = () => {
             workingHoursPerWeek: 40,
           },
           joiningDate: "",
+          password: "",
+          isTeamLead: false,
         });
         fetchEmployees(selectedDept);
       }
@@ -142,6 +146,8 @@ const Employees = () => {
         workingHoursPerWeek: emp.workSchedule.workingHoursPerWeek,
       },
       joiningDate: emp.joiningDate ? emp.joiningDate.split('T')[0] : "",
+      password: "",
+      isTeamLead: emp.isTeamLead || false,
     });
     setShowModal(true);
   };
@@ -302,6 +308,7 @@ const Employees = () => {
                 <th>CNIC</th>
                 <th>Department</th>
                 <th>Position</th>
+                <th>Role</th>
                 <th>Salary</th>
                 <th>Working Hours</th>
                 <th>Actions</th>
@@ -322,6 +329,11 @@ const Employees = () => {
                     </span>
                   </td>
                   <td>{emp.position}</td>
+                  <td>
+                    <span className={`role-badge ${emp.isTeamLead ? 'team-lead' : 'employee'}`}>
+                      {emp.isTeamLead ? '⭐ Team Lead' : 'Employee'}
+                    </span>
+                  </td>
                   <td>
                     {emp.salary?.monthlySalary?.toLocaleString() || "0"}/{emp.salary?.currency || "PKR"}
                   </td>
@@ -489,6 +501,35 @@ const Employees = () => {
                       setFormData({ ...formData, joiningDate: e.target.value })
                     }
                   />
+                </div>
+                <div className="form-group">
+                  <label>Employee Role *</label>
+                  <select
+                    value={formData.isTeamLead ? "teamLead" : "employee"}
+                    onChange={(e) =>
+                      setFormData({ ...formData, isTeamLead: e.target.value === "teamLead" })
+                    }
+                    required
+                  >
+                    <option value="employee">Employee (Can view/update own tasks)</option>
+                    <option value="teamLead">Team Lead (Can manage tasks & assign work)</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>Password {!editMode && "(Optional)"}</label>
+                  <input
+                    type="password"
+                    value={formData.password}
+                    onChange={(e) =>
+                      setFormData({ ...formData, password: e.target.value })
+                    }
+                    placeholder={editMode ? "Leave blank to keep current" : "Auto: Emp@{last4digits}"}
+                  />
+                  <small style={{color: '#64748b', fontSize: '12px', marginTop: '4px'}}>
+                    {editMode 
+                      ? "Leave empty to keep existing password" 
+                      : "If empty, password will be auto-generated as: Emp@{last 4 digits of Employee ID}"}
+                  </small>
                 </div>
               </div>
 

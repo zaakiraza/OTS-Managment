@@ -1,5 +1,6 @@
 import Employee from "../Model/Employee.js";
 import Department from "../Model/Department.js";
+import bcrypt from "bcrypt";
 
 // Create employee
 export const createEmployee = async (req, res) => {
@@ -17,6 +18,8 @@ export const createEmployee = async (req, res) => {
       joiningDate,
       address,
       emergencyContact,
+      password,
+      isTeamLead,
     } = req.body;
 
     // Check if employee with email exists (only if email is provided)
@@ -64,6 +67,7 @@ export const createEmployee = async (req, res) => {
       salary,
       workSchedule,
       createdBy: req.user._id,
+      isTeamLead: isTeamLead || false,
     };
 
     // Only add optional fields if they have values
@@ -74,6 +78,11 @@ export const createEmployee = async (req, res) => {
     if (joiningDate) employeeData.joiningDate = joiningDate;
     if (address) employeeData.address = address;
     if (emergencyContact) employeeData.emergencyContact = emergencyContact;
+    
+    // Handle password: if provided use it, otherwise let pre-save hook generate default
+    if (password && password.trim()) {
+      employeeData.password = password;
+    }
 
     const employee = await Employee.create(employeeData);
 
@@ -161,6 +170,14 @@ export const updateEmployee = async (req, res) => {
     if (updateData.phone === '') updateData.phone = undefined;
     if (updateData.cnic === '') updateData.cnic = undefined;
     if (updateData.biometricId === '') updateData.biometricId = undefined;
+    
+    // Handle password: hash if provided, otherwise remove from update
+    if (updateData.password && updateData.password !== '') {
+      // Hash the password before updating
+      updateData.password = await bcrypt.hash(updateData.password, 10);
+    } else {
+      delete updateData.password;
+    }
 
     const employee = await Employee.findByIdAndUpdate(
       req.params.id,

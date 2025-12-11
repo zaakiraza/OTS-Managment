@@ -26,7 +26,9 @@ function Login() {
     setLoading(true);
 
     try {
+      console.log("Attempting login with:", formData.email);
       const response = await authAPI.login(formData);
+      console.log("Login response:", response.data);
 
       if (response.data.success) {
         // Store token and user data
@@ -40,16 +42,22 @@ function Login() {
           superAdmin: "/dashboard",
           attendanceDepartment: "/attendance",
           ITAssetManager: "/assets",
+          teamLead: "/tasks",
+          employee: "/my-tasks",
         };
-        
+
         const redirectPath = redirectMap[userRole] || "/dashboard";
         console.log("Redirecting to:", redirectPath); // Debug log
         navigate(redirectPath);
       }
     } catch (err) {
-      setError(
-        err.response?.data?.message || "Login failed. Please try again."
-      );
+      console.error("Login error:", err);
+      console.error("Error response:", err.response);
+      const errorMessage =
+        err.response?.data?.message || "Login failed. Please try again.";
+      console.error("Error message:", errorMessage);
+      setError(errorMessage);
+      alert("Login Error: " + errorMessage); // Temporary alert to see error
     } finally {
       setLoading(false);
     }
@@ -67,16 +75,16 @@ function Login() {
           {error && <div className="error-message">{error}</div>}
 
           <div className="form-group">
-            <label htmlFor="email">Email Address</label>
+            <label htmlFor="email">Email / Employee ID</label>
             <input
-              type="email"
+              type="text"
               id="email"
               name="email"
               value={formData.email}
               onChange={handleChange}
-              placeholder="Enter your email"
+              placeholder="Enter your email or Employee ID"
               required
-              autoComplete="email"
+              autoComplete="username"
             />
           </div>
 
@@ -108,38 +116,85 @@ function Login() {
             <h3>🔑 Test Credentials</h3>
             <p>Click any credential to auto-fill</p>
           </div>
-          
+
           <div className="credentials-grid">
-            <div 
+            <div
               className="credential-card admin"
-              onClick={() => setFormData({ email: "admin@organization.com", password: "12345678" })}
+              onClick={() =>
+                setFormData({
+                  email: "admin@organization.com",
+                  password: "12345678",
+                })
+              }
             >
               <div className="credential-badge">Super Admin</div>
               <div className="credential-info">
-                <p className="credential-email">admin@organization.com</p>
-                <p className="credential-password">12345678</p>
+                {/* <p className="credential-email">admin@organization.com</p>
+                <p className="credential-password">12345678</p> */}
               </div>
             </div>
 
-            <div 
+            <div
               className="credential-card attendance"
-              onClick={() => setFormData({ email: "attendance@gmail.com", password: "12345678" })}
+              onClick={() =>
+                setFormData({
+                  email: "attendance@gmail.com",
+                  password: "12345678",
+                })
+              }
             >
               <div className="credential-badge">Attendance Dept</div>
               <div className="credential-info">
-                <p className="credential-email">attendance@gmail.com</p>
-                <p className="credential-password">12345678</p>
+                {/* <p className="credential-email">attendance@gmail.com</p>
+                <p className="credential-password">12345678</p> */}
               </div>
             </div>
 
-            <div 
+            <div
               className="credential-card asset"
-              onClick={() => setFormData({ email: "itmanager@gmail.com", password: "12345678" })}
+              onClick={() =>
+                setFormData({
+                  email: "itmanager@gmail.com",
+                  password: "12345678",
+                })
+              }
             >
               <div className="credential-badge">IT Manager</div>
               <div className="credential-info">
-                <p className="credential-email">itmanager@gmail.com</p>
-                <p className="credential-password">12345678</p>
+                {/* <p className="credential-email">itmanager@gmail.com</p>
+                <p className="credential-password">12345678</p> */}
+              </div>
+            </div>
+
+            <div
+              className="credential-card asset"
+              onClick={() =>
+                setFormData({
+                  email: "WEB0005",
+                  password: "12345678",
+                })
+              }
+            >
+              <div className="credential-badge">A Team Lead</div>
+              <div className="credential-info">
+                {/* <p className="credential-email">WEB0005</p>
+                <p className="credential-password">12345678</p> */}
+              </div>
+            </div>
+
+            <div
+              className="credential-card asset"
+              onClick={() =>
+                setFormData({
+                  email: "WEB0001",
+                  password: "12345678",
+                })
+              }
+            >
+              <div className="credential-badge">Employee</div>
+              <div className="credential-info">
+                {/* <p className="credential-email">WEB0001</p>
+                <p className="credential-password">12345678</p> */}
               </div>
             </div>
           </div>

@@ -42,6 +42,16 @@ const seedRoles = async () => {
         description: "IT Asset Manager with asset management access",
         permissions: ["manage_assets", "view_reports"],
       },
+      {
+        name: "teamLead",
+        description: "Team Lead with task management access",
+        permissions: ["manage_tasks", "view_reports"],
+      },
+      {
+        name: "employee",
+        description: "Regular employee with basic access",
+        permissions: ["view_own_tasks", "update_own_tasks"],
+      },
     ]);
 
     // console.log("Roles created successfully:", roles);
