@@ -54,6 +54,7 @@ function Attendance() {
   const [editFormData, setEditFormData] = useState({
     checkIn: "",
     checkOut: "",
+    status: "",
     remarks: "",
     workingHours: "",
   });
@@ -63,6 +64,7 @@ function Attendance() {
     date: new Date().toISOString().split("T")[0],
     checkIn: "",
     checkOut: "",
+    status: "",
     remarks: "",
     workingHours: "",
   });
@@ -175,12 +177,10 @@ function Attendance() {
     
     try {
       const date = new Date(time);
-      // Use toLocaleTimeString to get local time in HH:MM format
-      return date.toLocaleTimeString("en-US", {
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: false
-      });
+      // Use local time methods to automatically add PKT offset
+      const hours = String(date.getHours()).padStart(2, '0');
+      const minutes = String(date.getMinutes()).padStart(2, '0');
+      return `${hours}:${minutes}`;
     } catch (error) {
       return "-";
     }
@@ -230,6 +230,7 @@ function Attendance() {
     
     if (record.checkIn) {
       const date = new Date(record.checkIn);
+      // Use local time to get PKT time
       const hours = String(date.getHours()).padStart(2, '0');
       const minutes = String(date.getMinutes()).padStart(2, '0');
       checkInTime = `${hours}:${minutes}`;
@@ -237,6 +238,7 @@ function Attendance() {
     
     if (record.checkOut) {
       const date = new Date(record.checkOut);
+      // Use local time to get PKT time
       const hours = String(date.getHours()).padStart(2, '0');
       const minutes = String(date.getMinutes()).padStart(2, '0');
       checkOutTime = `${hours}:${minutes}`;
@@ -246,6 +248,7 @@ function Attendance() {
     setEditFormData({
       checkIn: checkInTime,
       checkOut: checkOutTime,
+      status: record.status || "",
       remarks: record.remarks || "",
       workingHours: workingHours,
     });
@@ -274,6 +277,9 @@ function Attendance() {
       }
       if (editFormData.workingHours) {
         submitData.workingHours = parseFloat(editFormData.workingHours);
+      }
+      if (editFormData.status) {
+        submitData.status = editFormData.status;
       }
 
       await attendanceAPI.updateAttendance(selectedRecord._id, submitData);
@@ -317,6 +323,9 @@ function Attendance() {
       if (manualFormData.workingHours) {
         submitData.workingHours = parseFloat(manualFormData.workingHours);
       }
+      if (manualFormData.status) {
+        submitData.status = manualFormData.status;
+      }
 
       await attendanceAPI.createManualAttendance(submitData);
       alert("Manual attendance created successfully!");
@@ -334,6 +343,7 @@ function Attendance() {
         date: new Date().toISOString().split("T")[0],
         checkIn: "",
         checkOut: "",
+        status: "",
         remarks: "",
         workingHours: "",
       });
@@ -642,6 +652,28 @@ function Attendance() {
                     />
                   </div>
                   <div className="form-group">
+                    <label>Status (Optional - Auto-calculated if not set)</label>
+                    <select
+                      value={manualFormData.status}
+                      onChange={(e) =>
+                        setManualFormData({
+                          ...manualFormData,
+                          status: e.target.value,
+                        })
+                      }
+                    >
+                      <option value="">Auto-calculate based on times</option>
+                      <option value="present">Present</option>
+                      <option value="absent">Absent</option>
+                      <option value="half-day">Half Day</option>
+                      <option value="late">Late</option>
+                      <option value="early-arrival">Early Arrival</option>
+                      <option value="late-early-arrival">Late & Early Arrival</option>
+                      <option value="leave">Leave</option>
+                      <option value="pending">Pending</option>
+                    </select>
+                  </div>
+                  <div className="form-group">
                     <label>Remarks</label>
                     <textarea
                       value={manualFormData.remarks}
@@ -765,6 +797,28 @@ function Attendance() {
                       placeholder="Auto-calculated"
                       style={{ background: "#f5f5f5", cursor: "not-allowed" }}
                     />
+                  </div>
+                  <div className="form-group">
+                    <label>Status (Optional - Auto-calculated if not set)</label>
+                    <select
+                      value={editFormData.status}
+                      onChange={(e) =>
+                        setEditFormData({
+                          ...editFormData,
+                          status: e.target.value,
+                        })
+                      }
+                    >
+                      <option value="">Auto-calculate based on times</option>
+                      <option value="present">Present</option>
+                      <option value="absent">Absent</option>
+                      <option value="half-day">Half Day</option>
+                      <option value="late">Late</option>
+                      <option value="early-arrival">Early Arrival</option>
+                      <option value="late-early-arrival">Late & Early Arrival</option>
+                      <option value="leave">Leave</option>
+                      <option value="pending">Pending</option>
+                    </select>
                   </div>
                   <div className="form-group">
                     <label>Remarks</label>

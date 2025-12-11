@@ -22,6 +22,7 @@ const Employees = () => {
     salary: {
       monthlySalary: "",
       currency: "PKR",
+      leaveThreshold: 0,
     },
     workSchedule: {
       checkInTime: "09:00",
@@ -86,7 +87,7 @@ const Employees = () => {
           biometricId: "",
           department: "",
           position: "",
-          salary: { monthlySalary: "", currency: "PRK" },
+          salary: { monthlySalary: "", currency: "PRK", leaveThreshold: 0 },
           workSchedule: {
             checkInTime: "09:00",
             checkOutTime: "17:00",
@@ -131,6 +132,7 @@ const Employees = () => {
       salary: {
         monthlySalary: emp.salary.monthlySalary,
         currency: emp.salary.currency,
+        leaveThreshold: emp.salary.leaveThreshold || 0,
       },
       workSchedule: {
         checkInTime: emp.workSchedule.checkInTime,
@@ -156,7 +158,7 @@ const Employees = () => {
       biometricId: "",
       department: "",
       position: "",
-      salary: { monthlySalary: "", currency: "PKR" },
+      salary: { monthlySalary: "", currency: "PKR", leaveThreshold: 0 },
       workSchedule: {
         checkInTime: "09:00",
         checkOutTime: "17:00",
@@ -174,9 +176,22 @@ const Employees = () => {
       ? currentOffs.filter((d) => d !== day)
       : [...currentOffs, day];
     
+    // Calculate working days and hours when weekly offs change
+    const workingDays = 7 - newOffs.length;
+    const weeklyHours = calculateWeeklyHours(
+      formData.workSchedule.checkInTime,
+      formData.workSchedule.checkOutTime,
+      newOffs
+    );
+    
     setFormData({
       ...formData,
-      workSchedule: { ...formData.workSchedule, weeklyOffs: newOffs },
+      workSchedule: { 
+        ...formData.workSchedule, 
+        weeklyOffs: newOffs,
+        workingDaysPerWeek: workingDays,
+        workingHoursPerWeek: weeklyHours,
+      },
     });
   };
 
@@ -202,8 +217,11 @@ const Employees = () => {
     setFormData({ ...formData, cnic: formatted });
   };
 
-  const calculateWeeklyHours = (checkIn, checkOut, workingDays) => {
-    if (!checkIn || !checkOut || !workingDays) return 0;
+  const calculateWeeklyHours = (checkIn, checkOut, weeklyOffs) => {
+    if (!checkIn || !checkOut) return 0;
+    
+    // Calculate working days from weeklyOffs (7 days - number of offs)
+    const workingDays = 7 - (weeklyOffs?.length || 0);
     
     const [inHour, inMinute] = checkIn.split(':').map(Number);
     const [outHour, outMinute] = checkOut.split(':').map(Number);
@@ -220,17 +238,21 @@ const Employees = () => {
   const handleWorkScheduleChange = (field, value) => {
     const updatedSchedule = { ...formData.workSchedule, [field]: value };
     
+    // Calculate working days from weeklyOffs
+    const workingDays = 7 - (updatedSchedule.weeklyOffs?.length || 0);
+    
     // Auto-calculate weekly hours
     const weeklyHours = calculateWeeklyHours(
       updatedSchedule.checkInTime,
       updatedSchedule.checkOutTime,
-      updatedSchedule.workingDaysPerWeek
+      updatedSchedule.weeklyOffs
     );
     
     setFormData({
       ...formData,
       workSchedule: {
         ...updatedSchedule,
+        workingDaysPerWeek: workingDays,
         workingHoursPerWeek: weeklyHours,
       },
     });
@@ -291,20 +313,20 @@ const Employees = () => {
                   <td className="emp-id">{emp.employeeId}</td>
                   <td className="bio-id">{emp.biometricId || "-"}</td>
                   <td>{emp.name}</td>
-                  <td>{emp.email}</td>
-                  <td>{emp.phone}</td>
-                  <td>{emp.cnic || "N/A"}</td>
+                  <td>{emp.email || "-"}</td>
+                  <td>{emp.phone || "-"}</td>
+                  <td>{emp.cnic || "-"}</td>
                   <td>
                     <span className="dept-badge">
-                      {emp.department?.name || "N/A"}
+                      {emp.department?.name || "-"}
                     </span>
                   </td>
                   <td>{emp.position}</td>
                   <td>
-                    {emp.salary.monthlySalary.toLocaleString()}/{emp.salary.currency}
+                    {emp.salary?.monthlySalary?.toLocaleString() || "0"}/{emp.salary?.currency || "PKR"}
                   </td>
                   <td>
-                    {emp.workSchedule.checkInTime} - {emp.workSchedule.checkOutTime}
+                    {emp.workSchedule?.checkInTime || "0"} - {emp.workSchedule?.checkOutTime || "-"}
                   </td>
                   <td>
                     <div className="action-buttons">
@@ -355,30 +377,28 @@ const Employees = () => {
                   />
                 </div>
                 <div className="form-group">
-                  <label>Email *</label>
+                  <label>Email</label>
                   <input
                     type="email"
                     value={formData.email}
                     onChange={(e) =>
                       setFormData({ ...formData, email: e.target.value })
                     }
-                    required
                     disabled={editMode}
                   />
                 </div>
                 <div className="form-group">
-                  <label>Phone *</label>
+                  <label>Phone</label>
                   <input
                     type="tel"
                     value={formData.phone}
                     onChange={(e) =>
                       setFormData({ ...formData, phone: e.target.value })
                     }
-                    required
                   />
                 </div>
                 <div className="form-group">
-                  <label>CNIC *</label>
+                  <label>CNIC</label>
                   <input
                     type="text"
                     value={formData.cnic}
@@ -386,7 +406,6 @@ const Employees = () => {
                     placeholder="XXXXX-XXXXXXX-X"
                     maxLength="15"
                     title="Format: XXXXX-XXXXXXX-X (e.g., 12345-1234567-1)"
-                    required
                   />
                 </div>
                 <div className="form-group">
@@ -431,7 +450,7 @@ const Employees = () => {
                   />
                 </div>
                 <div className="form-group">
-                  <label>Monthly Salary *</label>
+                  <label>Monthly Salary</label>
                   <input
                     type="number"
                     value={formData.salary.monthlySalary}
@@ -441,18 +460,34 @@ const Employees = () => {
                         salary: { ...formData.salary, monthlySalary: e.target.value },
                       })
                     }
-                    required
                   />
                 </div>
                 <div className="form-group">
-                  <label>Joining Date *</label>
+                  <label>Leave Threshold (Allowed Leaves per Month)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={formData.salary.leaveThreshold}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        salary: { ...formData.salary, leaveThreshold: parseInt(e.target.value) || 0 },
+                      })
+                    }
+                    placeholder="0 = all leaves deducted from salary"
+                  />
+                  <small style={{color: '#64748b', fontSize: '12px', marginTop: '4px'}}>
+                    Leaves exceeding this number will be marked as absent for salary calculation
+                  </small>
+                </div>
+                <div className="form-group">
+                  <label>Joining Date</label>
                   <input
                     type="date"
                     value={formData.joiningDate}
                     onChange={(e) =>
                       setFormData({ ...formData, joiningDate: e.target.value })
                     }
-                    required
                   />
                 </div>
               </div>

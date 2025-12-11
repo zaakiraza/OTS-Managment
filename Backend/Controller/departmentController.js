@@ -1,32 +1,9 @@
 import Department from "../Model/Department.js";
-import Room from "../Model/Room.js";
-import Floor from "../Model/Floor.js";
 
 // Create department
 export const createDepartment = async (req, res) => {
   try {
-    const { name, code, room, floor, description, head, leverageTime, teamLead } = req.body;
-
-    // Verify room and floor exist
-    if (room) {
-      const roomExists = await Room.findById(room);
-      if (!roomExists) {
-        return res.status(400).json({
-          success: false,
-          message: "Invalid room",
-        });
-      }
-    }
-
-    if (floor) {
-      const floorExists = await Floor.findById(floor);
-      if (!floorExists) {
-        return res.status(400).json({
-          success: false,
-          message: "Invalid floor",
-        });
-      }
-    }
+    const { name, code, description, head, leverageTime, teamLead } = req.body;
 
     const existingDept = await Department.findOne({
       $or: [{ name }, { code }],
@@ -45,8 +22,6 @@ export const createDepartment = async (req, res) => {
     const department = await Department.create({
       name,
       code: deptCode,
-      room,
-      floor,
       description,
       head,
       leverageTime,
@@ -55,8 +30,6 @@ export const createDepartment = async (req, res) => {
     });
 
     const populatedDept = await Department.findById(department._id)
-      .populate("room", "name roomNumber code")
-      .populate("floor", "name floorNumber")
       .populate("head", "name email")
       .populate("teamLead", "name employeeId email position");
 
@@ -77,8 +50,6 @@ export const createDepartment = async (req, res) => {
 export const getAllDepartments = async (req, res) => {
   try {
     const departments = await Department.find({ isActive: true })
-      .populate("room", "name roomNumber code")
-      .populate("floor", "name floorNumber")
       .populate("head", "name email")
       .populate("teamLead", "name employeeId email position")
       .populate("createdBy", "name")
@@ -101,8 +72,6 @@ export const getAllDepartments = async (req, res) => {
 export const getDepartmentById = async (req, res) => {
   try {
     const department = await Department.findById(req.params.id)
-      .populate("room", "name roomNumber code roomType")
-      .populate("floor", "name floorNumber building")
       .populate("head", "name email phone")
       .populate("teamLead", "name employeeId email position phone")
       .populate("createdBy", "name");
@@ -129,32 +98,9 @@ export const getDepartmentById = async (req, res) => {
 // Update department
 export const updateDepartment = async (req, res) => {
   try {
-    const { name, code, room, floor, description, head, isActive, leverageTime, teamLead } = req.body;
-
-    // Verify room and floor exist if provided
-    if (room) {
-      const roomExists = await Room.findById(room);
-      if (!roomExists) {
-        return res.status(400).json({
-          success: false,
-          message: "Invalid room",
-        });
-      }
-    }
-
-    if (floor) {
-      const floorExists = await Floor.findById(floor);
-      if (!floorExists) {
-        return res.status(400).json({
-          success: false,
-          message: "Invalid floor",
-        });
-      }
-    }
+    const { name, code, description, head, isActive, leverageTime, teamLead } = req.body;
 
     const updateData = { name, description, head, isActive, leverageTime, teamLead };
-    if (room) updateData.room = room;
-    if (floor) updateData.floor = floor;
     if (code) updateData.code = code.toUpperCase();
 
     const department = await Department.findByIdAndUpdate(
@@ -162,8 +108,6 @@ export const updateDepartment = async (req, res) => {
       updateData,
       { new: true, runValidators: true }
     )
-      .populate("room", "name roomNumber code")
-      .populate("floor", "name floorNumber")
       .populate("head", "name email")
       .populate("teamLead", "name employeeId email position");
 

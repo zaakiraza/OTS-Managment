@@ -1,11 +1,13 @@
 import { useState, useEffect } from "react";
 import SideBar from "../../Components/SideBar/SideBar";
-import { assetAPI, employeeAPI } from "../../Config/Api";
+import { assetAPI, employeeAPI, departmentAPI } from "../../Config/Api";
 import "./Assets.css";
 
 function Assets() {
   const [assets, setAssets] = useState([]);
   const [employees, setEmployees] = useState([]);
+  const [departments, setDepartments] = useState([]);
+  const [filteredEmployees, setFilteredEmployees] = useState([]);
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [showAssignModal, setShowAssignModal] = useState(false);
@@ -18,19 +20,12 @@ function Assets() {
   const [formData, setFormData] = useState({
     name: "",
     category: "",
-    brand: "",
-    model: "",
-    serialNumber: "",
-    specifications: "",
-    purchaseDate: "",
-    purchasePrice: "",
-    vendor: "",
-    warrantyExpiry: "",
     condition: "Good",
-    location: "",
+    issueDate: "",
+    purchasePrice: "",
     notes: "",
+    department: "",
     assignToEmployee: "",
-    assignmentNotes: "",
   });
   const [assignData, setAssignData] = useState({
     employeeId: "",
@@ -63,6 +58,7 @@ function Assets() {
     fetchAssets();
     fetchStats();
     fetchEmployees();
+    fetchDepartments();
   }, [filter]);
 
   const fetchAssets = async () => {
@@ -100,9 +96,21 @@ function Assets() {
       const response = await employeeAPI.getAll({ isActive: true });
       if (response.data.success) {
         setEmployees(response.data.data);
+        setFilteredEmployees(response.data.data);
       }
     } catch (error) {
       console.error("Error fetching employees:", error);
+    }
+  };
+
+  const fetchDepartments = async () => {
+    try {
+      const response = await departmentAPI.getAll();
+      if (response.data.success) {
+        setDepartments(response.data.data);
+      }
+    } catch (error) {
+      console.error("Error fetching departments:", error);
     }
   };
 
@@ -128,7 +136,7 @@ function Assets() {
           assetId: assetId,
           employeeId: formData.assignToEmployee,
           conditionAtAssignment: formData.condition,
-          notes: formData.assignmentNotes || "",
+          notes: formData.notes || "",
         });
       }
 
@@ -175,19 +183,12 @@ function Assets() {
     setFormData({
       name: asset.name,
       category: asset.category,
-      brand: asset.brand || "",
-      model: asset.model || "",
-      serialNumber: asset.serialNumber || "",
-      specifications: asset.specifications || "",
-      purchaseDate: asset.purchaseDate ? asset.purchaseDate.split("T")[0] : "",
-      purchasePrice: asset.purchasePrice || "",
-      vendor: asset.vendor || "",
-      warrantyExpiry: asset.warrantyExpiry ? asset.warrantyExpiry.split("T")[0] : "",
       condition: asset.condition,
-      location: asset.location || "",
+      issueDate: asset.issueDate ? asset.issueDate.split("T")[0] : "",
+      purchasePrice: asset.purchasePrice || "",
       notes: asset.notes || "",
+      department: "",
       assignToEmployee: "",
-      assignmentNotes: "",
     });
     setShowModal(true);
   };
@@ -209,21 +210,26 @@ function Assets() {
     setFormData({
       name: "",
       category: "",
-      brand: "",
-      model: "",
-      serialNumber: "",
-      specifications: "",
-      purchaseDate: "",
-      purchasePrice: "",
-      vendor: "",
-      warrantyExpiry: "",
       condition: "Good",
-      location: "",
+      issueDate: "",
+      purchasePrice: "",
       notes: "",
+      department: "",
       assignToEmployee: "",
-      assignmentNotes: "",
     });
+    setFilteredEmployees(employees);
     setSelectedAsset(null);
+  };
+
+  const handleDepartmentChange = (departmentId) => {
+    setFormData({ ...formData, department: departmentId, assignToEmployee: "" });
+    
+    if (departmentId) {
+      const filtered = employees.filter(emp => emp.department?._id === departmentId);
+      setFilteredEmployees(filtered);
+    } else {
+      setFilteredEmployees(employees);
+    }
   };
 
   const getStatusBadge = (status) => {
@@ -371,25 +377,24 @@ function Assets() {
                   <th>Asset ID</th>
                   <th>Name</th>
                   <th>Category</th>
-                  <th>Brand/Model</th>
-                  <th>Serial Number</th>
-                  <th>Status</th>
                   <th>Condition</th>
+                  <th>Issue Date</th>
+                  <th>Purchase Price</th>
+                  <th>Status</th>
                   <th>Assigned To</th>
-                  <th>Location</th>
                   <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan="10" style={{ textAlign: "center" }}>
+                    <td colSpan="9" style={{ textAlign: "center" }}>
                       Loading...
                     </td>
                   </tr>
                 ) : assets.length === 0 ? (
                   <tr>
-                    <td colSpan="10" style={{ textAlign: "center" }}>
+                    <td colSpan="9" style={{ textAlign: "center" }}>
                       No assets found
                     </td>
                   </tr>
@@ -399,18 +404,23 @@ function Assets() {
                       <td className="asset-id">{asset.assetId}</td>
                       <td>{asset.name}</td>
                       <td>{asset.category}</td>
-                      <td>
-                        {asset.brand} {asset.model}
-                      </td>
-                      <td>{asset.serialNumber || "-"}</td>
-                      <td>{getStatusBadge(asset.status)}</td>
                       <td>{getConditionBadge(asset.condition)}</td>
+                      <td>
+                        {asset.issueDate
+                          ? new Date(asset.issueDate).toLocaleDateString()
+                          : "-"}
+                      </td>
+                      <td>
+                        {asset.purchasePrice
+                          ? `PKR ${asset.purchasePrice.toLocaleString()}`
+                          : "-"}
+                      </td>
+                      <td>{getStatusBadge(asset.status)}</td>
                       <td>
                         {asset.assignedTo
                           ? `${asset.assignedTo.employeeId} - ${asset.assignedTo.name}`
                           : "-"}
                       </td>
-                      <td>{asset.location || "-"}</td>
                       <td>
                         <div className="action-buttons">
                           <button
@@ -501,48 +511,13 @@ function Assets() {
 
                   <div className="form-row">
                     <div className="form-group">
-                      <label>Brand</label>
-                      <input
-                        type="text"
-                        value={formData.brand}
-                        onChange={(e) =>
-                          setFormData({ ...formData, brand: e.target.value })
-                        }
-                      />
-                    </div>
-                    <div className="form-group">
-                      <label>Model</label>
-                      <input
-                        type="text"
-                        value={formData.model}
-                        onChange={(e) =>
-                          setFormData({ ...formData, model: e.target.value })
-                        }
-                      />
-                    </div>
-                  </div>
-
-                  <div className="form-row">
-                    <div className="form-group">
-                      <label>Serial Number</label>
-                      <input
-                        type="text"
-                        value={formData.serialNumber}
-                        onChange={(e) =>
-                          setFormData({
-                            ...formData,
-                            serialNumber: e.target.value,
-                          })
-                        }
-                      />
-                    </div>
-                    <div className="form-group">
-                      <label>Condition</label>
+                      <label>Condition *</label>
                       <select
                         value={formData.condition}
                         onChange={(e) =>
                           setFormData({ ...formData, condition: e.target.value })
                         }
+                        required
                       >
                         {conditions.map((cond) => (
                           <option key={cond} value={cond}>
@@ -551,88 +526,52 @@ function Assets() {
                         ))}
                       </select>
                     </div>
+                    <div className="form-group">
+                      <label>Issue Date</label>
+                      <input
+                        type="date"
+                        value={formData.issueDate}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            issueDate: e.target.value,
+                          })
+                        }
+                      />
+                    </div>
                   </div>
 
                   <div className="form-group">
-                    <label>Specifications</label>
-                    <textarea
-                      value={formData.specifications}
+                    <label>Purchase Price (PKR) - Optional</label>
+                    <input
+                      type="number"
+                      value={formData.purchasePrice}
                       onChange={(e) =>
                         setFormData({
                           ...formData,
-                          specifications: e.target.value,
+                          purchasePrice: e.target.value,
                         })
                       }
-                      rows={2}
-                      placeholder="e.g., RAM 16GB, SSD 512GB, Core i7"
+                      placeholder="Enter purchase price"
                     />
-                  </div>
-
-                  <div className="form-row">
-                    <div className="form-group">
-                      <label>Purchase Date</label>
-                      <input
-                        type="date"
-                        value={formData.purchaseDate}
-                        onChange={(e) =>
-                          setFormData({
-                            ...formData,
-                            purchaseDate: e.target.value,
-                          })
-                        }
-                      />
-                    </div>
-                    <div className="form-group">
-                      <label>Purchase Price (PKR)</label>
-                      <input
-                        type="number"
-                        value={formData.purchasePrice}
-                        onChange={(e) =>
-                          setFormData({
-                            ...formData,
-                            purchasePrice: e.target.value,
-                          })
-                        }
-                      />
-                    </div>
-                  </div>
-
-                  <div className="form-row">
-                    <div className="form-group">
-                      <label>Vendor</label>
-                      <input
-                        type="text"
-                        value={formData.vendor}
-                        onChange={(e) =>
-                          setFormData({ ...formData, vendor: e.target.value })
-                        }
-                      />
-                    </div>
-                    <div className="form-group">
-                      <label>Warranty Expiry</label>
-                      <input
-                        type="date"
-                        value={formData.warrantyExpiry}
-                        onChange={(e) =>
-                          setFormData({
-                            ...formData,
-                            warrantyExpiry: e.target.value,
-                          })
-                        }
-                      />
-                    </div>
                   </div>
 
                   <div className="form-group">
-                    <label>Location</label>
-                    <input
-                      type="text"
-                      value={formData.location}
-                      onChange={(e) =>
-                        setFormData({ ...formData, location: e.target.value })
-                      }
-                      placeholder="e.g., Office Floor 2, Desk 15"
-                    />
+                    <label>Department (For Employee Filter)</label>
+                    <select
+                      value={formData.department}
+                      onChange={(e) => handleDepartmentChange(e.target.value)}
+                    >
+                      <option value="">-- All Departments --</option>
+                      {departments.map((dept) => (
+                        <option key={dept._id} value={dept._id}>
+                          {dept.name}
+                        </option>
+                      ))}
+                    </select>
+                    <small style={{ color: "#666", fontSize: "12px" }}>
+                      Select a department to filter employees below
+                    </small>
                   </div>
 
                   <div className="form-group">
@@ -644,30 +583,16 @@ function Assets() {
                       }
                     >
                       <option value="">-- Leave Unassigned --</option>
-                      {employees.map((emp) => (
+                      {filteredEmployees.map((emp) => (
                         <option key={emp._id} value={emp._id}>
                           {emp.name} - {emp.employeeId} ({emp.department?.name || "N/A"})
                         </option>
                       ))}
                     </select>
                     <small style={{ color: "#666", fontSize: "12px" }}>
-                      Select an employee to assign this asset immediately upon creation
+                      Select an employee to assign this asset immediately
                     </small>
                   </div>
-
-                  {formData.assignToEmployee && (
-                    <div className="form-group">
-                      <label>Assignment Notes</label>
-                      <textarea
-                        value={formData.assignmentNotes}
-                        onChange={(e) =>
-                          setFormData({ ...formData, assignmentNotes: e.target.value })
-                        }
-                        rows={2}
-                        placeholder="e.g., Assigned for remote work setup"
-                      />
-                    </div>
-                  )}
 
                   <div className="form-group">
                     <label>Notes</label>
@@ -677,6 +602,7 @@ function Assets() {
                         setFormData({ ...formData, notes: e.target.value })
                       }
                       rows={3}
+                      placeholder="Any additional information about the asset"
                     />
                   </div>
 

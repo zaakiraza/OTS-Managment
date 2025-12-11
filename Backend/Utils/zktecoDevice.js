@@ -45,20 +45,21 @@ function mapZkLogToDoc(log) {
 
   if (isNaN(dt.getTime())) return null; // invalid date
 
-  // Use local date/time strings (not UTC) to preserve device timezone
+  // Device sends local time (PKT), convert to UTC by subtracting offset
   const year = dt.getFullYear();
-  const month = String(dt.getMonth() + 1).padStart(2, '0');
-  const day = String(dt.getDate()).padStart(2, '0');
-  const hours = String(dt.getHours()).padStart(2, '0');
-  const minutes = String(dt.getMinutes()).padStart(2, '0');
-  const seconds = String(dt.getSeconds()).padStart(2, '0');
+  const month = dt.getMonth();
+  const day = dt.getDate();
+  const hours = dt.getHours();
+  const minutes = dt.getMinutes();
+  const seconds = dt.getSeconds();
   
-  const dateStr = `${year}-${month}-${day}`;           // YYYY-MM-DD in local time
-  const timeStr = `${hours}:${minutes}:${seconds}`;    // HH:MM:SS in local time
+  const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+  const timeStr = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
   
-  // Create a new Date object with UTC time matching local time
-  // This ensures MongoDB stores the correct date without timezone conversion
-  const localDatetime = new Date(Date.UTC(year, dt.getMonth(), day, hours, minutes, seconds));
+  // Subtract PKT offset (5 hours) to convert local time to UTC
+  const PKT_OFFSET_HOURS = 5;
+  const utcHours = hours - PKT_OFFSET_HOURS;
+  const localDatetime = new Date(Date.UTC(year, month, day, utcHours, minutes, seconds));
 
   return {
     datetime: localDatetime,
@@ -71,10 +72,6 @@ function mapZkLogToDoc(log) {
     deviceIp: log.ip ?? DEVICE_IP,
   };
 }
-
-/**
- * Process attendance log and create/update attendance record
- */
 async function processAttendanceLog(doc) {
   try {
     // Find employee by biometric ID (userId from device)

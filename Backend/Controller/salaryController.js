@@ -64,6 +64,7 @@ export const calculateSalary = async (req, res) => {
     let halfDays = 0;
     let lateDays = 0;
     let earlyArrivals = 0;
+    let leaveDays = 0;
 
     attendanceRecords.forEach((record) => {
       if (record.status === "present" || record.status === "early-arrival") {
@@ -72,6 +73,7 @@ export const calculateSalary = async (req, res) => {
       }
       else if (record.status === "absent") absentDays++;
       else if (record.status === "half-day") halfDays++;
+      else if (record.status === "leave") leaveDays++;
       else if (record.status === "late" || record.status === "late-early-arrival") {
         lateDays++;
         presentDays++; // Late is still considered present
@@ -79,7 +81,7 @@ export const calculateSalary = async (req, res) => {
       }
     });
 
-    logger.debug(`Attendance stats: Present=${presentDays}, Absent=${absentDays}, Late=${lateDays}, HalfDays=${halfDays}, EarlyArrivals=${earlyArrivals}`);
+    logger.debug(`Attendance stats: Present=${presentDays}, Absent=${absentDays}, Late=${lateDays}, HalfDays=${halfDays}, Leaves=${leaveDays}, EarlyArrivals=${earlyArrivals}`);
 
     let totalDeductions = 0;
     let bonus = 0;
@@ -99,9 +101,13 @@ export const calculateSalary = async (req, res) => {
       totalDeductions = missingHours * (criteria.hourlyDeductionRate || 0);
     } else {
       // Check-in/checkout method
+      // Apply leave threshold logic
+      const leaveThreshold = employee.salary.leaveThreshold || 0;
+      const excessLeaves = Math.max(0, leaveDays - leaveThreshold);
+      
       // Apply late penalty
       const lateAsAbsent = Math.floor(lateDays / (criteria.lateThreshold || SALARY.DEFAULT_LATE_THRESHOLD));
-      const totalAbsents = absentDays + lateAsAbsent;
+      const totalAbsents = absentDays + lateAsAbsent + excessLeaves;
       
       // Apply early arrival bonus
       const earlyBonus = criteria.earlyArrivalBonus > 0 
@@ -115,6 +121,8 @@ export const calculateSalary = async (req, res) => {
       
       // Add bonus days to present
       presentDays += earlyBonus;
+      
+      logger.debug(`Leave calculation: Total=${leaveDays}, Threshold=${leaveThreshold}, Excess=${excessLeaves}, Total Absents=${totalAbsents}`);
     }
 
     // Perfect attendance bonus
@@ -144,6 +152,7 @@ export const calculateSalary = async (req, res) => {
         absentDays,
         halfDays,
         lateDays,
+        leaveDays,
         totalWorkedDays,
         perDaySalary,
       },

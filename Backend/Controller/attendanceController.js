@@ -33,11 +33,11 @@ export const deviceCheckIn = async (req, res) => {
     // Use provided timestamp or current time
     const punchTime = timestamp ? new Date(timestamp) : new Date();
     
-    // Get date at midnight in UTC for consistent storage
-    // Extract year, month, day from local time but create UTC date
+    // Get date at midnight - store as-is without timezone conversion
     const localYear = punchTime.getFullYear();
     const localMonth = punchTime.getMonth();
     const localDay = punchTime.getDate();
+    // Store date at midnight using UTC to prevent timezone shifts
     const dateOnly = new Date(Date.UTC(localYear, localMonth, localDay, 0, 0, 0, 0));
 
     // Find today's attendance record
@@ -325,13 +325,27 @@ export const updateAttendance = async (req, res) => {
     }
 
     // Update fields - Convert time strings to Date objects
+    // For manual entries, subtract PKT offset (5 hours) to store as UTC
+    const PKT_OFFSET_HOURS = 5; // Pakistan Standard Time is UTC+5
+    
     if (checkIn) {
       // If checkIn is a time string (HH:MM:SS or HH:MM), combine with date
       if (typeof checkIn === 'string' && /^\d{1,2}:\d{2}(:\d{2})?$/.test(checkIn)) {
         const attendanceDate = new Date(attendance.date);
         const [hours, minutes, seconds = 0] = checkIn.split(':').map(Number);
-        attendanceDate.setHours(hours, minutes, seconds, 0);
-        attendance.checkIn = attendanceDate;
+        // Subtract PKT offset to convert local time to UTC
+        const utcHours = hours - PKT_OFFSET_HOURS;
+        attendance.checkIn = new Date(
+          Date.UTC(
+            attendanceDate.getUTCFullYear(),
+            attendanceDate.getUTCMonth(),
+            attendanceDate.getUTCDate(),
+            utcHours,
+            minutes,
+            seconds,
+            0
+          )
+        );
       } else {
         // It's already a full datetime string or Date object
         attendance.checkIn = new Date(checkIn);
@@ -343,8 +357,19 @@ export const updateAttendance = async (req, res) => {
       if (typeof checkOut === 'string' && /^\d{1,2}:\d{2}(:\d{2})?$/.test(checkOut)) {
         const attendanceDate = new Date(attendance.date);
         const [hours, minutes, seconds = 0] = checkOut.split(':').map(Number);
-        attendanceDate.setHours(hours, minutes, seconds, 0);
-        attendance.checkOut = attendanceDate;
+        // Subtract PKT offset to convert local time to UTC
+        const utcHours = hours - PKT_OFFSET_HOURS;
+        attendance.checkOut = new Date(
+          Date.UTC(
+            attendanceDate.getUTCFullYear(),
+            attendanceDate.getUTCMonth(),
+            attendanceDate.getUTCDate(),
+            utcHours,
+            minutes,
+            seconds,
+            0
+          )
+        );
       } else {
         // It's already a full datetime string or Date object
         attendance.checkOut = new Date(checkOut);
@@ -404,7 +429,7 @@ export const deleteAttendance = async (req, res) => {
 // Create manual attendance entry
 export const createManualAttendance = async (req, res) => {
   try {
-    const { userId, date, checkIn, checkOut, remarks, workingHours } = req.body;
+    const { userId, date, checkIn, checkOut, remarks, workingHours, status } = req.body;
 
     // Check if employee or user exists
     let employee = await Employee.findOne({ employeeId: userId });
@@ -443,14 +468,19 @@ export const createManualAttendance = async (req, res) => {
     }
 
     // Convert checkIn and checkOut to proper Date objects
+    // For manual entries, subtract PKT offset (5 hours) to store as UTC
     let checkInDate = null;
     let checkOutDate = null;
+    
+    const PKT_OFFSET_HOURS = 5; // Pakistan Standard Time is UTC+5
     
     if (checkIn) {
       // If checkIn is a time string (HH:MM:SS or HH:MM), combine with attendance date
       if (typeof checkIn === 'string' && /^\d{1,2}:\d{2}(:\d{2})?$/.test(checkIn)) {
         const [hours, minutes, seconds = 0] = checkIn.split(':').map(Number);
-        checkInDate = new Date(Date.UTC(year, month - 1, day, hours, minutes, seconds, 0));
+        // Subtract PKT offset to convert local time to UTC
+        const utcHours = hours - PKT_OFFSET_HOURS;
+        checkInDate = new Date(Date.UTC(year, month - 1, day, utcHours, minutes, seconds, 0));
       } else {
         // It's already a full datetime string or Date object
         checkInDate = new Date(checkIn);
@@ -461,7 +491,9 @@ export const createManualAttendance = async (req, res) => {
       // If checkOut is a time string (HH:MM:SS or HH:MM), combine with attendance date
       if (typeof checkOut === 'string' && /^\d{1,2}:\d{2}(:\d{2})?$/.test(checkOut)) {
         const [hours, minutes, seconds = 0] = checkOut.split(':').map(Number);
-        checkOutDate = new Date(Date.UTC(year, month - 1, day, hours, minutes, seconds, 0));
+        // Subtract PKT offset to convert local time to UTC
+        const utcHours = hours - PKT_OFFSET_HOURS;
+        checkOutDate = new Date(Date.UTC(year, month - 1, day, utcHours, minutes, seconds, 0));
       } else {
         // It's already a full datetime string or Date object
         checkOutDate = new Date(checkOut);
@@ -479,6 +511,11 @@ export const createManualAttendance = async (req, res) => {
       isManualEntry: true,
       modifiedBy: req.user._id,
     };
+
+    // Add manual status if provided (overrides auto-calculation)
+    if (status) {
+      attendanceData.status = status;
+    }
 
     // Add workingHours if provided
     if (workingHours !== undefined) {

@@ -16,8 +16,6 @@ export const getAllAssets = async (req, res) => {
       filter.$or = [
         { assetId: { $regex: search, $options: "i" } },
         { name: { $regex: search, $options: "i" } },
-        { serialNumber: { $regex: search, $options: "i" } },
-        { brand: { $regex: search, $options: "i" } },
       ];
     }
 

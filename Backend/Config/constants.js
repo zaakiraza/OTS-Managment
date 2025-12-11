@@ -37,6 +37,7 @@ export const ATTENDANCE = {
     EARLY_ARRIVAL: 'early-arrival',
     LATE_EARLY_ARRIVAL: 'late-early-arrival',
     PENDING: 'pending',
+    LEAVE: 'leave',
   },
 };
 

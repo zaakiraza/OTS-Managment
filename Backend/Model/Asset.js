@@ -4,7 +4,6 @@ const assetSchema = new mongoose.Schema(
   {
     assetId: {
       type: String,
-      required: [true, "Asset ID is required"],
       unique: true,
       uppercase: true,
     },
@@ -33,37 +32,12 @@ const assetSchema = new mongoose.Schema(
         "Other",
       ],
     },
-    brand: {
-      type: String,
-      trim: true,
-    },
-    model: {
-      type: String,
-      trim: true,
-    },
-    serialNumber: {
-      type: String,
-      trim: true,
-      unique: true,
-      sparse: true,
-    },
-    specifications: {
-      type: String,
-      trim: true,
-    },
-    purchaseDate: {
+    issueDate: {
       type: Date,
     },
     purchasePrice: {
       type: Number,
       min: 0,
-    },
-    vendor: {
-      type: String,
-      trim: true,
-    },
-    warrantyExpiry: {
-      type: Date,
     },
     status: {
       type: String,
@@ -82,10 +56,6 @@ const assetSchema = new mongoose.Schema(
     },
     assignedDate: {
       type: Date,
-    },
-    location: {
-      type: String,
-      trim: true,
     },
     notes: {
       type: String,
@@ -116,12 +86,11 @@ const assetSchema = new mongoose.Schema(
 );
 
 // Auto-generate asset ID
-assetSchema.pre("save", async function (next) {
+assetSchema.pre("save", async function () {
   if (this.isNew && !this.assetId) {
     const count = await mongoose.model("Asset").countDocuments();
     this.assetId = `AST${String(count + 1).padStart(5, "0")}`;
   }
-  next();
 });
 
 const Asset = mongoose.model("Asset", assetSchema);

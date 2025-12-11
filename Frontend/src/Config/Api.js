@@ -82,42 +82,6 @@ export const departmentAPI = {
   delete: (id) => api.delete(`/departments/${id}`),
 };
 
-// Campus API
-export const campusAPI = {
-  getAll: (params) => api.get("/campuses", { params }),
-  getById: (id) => api.get(`/campuses/${id}`),
-  create: (data) => api.post("/campuses", data),
-  update: (id, data) => api.put(`/campuses/${id}`, data),
-  delete: (id) => api.delete(`/campuses/${id}`),
-};
-
-// Building API
-export const buildingAPI = {
-  getAll: (params) => api.get("/buildings", { params }),
-  getById: (id) => api.get(`/buildings/${id}`),
-  create: (data) => api.post("/buildings", data),
-  update: (id, data) => api.put(`/buildings/${id}`, data),
-  delete: (id) => api.delete(`/buildings/${id}`),
-};
-
-// Floor API
-export const floorAPI = {
-  getAll: (params) => api.get("/floors", { params }),
-  getById: (id) => api.get(`/floors/${id}`),
-  create: (data) => api.post("/floors", data),
-  update: (id, data) => api.put(`/floors/${id}`, data),
-  delete: (id) => api.delete(`/floors/${id}`),
-};
-
-// Room API
-export const roomAPI = {
-  getAll: (params) => api.get("/rooms", { params }),
-  getById: (id) => api.get(`/rooms/${id}`),
-  create: (data) => api.post("/rooms", data),
-  update: (id, data) => api.put(`/rooms/${id}`, data),
-  delete: (id) => api.delete(`/rooms/${id}`),
-};
-
 // Employee API
 export const employeeAPI = {
   getAll: (params) => api.get("/employees", { params }),

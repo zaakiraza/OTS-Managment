@@ -7,6 +7,8 @@ function Roles() {
   const [roles, setRoles] = useState([]);
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
+  const [editMode, setEditMode] = useState(false);
+  const [editId, setEditId] = useState(null);
   const [formData, setFormData] = useState({
     name: "",
     description: "",
@@ -47,25 +49,34 @@ function Roles() {
         .map((p) => p.trim())
         .filter((p) => p);
 
-      await roleAPI.createRole({
+      const roleData = {
         name: formData.name,
         description: formData.description,
         permissions,
-      });
+      };
 
-      setSuccess("Role created successfully!");
+      if (editMode) {
+        await roleAPI.updateRole(editId, roleData);
+        setSuccess("Role updated successfully!");
+      } else {
+        await roleAPI.createRole(roleData);
+        setSuccess("Role created successfully!");
+      }
+
       setFormData({
         name: "",
         description: "",
         permissions: "",
       });
+      setEditMode(false);
+      setEditId(null);
       fetchRoles();
       setTimeout(() => {
         setShowModal(false);
         setSuccess("");
       }, 2000);
     } catch (err) {
-      setError(err.response?.data?.message || "Failed to create role");
+      setError(err.response?.data?.message || `Failed to ${editMode ? 'update' : 'create'} role`);
     } finally {
       setLoading(false);
     }
@@ -83,6 +94,29 @@ function Roles() {
         setTimeout(() => setError(""), 3000);
       }
     }
+  };
+
+  const handleEdit = (role) => {
+    setEditMode(true);
+    setEditId(role._id);
+    setFormData({
+      name: role.name,
+      description: role.description || "",
+      permissions: role.permissions ? role.permissions.join(", ") : "",
+    });
+    setShowModal(true);
+  };
+
+  const handleCloseModal = () => {
+    setShowModal(false);
+    setEditMode(false);
+    setEditId(null);
+    setFormData({
+      name: "",
+      description: "",
+      permissions: "",
+    });
+    setError("");
   };
 
   return (
@@ -111,12 +145,22 @@ function Roles() {
                 <div key={role._id} className="role-card">
                   <div className="role-header">
                     <h3>{role.name}</h3>
-                    <button
-                      className="btn-delete"
-                      onClick={() => handleDelete(role._id)}
-                    >
-                      🗑️
-                    </button>
+                    <div className="role-actions">
+                      <button
+                        className="btn-edit-icon"
+                        onClick={() => handleEdit(role)}
+                        title="Edit role"
+                      >
+                        ✏️
+                      </button>
+                      <button
+                        className="btn-delete"
+                        onClick={() => handleDelete(role._id)}
+                        title="Delete role"
+                      >
+                        🗑️
+                      </button>
+                    </div>
                   </div>
                   <p className="role-description">{role.description}</p>
                   <div className="permissions-list">
@@ -150,13 +194,13 @@ function Roles() {
       </div>
 
       {showModal && (
-        <div className="modal-overlay" onClick={() => setShowModal(false)}>
+        <div className="modal-overlay" onClick={handleCloseModal}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h2>Add New Role</h2>
+              <h2>{editMode ? "Edit Role" : "Add New Role"}</h2>
               <button
                 className="close-btn"
-                onClick={() => setShowModal(false)}
+                onClick={handleCloseModal}
               >
                 ✕
               </button>
@@ -204,12 +248,12 @@ function Roles() {
                 <button
                   type="button"
                   className="btn-secondary"
-                  onClick={() => setShowModal(false)}
+                  onClick={handleCloseModal}
                 >
                   Cancel
                 </button>
                 <button type="submit" className="btn-primary" disabled={loading}>
-                  {loading ? "Creating..." : "Create Role"}
+                  {loading ? (editMode ? "Updating..." : "Creating...") : (editMode ? "Update Role" : "Create Role")}
                 </button>
               </div>
             </form>

@@ -15,10 +15,24 @@ function Reports() {
     startDate: "",
     endDate: "",
     month: "",
+    week: "", // Week selection
     departmentId: "",
     employeeId: "",
     status: "",
   });
+
+  // Format time to show local PKT time
+  const formatTime = (time) => {
+    if (!time) return "-";
+    try {
+      const date = new Date(time);
+      const hours = String(date.getHours()).padStart(2, '0');
+      const minutes = String(date.getMinutes()).padStart(2, '0');
+      return `${hours}:${minutes}`;
+    } catch (error) {
+      return "-";
+    }
+  };
 
   useEffect(() => {
     fetchDepartments();
@@ -71,6 +85,7 @@ function Reports() {
         startDate: filters.startDate || undefined,
         endDate: filters.endDate || undefined,
         month: filters.month || undefined,
+        week: filters.week || undefined,
         departmentId: filters.departmentId || undefined,
         employeeId: filters.employeeId || undefined,
         status: filters.status || undefined,
@@ -211,6 +226,53 @@ function Reports() {
   const renderAttendanceReport = () => {
     if (!reportData || !reportData.data) return null;
 
+    // Check if it's weekly summary
+    if (reportData.isWeeklySummary && Array.isArray(reportData.data)) {
+      return (
+        <div className="report-result">
+          <h2>Weekly Attendance Summary</h2>
+          <div className="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>Employee ID</th>
+                  <th>Name</th>
+                  <th>Department</th>
+                  <th>Total Hrs</th>
+                  <th>Completed Hrs</th>
+                  <th>Late</th>
+                  <th>Present</th>
+                  <th>Absent</th>
+                  <th>Leave</th>
+                  <th>Early Arrival</th>
+                  <th>Late + Early</th>
+                </tr>
+              </thead>
+              <tbody>
+                {reportData.data.map((emp, index) => (
+                  <tr key={index}>
+                    <td>{emp.employee.employeeId}</td>
+                    <td>{emp.employee.name}</td>
+                    <td>{emp.employee.department}</td>
+                    <td>{emp.expectedHours.toFixed(2)}</td>
+                    <td style={{ fontWeight: 'bold', color: emp.totalHours >= emp.expectedHours ? 'green' : 'orange' }}>
+                      {emp.totalHours.toFixed(2)}
+                    </td>
+                    <td><span className="status status-late">{emp.late}</span></td>
+                    <td><span className="status status-present">{emp.present}</span></td>
+                    <td><span className="status status-absent">{emp.absent}</span></td>
+                    <td>{emp.leaves}</td>
+                    <td><span className="status status-early-arrival">{emp.earlyArrival}</span></td>
+                    <td><span className="status status-late-early-arrival">{emp.lateEarlyArrival}</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="report-result">
         <h2>Attendance Report</h2>
@@ -238,16 +300,8 @@ function Reports() {
                     <td>{record.userId}</td>
                     <td>{record.employee?.name || record.user?.name || "N/A"}</td>
                     <td>{record.employee?.department?.name || "N/A"}</td>
-                    <td>
-                      {record.checkIn
-                        ? new Date(record.checkIn).toLocaleTimeString()
-                        : "-"}
-                    </td>
-                    <td>
-                      {record.checkOut
-                        ? new Date(record.checkOut).toLocaleTimeString()
-                        : "-"}
-                    </td>
+                    <td>{formatTime(record.checkIn)}</td>
+                    <td>{formatTime(record.checkOut)}</td>
                     <td>{record.workingHours?.toFixed(2) || "0"}</td>
                     <td>
                       <span className={`status status-${record.status}`}>
@@ -324,16 +378,8 @@ function Reports() {
               {reportData.records?.map((record, index) => (
                 <tr key={index}>
                   <td>{new Date(record.date).toLocaleDateString()}</td>
-                  <td>
-                    {record.checkIn
-                      ? new Date(record.checkIn).toLocaleTimeString()
-                      : "-"}
-                  </td>
-                  <td>
-                    {record.checkOut
-                      ? new Date(record.checkOut).toLocaleTimeString()
-                      : "-"}
-                  </td>
+                  <td>{formatTime(record.checkIn)}</td>
+                  <td>{formatTime(record.checkOut)}</td>
                   <td>{record.workingHours?.toFixed(2) || "0"}</td>
                   <td>
                     <span className={`status status-${record.status}`}>
@@ -471,7 +517,22 @@ function Reports() {
                     name="month"
                     value={filters.month}
                     onChange={handleFilterChange}
+                    placeholder="Select month"
                   />
+                </div>
+
+                <div className="filter-group">
+                  <label>Week</label>
+                  <input
+                    type="week"
+                    name="week"
+                    value={filters.week}
+                    onChange={handleFilterChange}
+                    placeholder="Select week"
+                  />
+                  <small style={{ color: "#666", fontSize: "0.85em" }}>
+                    Select specific week for weekly report
+                  </small>
                 </div>
 
                 <div className="filter-group">

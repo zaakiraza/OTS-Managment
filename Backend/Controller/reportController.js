@@ -11,6 +11,7 @@ export const generateAttendanceReport = async (req, res) => {
       startDate,
       endDate,
       month, // Format: YYYY-MM
+      week, // Format: YYYY-Www (e.g., 2025-W01)
       departmentId,
       employeeId,
       userId,
@@ -20,8 +21,28 @@ export const generateAttendanceReport = async (req, res) => {
 
     let dateFilter = {};
 
+    // Handle week filter
+    if (week) {
+      const [yearStr, weekStr] = week.split("-W");
+      const year = parseInt(yearStr);
+      const weekNum = parseInt(weekStr);
+      
+      // Calculate start and end of week (Monday to Sunday)
+      const firstDayOfYear = new Date(year, 0, 1);
+      const daysToMonday = (firstDayOfYear.getDay() + 6) % 7; // Days until first Monday
+      const firstMonday = new Date(year, 0, 1 + (7 - daysToMonday) % 7);
+      
+      const startOfWeek = new Date(firstMonday);
+      startOfWeek.setDate(firstMonday.getDate() + (weekNum - 1) * 7);
+      
+      const endOfWeek = new Date(startOfWeek);
+      endOfWeek.setDate(startOfWeek.getDate() + 6);
+      endOfWeek.setHours(23, 59, 59, 999);
+      
+      dateFilter.date = { $gte: startOfWeek, $lte: endOfWeek };
+    }
     // Handle month filter
-    if (month) {
+    else if (month) {
       const [year, monthNum] = month.split("-");
       const startOfMonth = new Date(year, monthNum - 1, 1);
       const endOfMonth = new Date(year, monthNum, 0, 23, 59, 59, 999);
@@ -44,6 +65,17 @@ export const generateAttendanceReport = async (req, res) => {
     // Build filter object
     let filter = { ...dateFilter };
 
+    // Department filter - apply first if no specific employee selected
+    if (departmentId && !employeeId) {
+      const employees = await Employee.find({
+        department: departmentId,
+        isActive: true,
+      });
+      const employeeIds = employees.map((emp) => emp._id);
+      filter.employee = { $in: employeeIds };
+    }
+
+    // Employee filter - takes priority over department filter
     if (employeeId) {
       const employee = await Employee.findOne({ employeeId });
       if (employee) {
@@ -59,25 +91,87 @@ export const generateAttendanceReport = async (req, res) => {
       filter.status = status;
     }
 
-    // Department filter
-    if (departmentId) {
-      const employees = await Employee.find({
-        department: departmentId,
-        isActive: true,
-      });
-      const employeeIds = employees.map((emp) => emp._id);
-      filter.employee = { $in: employeeIds };
-    }
-
     // Fetch attendance records
     const attendanceRecords = await Attendance.find(filter)
       .populate({
         path: "employee",
-        select: "name employeeId email department position",
+        select: "name employeeId email department position salary workSchedule",
         populate: { path: "department", select: "name code" },
       })
       .populate("user", "name userId email")
       .sort({ date: -1, createdAt: -1 });
+
+    // If week filter is applied, always generate weekly summary per employee
+    let weeklySummary = null;
+    if (week) {
+      // Group records by employee
+      const employeeMap = new Map();
+      
+      attendanceRecords.forEach((record) => {
+        const empId = record.employee?._id.toString() || record.userId;
+        if (!employeeMap.has(empId)) {
+          employeeMap.set(empId, {
+            employee: record.employee,
+            userId: record.userId,
+            totalHours: 0,
+            expectedHours: 0,
+            present: 0,
+            absent: 0,
+            late: 0,
+            earlyArrival: 0,
+            lateEarlyArrival: 0,
+            halfDay: 0,
+            leaves: 0,
+            pending: 0,
+            records: []
+          });
+        }
+        
+        const empData = employeeMap.get(empId);
+        empData.records.push(record);
+        
+        // Count status
+        if (record.status === 'present') empData.present++;
+        else if (record.status === 'absent') empData.absent++;
+        else if (record.status === 'late') empData.late++;
+        else if (record.status === 'early-arrival') empData.earlyArrival++;
+        else if (record.status === 'late-early-arrival') empData.lateEarlyArrival++;
+        else if (record.status === 'half-day') empData.halfDay++;
+        else if (record.status === 'leave') empData.leaves++;
+        else if (record.status === 'pending') empData.pending++;
+        
+        // Add working hours
+        if (record.workingHours) {
+          empData.totalHours += record.workingHours;
+        }
+      });
+      
+      // Calculate expected hours from employee's work schedule
+      weeklySummary = Array.from(employeeMap.values()).map(emp => {
+        // Get expected hours from employee's workSchedule
+        const expectedHours = emp.employee?.workSchedule?.workingHoursPerWeek || 40;
+        
+        return {
+          employee: {
+            id: emp.employee?._id,
+            employeeId: emp.employee?.employeeId || emp.userId,
+            name: emp.employee?.name || 'N/A',
+            department: emp.employee?.department?.name || 'N/A'
+          },
+          totalHours: parseFloat(emp.totalHours.toFixed(2)),
+          expectedHours: parseFloat(expectedHours.toFixed(2)),
+          present: emp.present,
+          absent: emp.absent,
+          late: emp.late,
+          earlyArrival: emp.earlyArrival,
+          lateEarlyArrival: emp.lateEarlyArrival,
+          halfDay: emp.halfDay,
+          leaves: emp.leaves,
+          pending: emp.pending,
+          totalDays: emp.records.length
+        };
+      });
+    }
 
     // Generate summary statistics
     const summary = {
@@ -142,9 +236,10 @@ export const generateAttendanceReport = async (req, res) => {
       summary,
       salaryInfo,
       filters: {
-        startDate: startDate || (month ? `${month}-01` : null),
-        endDate: endDate || (month ? new Date(month + "-01").toISOString() : null),
+        startDate: startDate || (month ? `${month}-01` : null) || (week ? week : null),
+        endDate: endDate || (month ? new Date(month + "-01").toISOString() : null) || (week ? week : null),
         month,
+        week,
         departmentId,
         employeeId,
         userId,
@@ -152,11 +247,17 @@ export const generateAttendanceReport = async (req, res) => {
       },
     };
 
-    if (reportType === "summary") {
-      response.data = {
-        totalRecords: attendanceRecords.length,
-        summary,
-      };
+    if (reportType === "summary" || weeklySummary) {
+      // If weekly summary is generated, return that instead
+      if (weeklySummary) {
+        response.data = weeklySummary;
+        response.isWeeklySummary = true;
+      } else {
+        response.data = {
+          totalRecords: attendanceRecords.length,
+          summary,
+        };
+      }
     } else {
       response.data = attendanceRecords;
     }

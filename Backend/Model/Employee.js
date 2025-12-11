@@ -61,6 +61,12 @@ const employeeSchema = new mongoose.Schema(
         type: String,
         default: "PKR",
       },
+      leaveThreshold: {
+        type: Number,
+        default: 0,
+        min: 0,
+        description: "Number of leaves allowed before marking as absent for salary calculation"
+      },
     },
     workSchedule: {
       checkInTime: {
@@ -79,14 +85,15 @@ const employeeSchema = new mongoose.Schema(
         min: 1,
         max: 7,
       },
+      workingHoursPerWeek: {
+        type: Number,
+        default: 40,
+        min: 0,
+      },
       weeklyOffs: {
         type: [String],
         default: ["Saturday", "Sunday"],
         enum: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
-      },
-      workingHoursPerWeek: {
-        type: Number,
-        default: 40,
       },
     },
     joiningDate: {

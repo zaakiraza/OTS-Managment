@@ -15,7 +15,7 @@ import Employees from "./Pages/Employees/Employees";
 import Salaries from "./Pages/Salaries/Salaries";
 import Import from "./Pages/Import/Import";
 import Assets from "./Pages/Assets/Assets";
-import Organization from "./Pages/Organization/Organization";
+import Tickets from "./Pages/Tickets/Tickets";
 
 function App() {
   const isAuthenticated = () => {
@@ -84,20 +84,12 @@ function App() {
             </ProtectedRoute>
           }
         />
-        <Route
-          path="/organization"
-          element={
-            <ProtectedRoute allowedRoles={["superAdmin"]}>
-              <Organization />
-            </ProtectedRoute>
-          }
-        />
 
-        {/* SuperAdmin Only Routes - Organization Structure */}
+        {/* SuperAdmin & Attendance Department Routes - Organization Structure */}
         <Route
           path="/departments"
           element={
-            <ProtectedRoute allowedRoles={["superAdmin"]}>
+            <ProtectedRoute allowedRoles={["superAdmin", "attendanceDepartment"]}>
               <Departments />
             </ProtectedRoute>
           }
@@ -105,7 +97,7 @@ function App() {
         <Route
           path="/employees"
           element={
-            <ProtectedRoute allowedRoles={["superAdmin"]}>
+            <ProtectedRoute allowedRoles={["superAdmin", "attendanceDepartment"]}>
               <Employees />
             </ProtectedRoute>
           }
@@ -156,6 +148,17 @@ function App() {
             </ProtectedRoute>
           }
         />
+
+        {/* All Authenticated Users - Tickets */}
+        <Route
+          path="/tickets"
+          element={
+            <ProtectedRoute allowedRoles={["superAdmin", "attendanceDepartment", "ITAssetManager"]}>
+              <Tickets />
+            </ProtectedRoute>
+          }
+        />
+
         <Route path="/" element={<Navigate to="/login" />} />
         <Route path="*" element={<Navigate to="/login" />} />
       </Routes>

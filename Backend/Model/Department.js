@@ -15,16 +15,6 @@ const departmentSchema = new mongoose.Schema(
       uppercase: true,
       trim: true,
     },
-    room: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Room",
-      required: [true, "Room is required"],
-    },
-    floor: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Floor",
-      required: [true, "Floor is required"],
-    },
     description: {
       type: String,
       default: "",

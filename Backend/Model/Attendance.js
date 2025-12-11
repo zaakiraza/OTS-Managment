@@ -31,7 +31,7 @@ const attendanceSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ["present", "absent", "half-day", "late", "early-arrival", "late-early-arrival", "pending"],
+      enum: ["present", "absent", "half-day", "late", "early-arrival", "late-early-arrival", "pending", "leave"],
       default: "pending",
     },
     workingHours: {
@@ -82,6 +82,22 @@ const attendanceSchema = new mongoose.Schema(
 
 // Calculate working hours before saving
 attendanceSchema.pre("save", async function () {
+  // Check if status was manually modified in this save operation
+  const statusWasModified = this.isModified('status');
+  
+  // If status was manually set to a non-pending value, don't auto-calculate
+  if (statusWasModified && this.status && this.status !== 'pending' && this.isManualEntry) {
+    // Keep the manually set status, skip auto-calculation entirely
+    if (this.checkIn && this.checkOut) {
+      // Still calculate working hours even if status is manual
+      const checkInDate = this.checkIn instanceof Date ? this.checkIn : new Date(this.checkIn);
+      const checkOutDate = this.checkOut instanceof Date ? this.checkOut : new Date(this.checkOut);
+      const diffMs = checkOutDate - checkInDate;
+      this.workingHours = diffMs / TIME.ONE_HOUR;
+    }
+    return;
+  }
+  
   if (this.checkIn && this.checkOut) {
     // Ensure checkIn and checkOut are Date objects
     const checkInDate = this.checkIn instanceof Date ? this.checkIn : new Date(this.checkIn);

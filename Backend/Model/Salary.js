@@ -46,6 +46,10 @@ const salarySchema = new mongoose.Schema(
         type: Number,
         default: 0,
       },
+      leaveDays: {
+        type: Number,
+        default: 0,
+      },
       totalWorkedDays: {
         type: Number,
         default: 0,

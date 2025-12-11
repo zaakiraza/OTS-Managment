@@ -280,7 +280,7 @@
 
 .stat-number.deduction {
   background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
-  -webkit-background-clip: text;
+  /* -webkit-background-clip: text; */
   -webkit-text-fill-color: transparent;
 }
 
@@ -411,8 +411,8 @@
 }
 
 .table-container tbody tr:hover {
-  background: linear-gradient(90deg, #f8fafc 0%, #e8eef5 100%);
-  transform: scale(1.01);
+  background: linear-gradient(90deg, #f8fafc 0%, #b2c2d4 100%);
+  /* transform: scale(1.01); */
 }
 
 .table-container tbody tr:last-child td {

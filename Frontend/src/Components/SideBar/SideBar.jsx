@@ -57,9 +57,14 @@ function SideBar() {
               {!isCollapsed && <span className="nav-text">Roles</span>}
             </NavLink>
 
-            <NavLink to="/organization" className="nav-item">
-              <span className="nav-icon">🏛️</span>
-              {!isCollapsed && <span className="nav-text">Organization</span>}
+            <NavLink to="/departments" className="nav-item">
+              <span className="nav-icon">🏢</span>
+              {!isCollapsed && <span className="nav-text">Departments</span>}
+            </NavLink>
+
+            <NavLink to="/employees" className="nav-item">
+              <span className="nav-icon">👨‍💼</span>
+              {!isCollapsed && <span className="nav-text">Employees</span>}
             </NavLink>
 
             <NavLink to="/attendance" className="nav-item">
@@ -86,12 +91,27 @@ function SideBar() {
               <span className="nav-icon">🖥️</span>
               {!isCollapsed && <span className="nav-text">Assets</span>}
             </NavLink>
+
+            <NavLink to="/tickets" className="nav-item">
+              <span className="nav-icon">🎫</span>
+              {!isCollapsed && <span className="nav-text">Tickets</span>}
+            </NavLink>
           </>
         )}
 
         {/* Attendance Department Menu */}
         {isAttendanceDept && (
           <>
+            <NavLink to="/departments" className="nav-item">
+              <span className="nav-icon">🏢</span>
+              {!isCollapsed && <span className="nav-text">Departments</span>}
+            </NavLink>
+
+            <NavLink to="/employees" className="nav-item">
+              <span className="nav-icon">👨‍💼</span>
+              {!isCollapsed && <span className="nav-text">Employees</span>}
+            </NavLink>
+
             <NavLink to="/attendance" className="nav-item">
               <span className="nav-icon">📋</span>
               {!isCollapsed && <span className="nav-text">Attendance</span>}
@@ -110,6 +130,11 @@ function SideBar() {
             <NavLink to="/import" className="nav-item">
               <span className="nav-icon">📥</span>
               {!isCollapsed && <span className="nav-text">Import</span>}
+            </NavLink>
+
+            <NavLink to="/tickets" className="nav-item">
+              <span className="nav-icon">🎫</span>
+              {!isCollapsed && <span className="nav-text">Tickets</span>}
             </NavLink>
           </>
         )}
@@ -120,6 +145,11 @@ function SideBar() {
             <NavLink to="/assets" className="nav-item">
               <span className="nav-icon">🖥️</span>
               {!isCollapsed && <span className="nav-text">Assets</span>}
+            </NavLink>
+
+            <NavLink to="/tickets" className="nav-item">
+              <span className="nav-icon">🎫</span>
+              {!isCollapsed && <span className="nav-text">Tickets</span>}
             </NavLink>
           </>
         )}

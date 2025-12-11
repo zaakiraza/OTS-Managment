@@ -26,6 +26,9 @@
   padding: 1.5rem;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   transition: transform 0.2s, box-shadow 0.2s;
+  display: flex;
+  flex-direction: column;
+  min-height: 280px;
 }
 
 .department-card:hover {
@@ -97,6 +100,7 @@
   justify-content: flex-end;
   align-items: center;
   padding-top: 1rem;
+  margin-top: auto;
   border-top: 1px solid #eee;
 }
 
@@ -112,32 +116,38 @@
 
 .btn-edit {
   background: #667eea;
-  color: white;
+  /* color: #ffffff; */
   border: none;
-  padding: 0.5rem 1rem;
+  padding: 0.6rem 1.2rem;
   border-radius: 6px;
   cursor: pointer;
-  font-size: 0.85rem;
-  transition: background 0.2s;
+  font-size: 0.9rem;
+  font-weight: 500;
+  transition: all 0.2s;
 }
 
 .btn-edit:hover {
   background: #5568d3;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
 }
 
 .btn-delete {
   background: #ff4757;
-  color: white;
+  /* color: #ffffff; */
   border: none;
-  padding: 0.5rem 1rem;
+  padding: 0.6rem 1.2rem;
   border-radius: 6px;
   cursor: pointer;
-  font-size: 0.85rem;
-  transition: background 0.2s;
+  font-size: 0.9rem;
+  font-weight: 500;
+  transition: all 0.2s;
 }
 
 .btn-delete:hover {
   background: #ff3838;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(255, 71, 87, 0.3);
 }
 
 .loading {
