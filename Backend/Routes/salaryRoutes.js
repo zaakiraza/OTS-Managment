@@ -8,7 +8,7 @@ import {
   markSalaryPaid,
   updateSalary,
 } from "../Controller/salaryController.js";
-import { verifyToken, hasRole, isSuperAdmin } from "../Middleware/auth.js";
+import { verifyToken, hasRole, isAdmin } from "../Middleware/auth.js";
 
 const router = express.Router();
 
@@ -28,10 +28,10 @@ router.get("/", hasRole("superAdmin", "attendanceDepartment"), getAllSalaries);
 router.get("/:id", hasRole("superAdmin", "attendanceDepartment"), getSalaryById);
 
 // Approve salary (superAdmin only)
-router.patch("/:id/approve", isSuperAdmin, approveSalary);
+router.patch("/:id/approve", isAdmin, approveSalary);
 
 // Mark salary as paid (superAdmin only)
-router.patch("/:id/paid", isSuperAdmin, markSalaryPaid);
+router.patch("/:id/paid", isAdmin, markSalaryPaid);
 
 // Update salary (manual adjustments) - attendanceDepartment or superAdmin
 router.put("/:id", hasRole("superAdmin", "attendanceDepartment"), updateSalary);

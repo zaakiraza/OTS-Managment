@@ -1,5 +1,4 @@
 import Attendance from "../Model/Attendance.js";
-import User from "../Model/User.js";
 import Employee from "../Model/Employee.js";
 import logger from "../Utils/logger.js";
 import { TIME } from "../Config/constants.js";
@@ -120,18 +119,14 @@ export const markAttendance = async (req, res) => {
   try {
     const { userId, type, deviceId } = req.body; // type: 'checkIn' or 'checkOut'
 
-    // Try to find employee first, then user
-    let employee = await Employee.findOne({ employeeId: userId, isActive: true });
-    let user = null;
+    // Find employee by employeeId
+    const employee = await Employee.findOne({ employeeId: userId, isActive: true });
     
     if (!employee) {
-      user = await User.findOne({ userId, isActive: true });
-      if (!user) {
-        return res.status(404).json({
-          success: false,
-          message: "User/Employee not found",
-        });
-      }
+      return res.status(404).json({
+        success: false,
+        message: "Employee not found",
+      });
     }
 
     const today = new Date();
@@ -151,8 +146,7 @@ export const markAttendance = async (req, res) => {
     if (!attendance) {
       // Create new attendance record
       attendance = await Attendance.create({
-        user: user ? user._id : null,
-        employee: employee ? employee._id : null,
+        employee: employee._id,
         userId,
         date: new Date(),
         checkIn: type === "checkIn" ? now : null,
@@ -190,14 +184,34 @@ export const markAttendance = async (req, res) => {
 // Get all attendance records with filters
 export const getAllAttendance = async (req, res) => {
   try {
-    const { date, userId, status, startDate, endDate } = req.query;
+    const { date, userId, employee, status, startDate, endDate, month, year } = req.query;
     
-    // console.log("📋 Fetching attendance with params:", { date, userId, status, startDate, endDate });
+    // console.log("📋 Fetching attendance with params:", { date, userId, employee, status, startDate, endDate, month, year });
     
     let filter = {};
 
+    // Filter by employee ObjectId
+    if (employee) {
+      filter.employee = employee;
+    }
+
+    // Filter by userId (employeeId string)
+    if (userId) {
+      filter.userId = userId;
+    }
+
+    // Filter by month and year
+    if (month && year) {
+      const startOfMonth = new Date(parseInt(year), parseInt(month) - 1, 1);
+      const endOfMonth = new Date(parseInt(year), parseInt(month), 0, 23, 59, 59, 999);
+      
+      filter.date = {
+        $gte: startOfMonth,
+        $lte: endOfMonth
+      };
+    }
     // Filter by specific date
-    if (date) {
+    else if (date) {
       const targetDate = new Date(date);
       const nextDate = new Date(date);
       nextDate.setDate(nextDate.getDate() + 1);
@@ -208,18 +222,12 @@ export const getAllAttendance = async (req, res) => {
       };
       // console.log("📅 Date filter:", filter.date);
     }
-
     // Filter by date range
-    if (startDate && endDate) {
+    else if (startDate && endDate) {
       filter.date = {
         $gte: new Date(startDate),
         $lte: new Date(endDate),
       };
-    }
-
-    // Filter by userId
-    if (userId) {
-      filter.userId = userId;
     }
 
     // Filter by status
@@ -431,18 +439,14 @@ export const createManualAttendance = async (req, res) => {
   try {
     const { userId, date, checkIn, checkOut, remarks, workingHours, status } = req.body;
 
-    // Check if employee or user exists
-    let employee = await Employee.findOne({ employeeId: userId });
-    let user = null;
+    // Check if employee exists
+    const employee = await Employee.findOne({ employeeId: userId });
     
     if (!employee) {
-      user = await User.findOne({ userId });
-      if (!user) {
-        return res.status(404).json({
-          success: false,
-          message: "User/Employee not found",
-        });
-      }
+      return res.status(404).json({
+        success: false,
+        message: "Employee not found",
+      });
     }
 
     // Check if attendance already exists for this date
@@ -501,8 +505,7 @@ export const createManualAttendance = async (req, res) => {
     }
 
     const attendanceData = {
-      user: user ? user._id : null,
-      employee: employee ? employee._id : null,
+      employee: employee._id,
       userId,
       date: attendanceDate,
       checkIn: checkInDate,

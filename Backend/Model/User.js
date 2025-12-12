@@ -2,6 +2,19 @@ import mongoose from "mongoose";
 import bcrypt from "bcrypt";
 import { SECURITY } from "../Config/constants.js";
 
+/**
+ * @deprecated This model is DEPRECATED and kept for backward compatibility only.
+ * 
+ * IMPORTANT: Authentication now uses the Employee model exclusively.
+ * - All new users should be created as Employees via /api/employees
+ * - The /api/users endpoint now creates Employee records internally
+ * - This User model is only used for legacy data migration
+ * 
+ * Migration Status: See Scripts/MIGRATION_GUIDE.md for details
+ * 
+ * The Employee model supports all user types including:
+ * - superAdmin, attendanceDepartment, ITAssetManager, teamLead, employee
+ */
 const userSchema = new mongoose.Schema(
   {
     name: {

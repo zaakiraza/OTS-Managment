@@ -1,7 +1,6 @@
 import Attendance from "../Model/Attendance.js";
 import Employee from "../Model/Employee.js";
 import Department from "../Model/Department.js";
-import User from "../Model/User.js";
 import Salary from "../Model/Salary.js";
 
 // Generate attendance report with multiple filter options

@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
-import { employeeAPI, departmentAPI } from "../../Config/Api";
+import { employeeAPI, departmentAPI, roleAPI } from "../../Config/Api";
 import SideBar from "../../Components/SideBar/SideBar";
 import "./Employees.css";
 
 const Employees = () => {
   const [employees, setEmployees] = useState([]);
   const [departments, setDepartments] = useState([]);
+  const [roles, setRoles] = useState([]);
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [editMode, setEditMode] = useState(false);
@@ -34,11 +35,13 @@ const Employees = () => {
     joiningDate: "",
     password: "",
     isTeamLead: false,
+    role: "",
   });
 
   useEffect(() => {
     fetchEmployees();
     fetchDepartments();
+    fetchRoles();
   }, []);
 
   const fetchEmployees = async (deptId = "") => {
@@ -63,6 +66,17 @@ const Employees = () => {
       }
     } catch (error) {
       console.error("Error fetching departments:", error);
+    }
+  };
+
+  const fetchRoles = async () => {
+    try {
+      const response = await roleAPI.getAll();
+      if (response.data.success) {
+        setRoles(response.data.data);
+      }
+    } catch (error) {
+      console.error("Error fetching roles:", error);
     }
   };
 
@@ -100,6 +114,7 @@ const Employees = () => {
           joiningDate: "",
           password: "",
           isTeamLead: false,
+          role: "",
         });
         fetchEmployees(selectedDept);
       }
@@ -148,6 +163,7 @@ const Employees = () => {
       joiningDate: emp.joiningDate ? emp.joiningDate.split('T')[0] : "",
       password: "",
       isTeamLead: emp.isTeamLead || false,
+      role: emp.role?._id || "",
     });
     setShowModal(true);
   };
@@ -173,6 +189,9 @@ const Employees = () => {
         workingHoursPerWeek: 40,
       },
       joiningDate: "",
+      password: "",
+      isTeamLead: false,
+      role: "",
     });
   };
 
@@ -330,8 +349,8 @@ const Employees = () => {
                   </td>
                   <td>{emp.position}</td>
                   <td>
-                    <span className={`role-badge ${emp.isTeamLead ? 'team-lead' : 'employee'}`}>
-                      {emp.isTeamLead ? '⭐ Team Lead' : 'Employee'}
+                    <span className={`role-badge role-${emp.role?.name || 'employee'}`}>
+                      {emp.role?.name || 'Employee'}
                     </span>
                   </td>
                   <td>
@@ -505,14 +524,23 @@ const Employees = () => {
                 <div className="form-group">
                   <label>Employee Role *</label>
                   <select
-                    value={formData.isTeamLead ? "teamLead" : "employee"}
-                    onChange={(e) =>
-                      setFormData({ ...formData, isTeamLead: e.target.value === "teamLead" })
-                    }
+                    value={formData.role}
+                    onChange={(e) => {
+                      const selectedRole = roles.find(r => r._id === e.target.value);
+                      setFormData({ 
+                        ...formData, 
+                        role: e.target.value,
+                        isTeamLead: selectedRole?.name === "teamLead"
+                      });
+                    }}
                     required
                   >
-                    <option value="employee">Employee (Can view/update own tasks)</option>
-                    <option value="teamLead">Team Lead (Can manage tasks & assign work)</option>
+                    <option value="">Select Role</option>
+                    {roles.map((role) => (
+                      <option key={role._id} value={role._id}>
+                        {role.name} - {role.description}
+                      </option>
+                    ))}
                   </select>
                 </div>
                 <div className="form-group">

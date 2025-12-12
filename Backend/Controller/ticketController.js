@@ -1,5 +1,4 @@
 import Ticket from "../Model/Ticket.js";
-import User from "../Model/User.js";
 import Employee from "../Model/Employee.js";
 
 // Get all tickets

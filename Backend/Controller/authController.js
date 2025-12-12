@@ -1,11 +1,10 @@
-import User from "../Model/User.js";
 import Employee from "../Model/Employee.js";
 import Role from "../Model/Role.js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { SECURITY } from "../Config/constants.js";
 
-// Login user (supports both User and Employee login)
+// Login employee (unified authentication)
 export const login = async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -17,62 +16,50 @@ export const login = async (req, res) => {
       });
     }
 
-    let user = null;
-    let userType = null;
-
-    // Try to find as User first
-    user = await User.findOne({ email, isActive: true })
+    // Find employee by email or employeeId
+    const employee = await Employee.findOne({
+      $or: [{ email }, { employeeId: email.toUpperCase() }],
+      isActive: true,
+    })
       .select("+password")
-      .populate("role", "name description");
+      .populate("role", "name description permissions")
+      .populate("department", "name");
 
-    if (user) {
-      userType = "user";
-      // Compare password for User
-      const isPasswordValid = await bcrypt.compare(password, user.password);
-      if (!isPasswordValid) {
-        return res.status(401).json({
-          success: false,
-          message: "Invalid email or password",
-        });
-      }
-    } else {
-      // Try to find as Employee (by email or employeeId)
-      user = await Employee.findOne({
-        $or: [{ email }, { employeeId: email.toUpperCase() }],
-        isActive: true,
-      })
-        .select("+password")
-        .populate("department", "name");
-
-      if (!user) {
-        return res.status(401).json({
-          success: false,
-          message: "Invalid credentials - Employee not found",
-        });
-      }
-
-      if (!user.password) {
-        return res.status(401).json({
-          success: false,
-          message: "Password not set for this employee. Please contact admin.",
-        });
-      }
-
-      userType = "employee";
-      // Compare password for Employee
-      const isPasswordValid = await user.comparePassword(password);
-      if (!isPasswordValid) {
-        return res.status(401).json({
-          success: false,
-          message: "Invalid password",
-        });
-      }
+    if (!employee) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid credentials",
+      });
     }
 
+    if (!employee.password) {
+      return res.status(401).json({
+        success: false,
+        message: "Password not set for this employee. Please contact admin.",
+      });
+    }
+
+    // Compare password
+    const isPasswordValid = await employee.comparePassword(password);
+    if (!isPasswordValid) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid password",
+      });
+    }
+
+    // Update last login
+    employee.lastLogin = new Date();
+    await employee.save({ validateBeforeSave: false });
+
     // Generate JWT token
-    const tokenPayload = userType === "user" 
-      ? { id: user._id, role: user.role.name, userType }
-      : { id: user._id, employeeId: user.employeeId, isTeamLead: user.isTeamLead, department: user.department._id, userType };
+    const tokenPayload = {
+      id: employee._id,
+      employeeId: employee.employeeId,
+      role: employee.role.name,
+      isTeamLead: employee.isTeamLead,
+      department: employee.department?._id,
+    };
 
     const token = jwt.sign(
       tokenPayload,
@@ -81,33 +68,23 @@ export const login = async (req, res) => {
     );
 
     // Prepare response
-    const userResponse = userType === "user" 
-      ? {
-          _id: user._id,
-          name: user.name,
-          userId: user.userId,
-          email: user.email,
-          phone: user.phone,
-          role: user.role,
-          userType: "user",
-        }
-      : {
-          _id: user._id,
-          name: user.name,
-          employeeId: user.employeeId,
-          email: user.email,
-          phone: user.phone,
-          department: user.department,
-          isTeamLead: user.isTeamLead,
-          userType: "employee",
-          role: { name: user.isTeamLead ? "teamLead" : "employee" },
-        };
+    const employeeResponse = {
+      _id: employee._id,
+      name: employee.name,
+      employeeId: employee.employeeId,
+      email: employee.email,
+      phone: employee.phone,
+      department: employee.department,
+      position: employee.position,
+      role: employee.role,
+      isTeamLead: employee.isTeamLead,
+    };
 
     res.status(200).json({
       success: true,
       message: "Login successful",
       token,
-      data: userResponse,
+      data: employeeResponse,
     });
   } catch (error) {
     res.status(500).json({
@@ -117,17 +94,23 @@ export const login = async (req, res) => {
   }
 };
 
-// Get current logged-in user
+// Get current logged-in employee
 export const getMe = async (req, res) => {
   try {
-    const user = await User.findById(req.user._id).populate(
-      "role",
-      "name description"
-    );
+    const employee = await Employee.findById(req.user._id)
+      .populate("role", "name description permissions")
+      .populate("department", "name");
+
+    if (!employee) {
+      return res.status(404).json({
+        success: false,
+        message: "Employee not found",
+      });
+    }
 
     res.status(200).json({
       success: true,
-      data: user,
+      data: employee,
     });
   } catch (error) {
     res.status(500).json({
@@ -137,7 +120,7 @@ export const getMe = async (req, res) => {
   }
 };
 
-// Change password (supports both User and Employee)
+// Change password
 export const changePassword = async (req, res) => {
   try {
     const { currentPassword, newPassword } = req.body;
@@ -156,56 +139,27 @@ export const changePassword = async (req, res) => {
       });
     }
 
-    let user = null;
-    let userType = req.user.userType;
+    const employee = await Employee.findById(req.user._id).select("+password");
 
-    if (userType === "employee") {
-      // Handle employee password change
-      user = await Employee.findById(req.user._id).select("+password");
-      
-      if (!user) {
-        return res.status(404).json({
-          success: false,
-          message: "Employee not found",
-        });
-      }
-
-      // Verify current password
-      const isPasswordValid = await user.comparePassword(currentPassword);
-      if (!isPasswordValid) {
-        return res.status(401).json({
-          success: false,
-          message: "Current password is incorrect",
-        });
-      }
-
-      // Hash and update new password
-      user.password = await bcrypt.hash(newPassword, 10);
-      await user.save({ validateBeforeSave: false });
-    } else {
-      // Handle user password change
-      user = await User.findById(req.user._id).select("+password");
-
-      if (!user) {
-        return res.status(404).json({
-          success: false,
-          message: "User not found",
-        });
-      }
-
-      // Verify current password
-      const isPasswordValid = await bcrypt.compare(currentPassword, user.password);
-      if (!isPasswordValid) {
-        return res.status(401).json({
-          success: false,
-          message: "Current password is incorrect",
-        });
-      }
-
-      // Hash and update new password
-      user.password = await bcrypt.hash(newPassword, 10);
-      await user.save();
+    if (!employee) {
+      return res.status(404).json({
+        success: false,
+        message: "Employee not found",
+      });
     }
+
+    // Verify current password
+    const isPasswordValid = await employee.comparePassword(currentPassword);
+    if (!isPasswordValid) {
+      return res.status(401).json({
+        success: false,
+        message: "Current password is incorrect",
+      });
+    }
+
+    // Hash and update new password
+    employee.password = newPassword; // Will be hashed by pre-save hook
+    await employee.save();
 
     res.status(200).json({
       success: true,

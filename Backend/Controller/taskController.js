@@ -1,6 +1,5 @@
 import Task from "../Model/Task.js";
 import Employee from "../Model/Employee.js";
-import User from "../Model/User.js";
 
 // Get all tasks (filtered by department and role)
 export const getAllTasks = async (req, res) => {
@@ -174,21 +173,7 @@ export const updateTaskStatus = async (req, res) => {
     }
 
     // Check if user is the assigned employee
-    let employeeId;
-    if (req.user.userType === "employee") {
-      // For employee login, req.user._id is the employee's ID
-      employeeId = req.user._id;
-    } else {
-      // For user login, fetch the user's linked employee
-      const user = await User.findById(req.user._id);
-      if (!user || !user.employee) {
-        return res.status(403).json({
-          success: false,
-          message: "User has no linked employee",
-        });
-      }
-      employeeId = user.employee;
-    }
+    const employeeId = req.user._id;
 
     if (task.assignedTo.toString() !== employeeId.toString()) {
       return res.status(403).json({
@@ -275,20 +260,8 @@ export const addComment = async (req, res) => {
 
     const commentData = {
       comment,
+      employee: req.user._id, // All users are now employees
     };
-
-    // Handle both employee and user login
-    if (req.user.userType === "employee") {
-      // For employee login, use employee ID directly
-      commentData.employee = req.user._id;
-    } else {
-      // For user login, link to user and their employee if exists
-      const user = await User.findById(req.user._id);
-      commentData.user = req.user._id;
-      if (user && user.employee) {
-        commentData.employee = user.employee;
-      }
-    }
 
     task.comments.push(commentData);
     await task.save();
@@ -418,13 +391,9 @@ export const getTaskReport = async (req, res) => {
     const { period, department, employee } = req.query;
     const filter = { isActive: true };
 
-    // Role-based filtering
-    const user = await User.findById(req.user._id).populate("role");
-    if (user.role.name !== "superAdmin") {
-      if (user.employee) {
-        const emp = await Employee.findById(user.employee);
-        filter.department = emp.department;
-      }
+    // Role-based filtering - all users are now employees with roles
+    if (req.user.role.name !== "admin") {
+      filter.department = req.user.department;
     }
 
     if (department) filter.department = department;

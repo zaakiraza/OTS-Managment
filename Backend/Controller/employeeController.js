@@ -1,5 +1,6 @@
 import Employee from "../Model/Employee.js";
 import Department from "../Model/Department.js";
+import Role from "../Model/Role.js";
 import bcrypt from "bcrypt";
 
 // Create employee
@@ -20,6 +21,7 @@ export const createEmployee = async (req, res) => {
       emergencyContact,
       password,
       isTeamLead,
+      role,
     } = req.body;
 
     // Check if employee with email exists (only if email is provided)
@@ -39,6 +41,22 @@ export const createEmployee = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: "Invalid department",
+      });
+    }
+
+    // Verify role exists (role is now required)
+    if (!role) {
+      return res.status(400).json({
+        success: false,
+        message: "Role is required",
+      });
+    }
+    
+    const roleExists = await Role.findById(role);
+    if (!roleExists) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid role",
       });
     }
 
@@ -64,6 +82,7 @@ export const createEmployee = async (req, res) => {
       name,
       department,
       position,
+      role,
       salary,
       workSchedule,
       createdBy: req.user._id,
@@ -86,10 +105,9 @@ export const createEmployee = async (req, res) => {
 
     const employee = await Employee.create(employeeData);
 
-    const populatedEmployee = await Employee.findById(employee._id).populate(
-      "department",
-      "name code"
-    );
+    const populatedEmployee = await Employee.findById(employee._id)
+      .populate("department", "name code")
+      .populate("role", "name description");
 
     res.status(201).json({
       success: true,
@@ -116,6 +134,7 @@ export const getAllEmployees = async (req, res) => {
 
     const employees = await Employee.find(filter)
       .populate("department", "name code")
+      .populate("role", "name description")
       .populate("createdBy", "name")
       .sort({ employeeId: 1 });
 
@@ -137,6 +156,7 @@ export const getEmployeeById = async (req, res) => {
   try {
     const employee = await Employee.findById(req.params.id)
       .populate("department", "name code description")
+      .populate("role", "name description")
       .populate("createdBy", "name")
       .populate("modifiedBy", "name");
 
@@ -183,7 +203,9 @@ export const updateEmployee = async (req, res) => {
       req.params.id,
       updateData,
       { new: true, runValidators: true }
-    ).populate("department", "name code");
+    )
+      .populate("department", "name code")
+      .populate("role", "name description");
 
     if (!employee) {
       return res.status(404).json({

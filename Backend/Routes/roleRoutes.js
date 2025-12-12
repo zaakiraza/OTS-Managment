@@ -6,15 +6,15 @@ import {
   updateRole,
   deleteRole,
 } from "../Controller/roleController.js";
-import { verifyToken, isSuperAdmin } from "../Middleware/auth.js";
+import { verifyToken, isAdmin } from "../Middleware/auth.js";
 
 const router = express.Router();
 
 // Only superAdmin can manage roles
-router.post("/", verifyToken, isSuperAdmin, createRole);
+router.post("/", verifyToken, isAdmin, createRole);
 router.get("/", verifyToken, getAllRoles);
-router.get("/:id", verifyToken, isSuperAdmin, getRoleById);
-router.put("/:id", verifyToken, isSuperAdmin, updateRole);
-router.delete("/:id", verifyToken, isSuperAdmin, deleteRole);
+router.get("/:id", verifyToken, isAdmin, getRoleById);
+router.put("/:id", verifyToken, isAdmin, updateRole);
+router.delete("/:id", verifyToken, isAdmin, deleteRole);
 
 export default router;

@@ -40,6 +40,11 @@ const employeeSchema = new mongoose.Schema(
         message: "Password must be at least 6 characters"
       }
     },
+    role: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Role",
+      required: [true, "Role is required"],
+    },
     isTeamLead: {
       type: Boolean,
       default: false,
@@ -140,12 +145,12 @@ const employeeSchema = new mongoose.Schema(
     },
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      required: true,
+      ref: "Employee",
+      required: false,
     },
     modifiedBy: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
+      ref: "Employee",
       default: null,
     },
   },

@@ -201,6 +201,16 @@ function SideBar() {
               {!isCollapsed && <span className="nav-text">My Tasks</span>}
             </NavLink>
 
+            <NavLink to="/my-assets" className="nav-item">
+              <span className="nav-icon">💼</span>
+              {!isCollapsed && <span className="nav-text">My Assets</span>}
+            </NavLink>
+
+            <NavLink to="/my-attendance" className="nav-item">
+              <span className="nav-icon">📋</span>
+              {!isCollapsed && <span className="nav-text">My Attendance</span>}
+            </NavLink>
+
             <NavLink to="/resources" className="nav-item">
               <span className="nav-icon">📦</span>
               {!isCollapsed && <span className="nav-text">Resources</span>}
@@ -224,6 +234,11 @@ function SideBar() {
             <NavLink to="/my-assets" className="nav-item">
               <span className="nav-icon">💼</span>
               {!isCollapsed && <span className="nav-text">My Assets</span>}
+            </NavLink>
+
+            <NavLink to="/my-attendance" className="nav-item">
+              <span className="nav-icon">📋</span>
+              {!isCollapsed && <span className="nav-text">My Attendance</span>}
             </NavLink>
 
             <NavLink to="/tickets" className="nav-item">

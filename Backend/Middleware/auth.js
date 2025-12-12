@@ -1,8 +1,7 @@
 import jwt from "jsonwebtoken";
-import User from "../Model/User.js";
 import Employee from "../Model/Employee.js";
 
-// Verify JWT token (supports both User and Employee)
+// Verify JWT token (unified Employee authentication)
 export const verifyToken = async (req, res, next) => {
   try {
     const token = req.headers.authorization?.split(" ")[1];
@@ -16,37 +15,19 @@ export const verifyToken = async (req, res, next) => {
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     
-    let user = null;
+    // Find employee
+    const employee = await Employee.findById(decoded.id)
+      .populate("role", "name description permissions")
+      .populate("department", "name");
     
-    if (decoded.userType === "employee") {
-      // Find employee
-      user = await Employee.findById(decoded.id).populate("department", "name");
-      
-      if (!user || !user.isActive) {
-        return res.status(401).json({
-          success: false,
-          message: "Invalid token or employee not found.",
-        });
-      }
-      
-      // Add virtual role for consistency
-      user.role = { name: user.isTeamLead ? "teamLead" : "employee" };
-      user.userType = "employee";
-    } else {
-      // Find user
-      user = await User.findById(decoded.id).populate("role", "name");
-
-      if (!user || !user.isActive) {
-        return res.status(401).json({
-          success: false,
-          message: "Invalid token or user not found.",
-        });
-      }
-      
-      user.userType = "user";
+    if (!employee || !employee.isActive) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid token or employee not found.",
+      });
     }
 
-    req.user = user;
+    req.user = employee;
     next();
   } catch (error) {
     return res.status(401).json({
@@ -56,8 +37,8 @@ export const verifyToken = async (req, res, next) => {
   }
 };
 
-// Check if user is superAdmin
-export const isSuperAdmin = async (req, res, next) => {
+// Check if employee is superAdmin
+export const isAdmin = async (req, res, next) => {
   try {
     if (!req.user) {
       return res.status(401).json({
@@ -66,6 +47,7 @@ export const isSuperAdmin = async (req, res, next) => {
       });
     }
 
+    // Check for superAdmin role (the actual admin role in the system)
     if (req.user.role.name !== "superAdmin") {
       return res.status(403).json({
         success: false,
@@ -81,6 +63,9 @@ export const isSuperAdmin = async (req, res, next) => {
     });
   }
 };
+
+// Alias for clarity - use isSuperAdmin in new code
+export const isSuperAdmin = isAdmin;
 
 // Check if user has specific role
 export const hasRole = (...roles) => {

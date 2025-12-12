@@ -1,0 +1,290 @@
+import { useState, useEffect } from "react";
+import SideBar from "../../Components/SideBar/SideBar";
+import { attendanceAPI } from "../../Config/Api";
+import "../Attendance/Attendance.css";
+
+function MyAttendance() {
+  const [attendance, setAttendance] = useState([]);
+  const [stats, setStats] = useState({
+    totalDays: 0,
+    present: 0,
+    absent: 0,
+    late: 0,
+    halfDay: 0,
+    onLeave: 0,
+  });
+  const [loading, setLoading] = useState(false);
+  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+
+  const user = JSON.parse(localStorage.getItem("user") || "{}");
+  const months = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December"
+  ];
+
+  useEffect(() => {
+    fetchMyAttendance();
+  }, [selectedMonth, selectedYear]);
+
+  const fetchMyAttendance = async () => {
+    try {
+      setLoading(true);
+      
+      // Build query parameters
+      const params = {
+        employee: user._id,
+        month: selectedMonth,
+        year: selectedYear,
+      };
+      
+      const response = await attendanceAPI.getAllAttendance(params);
+      
+      if (response.data.success) {
+        setAttendance(response.data.data);
+        calculateStats(response.data.data);
+      }
+    } catch (error) {
+      console.error("Error fetching attendance:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const calculateStats = (records) => {
+    const stats = {
+      totalDays: records.length,
+      present: records.filter((r) => r.status === "present" || r.status === "early-arrival").length,
+      absent: records.filter((r) => r.status === "absent").length,
+      late: records.filter((r) => r.status === "late" || r.status === "late-early-arrival").length,
+      halfDay: records.filter((r) => r.status === "half-day").length,
+      onLeave: records.filter((r) => r.status === "leave").length,
+    };
+    setStats(stats);
+  };
+
+  const getStatusColor = (status) => {
+    const colors = {
+      present: "#10b981",
+      absent: "#ef4444",
+      late: "#f59e0b",
+      "late-early-arrival": "#f59e0b",
+      "early-arrival": "#10b981",
+      "half-day": "#3b82f6",
+      leave: "#8b5cf6",
+      pending: "#6b7280",
+    };
+    return colors[status] || "#6b7280";
+  };
+
+  const formatStatus = (status) => {
+    const statusMap = {
+      present: "Present",
+      absent: "Absent",
+      late: "Late",
+      "late-early-arrival": "Late Arrival",
+      "early-arrival": "Early Arrival",
+      "half-day": "Half Day",
+      leave: "On Leave",
+      pending: "Pending",
+    };
+    return statusMap[status] || status.toUpperCase();
+  };
+
+  const formatTime = (dateTime) => {
+    if (!dateTime) return "N/A";
+    return new Date(dateTime).toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
+  const calculateWorkHours = (checkIn, checkOut) => {
+    if (!checkIn || !checkOut) return "N/A";
+    
+    const checkInTime = new Date(checkIn);
+    const checkOutTime = new Date(checkOut);
+    
+    const diff = checkOutTime - checkInTime;
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    
+    return `${hours}h ${minutes}m`;
+  };
+
+  return (
+    <div className="dashboard-layout">
+      <SideBar />
+      <div className="main-content">
+        <div className="attendance-page">
+          <div className="page-header">
+            <div>
+              <h1>My Attendance</h1>
+              <p>View your attendance records and statistics</p>
+            </div>
+          </div>
+
+          {/* Filters */}
+          <div className="filters-section">
+            <div className="filter-group">
+              <label>Month:</label>
+              <select
+                value={selectedMonth}
+                onChange={(e) => setSelectedMonth(e.target.value)}
+              >
+                {months.map((month, index) => (
+                  <option key={month} value={index + 1}>
+                    {month}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="filter-group">
+              <label>Year:</label>
+              <select
+                value={selectedYear}
+                onChange={(e) => setSelectedYear(e.target.value)}
+              >
+                {[2023, 2024, 2025, 2026].map((year) => (
+                  <option key={year} value={year}>
+                    {year}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Stats */}
+          <div className="stats-grid">
+            <div className="stat-card">
+              <div className="stat-content">
+                <h3>Total Days</h3>
+                <p className="stat-value">{stats.totalDays}</p>
+              </div>
+            </div>
+            <div className="stat-card">
+              <div className="stat-content">
+                <h3>Present</h3>
+                <p className="stat-value" style={{ color: "#10b981" }}>
+                  {stats.present}
+                </p>
+              </div>
+            </div>
+            <div className="stat-card">
+              <div className="stat-content">
+                <h3>Absent</h3>
+                <p className="stat-value" style={{ color: "#ef4444" }}>
+                  {stats.absent}
+                </p>
+              </div>
+            </div>
+            <div className="stat-card">
+              <div className="stat-content">
+                <h3>Late</h3>
+                <p className="stat-value" style={{ color: "#f59e0b" }}>
+                  {stats.late}
+                </p>
+              </div>
+            </div>
+            <div className="stat-card">
+              <div className="stat-content">
+                <h3>Half Day</h3>
+                <p className="stat-value" style={{ color: "#3b82f6" }}>
+                  {stats.halfDay}
+                </p>
+              </div>
+            </div>
+            <div className="stat-card">
+              <div className="stat-content">
+                <h3>On Leave</h3>
+                <p className="stat-value" style={{ color: "#8b5cf6" }}>
+                  {stats.onLeave}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Attendance Table */}
+          <div className="table-container">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Day</th>
+                  <th>Status</th>
+                  <th>Check In</th>
+                  <th>Check Out</th>
+                  <th>Work Hours</th>
+                  <th>Remarks</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr>
+                    <td colSpan="7" style={{ textAlign: "center" }}>
+                      Loading...
+                    </td>
+                  </tr>
+                ) : attendance.length === 0 ? (
+                  <tr>
+                    <td colSpan="7" style={{ textAlign: "center" }}>
+                      No attendance records found for selected period
+                    </td>
+                  </tr>
+                ) : (
+                  attendance.map((record) => (
+                    <tr key={record._id}>
+                      <td>{new Date(record.date).toLocaleDateString()}</td>
+                      <td>
+                        {new Date(record.date).toLocaleDateString("en-US", {
+                          weekday: "short",
+                        })}
+                      </td>
+                      <td>
+                        <span
+                          className="status-badge"
+                          style={{
+                            background: getStatusColor(record.status),
+                            color: "white",
+                          }}
+                        >
+                          {formatStatus(record.status)}
+                        </span>
+                      </td>
+                      <td>{formatTime(record.checkIn)}</td>
+                      <td>{formatTime(record.checkOut)}</td>
+                      <td>{calculateWorkHours(record.checkIn, record.checkOut)}</td>
+                      <td>{record.remarks || "-"}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Summary Card */}
+          {attendance.length > 0 && (
+            <div style={{ marginTop: '20px', padding: '20px', background: '#f8fafc', borderRadius: '8px' }}>
+              <h3 style={{ marginBottom: '10px' }}>Summary</h3>
+              <p>
+                <strong>Attendance Rate:</strong>{" "}
+                {stats.totalDays > 0
+                  ? ((stats.present / stats.totalDays) * 100).toFixed(1)
+                  : 0}
+                %
+              </p>
+              <p>
+                <strong>Working Days:</strong> {stats.present + stats.late + stats.halfDay}
+              </p>
+              <p>
+                <strong>Non-Working Days:</strong> {stats.absent + stats.onLeave}
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default MyAttendance;

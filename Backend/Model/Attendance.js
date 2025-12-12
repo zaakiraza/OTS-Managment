@@ -3,19 +3,14 @@ import { TIME, ATTENDANCE } from "../Config/constants.js";
 
 const attendanceSchema = new mongoose.Schema(
   {
-    user: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      default: null,
-    },
     employee: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Employee",
-      default: null,
+      required: [true, "Employee is required"],
     },
     userId: {
       type: String,
-      required: [true, "User/Employee ID is required"],
+      required: [true, "Employee ID is required"],
     },
     date: {
       type: Date,
@@ -52,7 +47,7 @@ const attendanceSchema = new mongoose.Schema(
     },
     modifiedBy: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
+      ref: "Employee",
       default: null,
     },
   },

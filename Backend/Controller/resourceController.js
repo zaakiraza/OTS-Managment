@@ -1,5 +1,5 @@
 import Resource from "../Model/Resource.js";
-import User from "../Model/User.js";
+import Employee from "../Model/Employee.js";
 
 // Get all resources with filtering
 export const getAllResources = async (req, res) => {

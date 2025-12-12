@@ -19,6 +19,7 @@ import Tickets from "./Pages/Tickets/Tickets";
 import Tasks from "./Pages/Tasks/Tasks";
 import MyTasks from "./Pages/MyTasks/MyTasks";
 import MyAssets from "./Pages/MyAssets/MyAssets";
+import MyAttendance from "./Pages/MyAttendance/MyAttendance";
 import Resources from "./Pages/Resources/Resources";
 
 function App() {
@@ -193,12 +194,22 @@ function App() {
           }
         />
 
-        {/* Employee Asset View */}
+        {/* Employee & Team Lead Asset View */}
         <Route
           path="/my-assets"
           element={
-            <ProtectedRoute allowedRoles={["employee"]}>
+            <ProtectedRoute allowedRoles={["employee", "teamLead"]}>
               <MyAssets />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Employee & Team Lead Attendance View */}
+        <Route
+          path="/my-attendance"
+          element={
+            <ProtectedRoute allowedRoles={["employee", "teamLead"]}>
+              <MyAttendance />
             </ProtectedRoute>
           }
         />
