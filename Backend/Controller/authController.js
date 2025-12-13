@@ -23,7 +23,9 @@ export const login = async (req, res) => {
     })
       .select("+password")
       .populate("role", "name description permissions")
-      .populate("department", "name");
+      .populate("department", "name code")
+      .populate("additionalDepartments", "name code")
+      .populate("leadingDepartments", "name code");
 
     if (!employee) {
       return res.status(401).json({
@@ -45,6 +47,14 @@ export const login = async (req, res) => {
       return res.status(401).json({
         success: false,
         message: "Invalid password",
+      });
+    }
+
+    // Check if role is populated properly
+    if (!employee.role || !employee.role.name) {
+      return res.status(500).json({
+        success: false,
+        message: "Employee role not found. Please contact admin to fix your account.",
       });
     }
 
@@ -75,6 +85,8 @@ export const login = async (req, res) => {
       email: employee.email,
       phone: employee.phone,
       department: employee.department,
+      additionalDepartments: employee.additionalDepartments || [],
+      leadingDepartments: employee.leadingDepartments || [],
       position: employee.position,
       role: employee.role,
       isTeamLead: employee.isTeamLead,
@@ -99,7 +111,9 @@ export const getMe = async (req, res) => {
   try {
     const employee = await Employee.findById(req.user._id)
       .populate("role", "name description permissions")
-      .populate("department", "name");
+      .populate("department", "name code")
+      .populate("additionalDepartments", "name code")
+      .populate("leadingDepartments", "name code");
 
     if (!employee) {
       return res.status(404).json({

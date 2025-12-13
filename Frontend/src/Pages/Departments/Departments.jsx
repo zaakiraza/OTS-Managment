@@ -4,18 +4,22 @@ import SideBar from "../../Components/SideBar/SideBar";
 import "./Departments.css";
 
 const Departments = () => {
-  const [departments, setDepartments] = useState([]);
+  const [departments, setDepartments] = useState([]); // Hierarchical data
+  const [flatDepartments, setFlatDepartments] = useState([]); // Flat list for dropdowns
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [editId, setEditId] = useState(null);
+  const [expandedDepts, setExpandedDepts] = useState(new Set());
+  const [viewMode, setViewMode] = useState('grid'); // 'grid' or 'tree'
   const [formData, setFormData] = useState({
     name: "",
     code: "",
     description: "",
     head: "",
     teamLead: "",
+    parentDepartment: "",
     leverageTime: {
       checkInMinutes: 15,
       checkOutMinutes: 10,
@@ -32,13 +36,26 @@ const Departments = () => {
       setLoading(true);
       const response = await departmentAPI.getAll();
       if (response.data.success) {
-        setDepartments(response.data.data);
+        setDepartments(response.data.data); // Hierarchical data
+        setFlatDepartments(response.data.flatData || response.data.data); // Flat list for dropdowns
       }
     } catch (error) {
       console.error("Error fetching departments:", error);
     } finally {
       setLoading(false);
     }
+  };
+
+  const toggleExpand = (deptId) => {
+    setExpandedDepts(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(deptId)) {
+        newSet.delete(deptId);
+      } else {
+        newSet.add(deptId);
+      }
+      return newSet;
+    });
   };
 
   const fetchEmployees = async () => {
@@ -56,13 +73,16 @@ const Departments = () => {
     e.preventDefault();
     try {
       setLoading(true);
-      // Remove empty head field if not provided
+      // Remove empty fields if not provided
       const submitData = { ...formData };
       if (!submitData.head || submitData.head === "") {
         delete submitData.head;
       }
       if (!submitData.teamLead || submitData.teamLead === "") {
         delete submitData.teamLead;
+      }
+      if (!submitData.parentDepartment || submitData.parentDepartment === "") {
+        submitData.parentDepartment = null;
       }
       
       let response;
@@ -82,6 +102,7 @@ const Departments = () => {
           description: "", 
           head: "",
           teamLead: "",
+          parentDepartment: "",
           leverageTime: {
             checkInMinutes: 15,
             checkOutMinutes: 10,
@@ -117,6 +138,7 @@ const Departments = () => {
       description: dept.description || "",
       head: dept.head?._id || "",
       teamLead: dept.teamLead?._id || "",
+      parentDepartment: dept.parentDepartment?._id || "",
       leverageTime: {
         checkInMinutes: dept.leverageTime?.checkInMinutes || 15,
         checkOutMinutes: dept.leverageTime?.checkOutMinutes || 10,
@@ -135,11 +157,122 @@ const Departments = () => {
       description: "",
       head: "",
       teamLead: "",
+      parentDepartment: "",
       leverageTime: {
         checkInMinutes: 15,
         checkOutMinutes: 10,
       },
     });
+  };
+
+  // Get parent department name by ID
+  const getParentName = (parentDept) => {
+    if (!parentDept) return null;
+    if (typeof parentDept === 'object') return parentDept.name;
+    const parent = flatDepartments.find(d => d._id === parentDept);
+    return parent?.name || null;
+  };
+
+  // Department Card for Grid View
+  const DepartmentGridCard = ({ dept }) => {
+    const hasChildren = dept.children && dept.children.length > 0;
+    const parentName = getParentName(dept.parentDepartment);
+
+    return (
+      <div className={`department-card ${dept.level > 0 ? 'sub-department' : 'root-department'}`}>
+        <div className="dept-header">
+          <div className="dept-title-row">
+            <h3>{dept.name}</h3>
+            <span className="dept-code">{dept.code}</span>
+          </div>
+        </div>
+        {parentName && (
+          <div className="parent-info">
+            📂 Under: <strong>{parentName}</strong>
+          </div>
+        )}
+        <p className="dept-description">{dept.description || "No description"}</p>
+        <div className="dept-info">
+          <span className="leverage-info">
+            ⏰ Grace: Check-in {dept.leverageTime?.checkInMinutes || 15}min | Check-out {dept.leverageTime?.checkOutMinutes || 10}min
+          </span>
+        </div>
+        <div className="dept-team-info">
+          <span className="info-item">👤 Head: {dept.head?.name || "Not assigned"}</span>
+          <span className="info-item">⭐ Team Lead: {dept.teamLead?.name || "Not assigned"}</span>
+        </div>
+        {hasChildren && (
+          <div className="children-count">
+            📁 {dept.children.length} Sub-department{dept.children.length > 1 ? 's' : ''}
+          </div>
+        )}
+        <div className="dept-footer">
+          <div className="dept-actions">
+            <button className="btn-edit" onClick={() => handleEdit(dept)}>
+              Edit
+            </button>
+            <button className="btn-delete" onClick={() => handleDelete(dept._id)}>
+              Delete
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Recursive Tree Node Component
+  const TreeNode = ({ dept, level = 0 }) => {
+    const hasChildren = dept.children && dept.children.length > 0;
+    const isExpanded = expandedDepts.has(dept._id);
+
+    return (
+      <div className="tree-node">
+        <div className={`tree-node-content level-${level}`}>
+          <div className="tree-node-line">
+            {hasChildren && (
+              <button 
+                className="tree-expand-btn"
+                onClick={() => toggleExpand(dept._id)}
+              >
+                {isExpanded ? '−' : '+'}
+              </button>
+            )}
+            {!hasChildren && <span className="tree-leaf-icon">•</span>}
+            <div className={`tree-node-box ${level === 0 ? 'root-node' : 'child-node'}`}>
+              <span className="tree-node-name">{dept.name}</span>
+              <span className="tree-node-code">{dept.code}</span>
+            </div>
+          </div>
+        </div>
+        {hasChildren && isExpanded && (
+          <div className="tree-children">
+            {dept.children.map((child) => (
+              <TreeNode key={child._id} dept={child} level={level + 1} />
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // Expand all tree nodes
+  const expandAll = () => {
+    const allIds = new Set();
+    const collectIds = (depts) => {
+      depts.forEach(d => {
+        if (d.children && d.children.length > 0) {
+          allIds.add(d._id);
+          collectIds(d.children);
+        }
+      });
+    };
+    collectIds(departments);
+    setExpandedDepts(allIds);
+  };
+
+  // Collapse all tree nodes
+  const collapseAll = () => {
+    setExpandedDepts(new Set());
   };
 
   return (
@@ -148,52 +281,60 @@ const Departments = () => {
       <div className="main-content">
         <div className="departments-page">
           <div className="page-header">
-        <h1>Departments</h1>
-        <button className="btn-primary" onClick={() => setShowModal(true)}>
-          + Add Department
-        </button>
-      </div>
+            <h1>Departments</h1>
+            <div className="header-actions">
+              <div className="view-toggle">
+                <button 
+                  className={`view-btn ${viewMode === 'grid' ? 'active' : ''}`}
+                  onClick={() => setViewMode('grid')}
+                  title="Grid View"
+                >
+                  <span className="view-icon">▦</span> Grid
+                </button>
+                <button 
+                  className={`view-btn ${viewMode === 'tree' ? 'active' : ''}`}
+                  onClick={() => setViewMode('tree')}
+                  title="Tree View"
+                >
+                  <span className="view-icon">🌳</span> Tree
+                </button>
+              </div>
+              <button className="btn-primary" onClick={() => setShowModal(true)}>
+                + Add Department
+              </button>
+            </div>
+          </div>
 
-      {loading && departments.length === 0 ? (
-        <div className="loading">Loading...</div>
-      ) : (
-        <div className="departments-grid">
-          {departments.map((dept) => (
-            <div key={dept._id} className="department-card">
-              <div className="dept-header">
-                <h3>{dept.name}</h3>
-                <span className="dept-code">{dept.code}</span>
+          {loading && flatDepartments.length === 0 ? (
+            <div className="loading">Loading...</div>
+          ) : viewMode === 'grid' ? (
+            <div className="departments-grid">
+              {flatDepartments.map((dept) => (
+                <DepartmentGridCard key={dept._id} dept={dept} />
+              ))}
+            </div>
+          ) : (
+            <div className="tree-view-container">
+              <div className="tree-controls">
+                <button className="tree-control-btn" onClick={expandAll}>
+                  ⊞ Expand All
+                </button>
+                <button className="tree-control-btn" onClick={collapseAll}>
+                  ⊟ Collapse All
+                </button>
               </div>
-              <p className="dept-description">{dept.description || "No description"}</p>
-              <div className="dept-info">
-                <span className="leverage-info">
-                  ⏰ Grace: Check-in {dept.leverageTime?.checkInMinutes || 15}min | Check-out {dept.leverageTime?.checkOutMinutes || 10}min
-                </span>
-              </div>
-              <div className="dept-team-info">
-                <span className="info-item">👤 Head: {dept.head?.name || "Not assigned"}</span>
-                <span className="info-item">⭐ Team Lead: {dept.teamLead?.name || "Not assigned"}</span>
-              </div>
-              <div className="dept-footer">
-                <div className="dept-actions">
-                  <button
-                    className="btn-edit"
-                    onClick={() => handleEdit(dept)}
-                  >
-                    Edit
-                  </button>
-                  <button
-                    className="btn-delete"
-                    onClick={() => handleDelete(dept._id)}
-                  >
-                    Delete
-                  </button>
+              <div className="organization-tree">
+                <div className="tree-header">
+                  <h3>🏢 Organization Structure</h3>
+                </div>
+                <div className="tree-body">
+                  {departments.map((dept) => (
+                    <TreeNode key={dept._id} dept={dept} level={0} />
+                  ))}
                 </div>
               </div>
             </div>
-          ))}
-        </div>
-      )}
+          )}
 
       {showModal && (
         <div className="modal-overlay" onClick={handleCloseModal}>
@@ -239,6 +380,27 @@ const Departments = () => {
                   }
                   rows={3}
                 />
+              </div>
+              
+              <h3 className="section-title">Hierarchy</h3>
+              <div className="form-group">
+                <label>Parent Department (Optional)</label>
+                <select
+                  value={formData.parentDepartment}
+                  onChange={(e) =>
+                    setFormData({ ...formData, parentDepartment: e.target.value })
+                  }
+                >
+                  <option value="">None (Root Department)</option>
+                  {flatDepartments
+                    .filter(d => d._id !== editId) // Can't be parent of itself
+                    .map((dept) => (
+                      <option key={dept._id} value={dept._id}>
+                        {"—".repeat(dept.level || 0)} {dept.name} ({dept.code})
+                      </option>
+                    ))}
+                </select>
+                <small>Leave empty for a top-level department, or select a parent to create a sub-department</small>
               </div>
               
               <h3 className="section-title">Team Lead Assignment</h3>

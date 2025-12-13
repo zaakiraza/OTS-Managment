@@ -7,11 +7,15 @@ import {
   exportAttendanceData,
 } from "../Controller/reportController.js";
 import { verifyToken } from "../Middleware/auth.js";
+import { intensiveLimiter } from "../Middleware/rateLimiter.js";
 
 const router = express.Router();
 
 // All routes require authentication
 router.use(verifyToken);
+
+// Apply intensive rate limiting to all report routes (resource-heavy operations)
+router.use(intensiveLimiter);
 
 // Generate attendance report with flexible filters
 router.get("/attendance", generateAttendanceReport);

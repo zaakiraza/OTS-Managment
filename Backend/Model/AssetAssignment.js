@@ -23,12 +23,12 @@ const assetAssignmentSchema = new mongoose.Schema(
     },
     assignedBy: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
+      ref: "Employee",
       required: true,
     },
     returnedBy: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
+      ref: "Employee",
       default: null,
     },
     conditionAtAssignment: {

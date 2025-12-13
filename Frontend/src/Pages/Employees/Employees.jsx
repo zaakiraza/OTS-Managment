@@ -6,12 +6,15 @@ import "./Employees.css";
 const Employees = () => {
   const [employees, setEmployees] = useState([]);
   const [departments, setDepartments] = useState([]);
+  const [hierarchicalDepts, setHierarchicalDepts] = useState([]);
   const [roles, setRoles] = useState([]);
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [editId, setEditId] = useState(null);
   const [selectedDept, setSelectedDept] = useState("");
+  const [viewMode, setViewMode] = useState('table'); // 'table' or 'tree'
+  const [expandedDepts, setExpandedDepts] = useState(new Set());
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -19,6 +22,8 @@ const Employees = () => {
     cnic: "",
     biometricId: "",
     department: "",
+    additionalDepartments: [],
+    leadingDepartments: [],
     position: "",
     salary: {
       monthlySalary: "",
@@ -62,16 +67,129 @@ const Employees = () => {
     try {
       const response = await departmentAPI.getAll();
       if (response.data.success) {
-        setDepartments(response.data.data);
+        // Use flatData which includes all departments (root + sub-departments)
+        setDepartments(response.data.flatData || response.data.data);
+        // Store hierarchical data for tree view
+        setHierarchicalDepts(response.data.data || []);
       }
     } catch (error) {
       console.error("Error fetching departments:", error);
     }
   };
 
+  const toggleDeptExpand = (deptId) => {
+    setExpandedDepts(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(deptId)) {
+        newSet.delete(deptId);
+      } else {
+        newSet.add(deptId);
+      }
+      return newSet;
+    });
+  };
+
+  const expandAllDepts = () => {
+    const allIds = new Set();
+    const collectIds = (depts) => {
+      depts.forEach(d => {
+        allIds.add(d._id);
+        if (d.children && d.children.length > 0) {
+          collectIds(d.children);
+        }
+      });
+    };
+    collectIds(hierarchicalDepts);
+    setExpandedDepts(allIds);
+  };
+
+  const collapseAllDepts = () => {
+    setExpandedDepts(new Set());
+  };
+
+  // Get employees for a department
+  const getEmployeesForDept = (deptId) => {
+    return employees.filter(emp => emp.department?._id === deptId);
+  };
+
+  // Render department tree with employees
+  const renderDepartmentTree = (depts, level) => {
+    return depts.map((dept) => {
+      const deptEmployees = getEmployeesForDept(dept._id);
+      const isExpanded = expandedDepts.has(dept._id);
+      const hasChildren = dept.children && dept.children.length > 0;
+      const hasEmployees = deptEmployees.length > 0;
+
+      return (
+        <div key={dept._id} className={`dept-tree-node level-${level}`}>
+          <div className="dept-tree-header" onClick={() => toggleDeptExpand(dept._id)}>
+            <div className="dept-tree-info">
+              <span className="expand-icon">
+                {(hasChildren || hasEmployees) ? (isExpanded ? '▼' : '▶') : '●'}
+              </span>
+              <span className="dept-tree-name">{dept.name}</span>
+              <span className="dept-tree-code">{dept.code}</span>
+              <span className="dept-tree-count">
+                👥 {deptEmployees.length} employees
+              </span>
+              {dept.head && (
+                <span className="dept-tree-head">
+                  👔 Head: {dept.head.name}
+                </span>
+              )}
+            </div>
+          </div>
+          
+          {isExpanded && (
+            <div className="dept-tree-content">
+              {/* Employees in this department */}
+              {hasEmployees && (
+                <div className="dept-employees-list">
+                  {deptEmployees.map((emp) => (
+                    <div key={emp._id} className="tree-employee-card">
+                      <div className="tree-emp-avatar">
+                        {emp.name?.charAt(0).toUpperCase() || 'E'}
+                      </div>
+                      <div className="tree-emp-info">
+                        <div className="tree-emp-name">{emp.name}</div>
+                        <div className="tree-emp-position">{emp.position}</div>
+                        <div className="tree-emp-details">
+                          <span className="tree-emp-id">{emp.employeeId}</span>
+                          {emp.isTeamLead && <span className="tree-emp-lead">⭐ Team Lead</span>}
+                          <span className={`tree-emp-role role-${emp.role?.name || 'employee'}`}>
+                            {emp.role?.name || 'Employee'}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="tree-emp-actions">
+                        <button className="btn-edit-small" onClick={(e) => { e.stopPropagation(); handleEdit(emp); }}>
+                          ✏️
+                        </button>
+                        <button className="btn-delete-small" onClick={(e) => { e.stopPropagation(); handleDelete(emp._id); }}>
+                          🗑️
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              
+              {/* Child departments */}
+              {hasChildren && (
+                <div className="dept-children">
+                  {renderDepartmentTree(dept.children, level + 1)}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      );
+    });
+  };
+
   const fetchRoles = async () => {
     try {
-      const response = await roleAPI.getAll();
+      const response = await roleAPI.getAllRoles();
       if (response.data.success) {
         setRoles(response.data.data);
       }
@@ -102,8 +220,10 @@ const Employees = () => {
           cnic: "",
           biometricId: "",
           department: "",
+          additionalDepartments: [],
+          leadingDepartments: [],
           position: "",
-          salary: { monthlySalary: "", currency: "PRK", leaveThreshold: 0 },
+          salary: { monthlySalary: "", currency: "PKR", leaveThreshold: 0 },
           workSchedule: {
             checkInTime: "09:00",
             checkOutTime: "17:00",
@@ -147,6 +267,8 @@ const Employees = () => {
       cnic: emp.cnic || "",
       biometricId: emp.biometricId || "",
       department: emp.department?._id || "",
+      additionalDepartments: emp.additionalDepartments?.map(d => d._id || d) || [],
+      leadingDepartments: emp.leadingDepartments?.map(d => d._id || d) || [],
       position: emp.position,
       salary: {
         monthlySalary: emp.salary.monthlySalary,
@@ -179,6 +301,8 @@ const Employees = () => {
       cnic: "",
       biometricId: "",
       department: "",
+      additionalDepartments: [],
+      leadingDepartments: [],
       position: "",
       salary: { monthlySalary: "", currency: "PKR", leaveThreshold: 0 },
       workSchedule: {
@@ -193,6 +317,21 @@ const Employees = () => {
       isTeamLead: false,
       role: "",
     });
+  };
+
+  const handleMultiDeptToggle = (deptId, field) => {
+    const currentDepts = formData[field];
+    const newDepts = currentDepts.includes(deptId)
+      ? currentDepts.filter(d => d !== deptId)
+      : [...currentDepts, deptId];
+    
+    // Auto-set isTeamLead if leading any department
+    const updates = { [field]: newDepts };
+    if (field === 'leadingDepartments' && newDepts.length > 0) {
+      updates.isTeamLead = true;
+    }
+    
+    setFormData({ ...formData, ...updates });
   };
 
   const handleWeeklyOffToggle = (day) => {
@@ -291,21 +430,49 @@ const Employees = () => {
           <div className="page-header">
         <h1>Employees</h1>
         <div className="header-actions">
-          <select
-            className="dept-filter"
-            value={selectedDept}
-            onChange={(e) => {
-              setSelectedDept(e.target.value);
-              fetchEmployees(e.target.value);
-            }}
-          >
-            <option value="">All Departments</option>
-            {departments.map((dept) => (
-              <option key={dept._id} value={dept._id}>
-                {dept.name}
-              </option>
-            ))}
-          </select>
+          <div className="view-toggle">
+            <button 
+              className={`view-btn ${viewMode === 'table' ? 'active' : ''}`}
+              onClick={() => setViewMode('table')}
+              title="Table View"
+            >
+              📋 Table
+            </button>
+            <button 
+              className={`view-btn ${viewMode === 'tree' ? 'active' : ''}`}
+              onClick={() => setViewMode('tree')}
+              title="Tree View"
+            >
+              🌳 Tree
+            </button>
+          </div>
+          {viewMode === 'tree' && (
+            <div className="tree-controls">
+              <button className="btn-secondary" onClick={expandAllDepts}>
+                ➕ Expand All
+              </button>
+              <button className="btn-secondary" onClick={collapseAllDepts}>
+                ➖ Collapse All
+              </button>
+            </div>
+          )}
+          {viewMode === 'table' && (
+            <select
+              className="dept-filter"
+              value={selectedDept}
+              onChange={(e) => {
+                setSelectedDept(e.target.value);
+                fetchEmployees(e.target.value);
+              }}
+            >
+              <option value="">All Departments</option>
+              {departments.map((dept) => (
+                <option key={dept._id} value={dept._id}>
+                  {"—".repeat(dept.level || 0)} {dept.name}
+                </option>
+              ))}
+            </select>
+          )}
           <button className="btn-primary" onClick={() => setShowModal(true)}>
             + Add Employee
           </button>
@@ -314,7 +481,7 @@ const Employees = () => {
 
       {loading && employees.length === 0 ? (
         <div className="loading">Loading...</div>
-      ) : (
+      ) : viewMode === 'table' ? (
         <div className="employees-table">
           <table>
             <thead>
@@ -343,9 +510,26 @@ const Employees = () => {
                   <td>{emp.phone || "-"}</td>
                   <td>{emp.cnic || "-"}</td>
                   <td>
-                    <span className="dept-badge">
-                      {emp.department?.name || "-"}
-                    </span>
+                    <div className="dept-badges-container">
+                      <span className="dept-badge-primary" title="Primary Department">
+                        {emp.department?.name || "-"}
+                      </span>
+                      {emp.leadingDepartments?.map((dept) => (
+                        <span key={`lead-${dept._id}`} className="dept-badge-lead" title={`Team Lead of ${dept.name}`}>
+                          {dept.code || dept.name?.substring(0, 3)}
+                        </span>
+                      ))}
+                      {emp.additionalDepartments?.slice(0, 2).map((dept) => (
+                        <span key={`add-${dept._id}`} className="dept-badge-secondary" title={`Also works in ${dept.name}`}>
+                          {dept.code || dept.name?.substring(0, 3)}
+                        </span>
+                      ))}
+                      {emp.additionalDepartments?.length > 2 && (
+                        <span className="more-depts" title={emp.additionalDepartments.slice(2).map(d => d.name).join(', ')}>
+                          +{emp.additionalDepartments.length - 2}
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td>{emp.position}</td>
                   <td>
@@ -379,6 +563,16 @@ const Employees = () => {
               ))}
             </tbody>
           </table>
+        </div>
+      ) : (
+        <div className="employees-tree-view">
+          {hierarchicalDepts.length === 0 ? (
+            <div className="no-data">No departments found</div>
+          ) : (
+            <div className="dept-tree-container">
+              {renderDepartmentTree(hierarchicalDepts, 0)}
+            </div>
+          )}
         </div>
       )}
 
@@ -453,22 +647,78 @@ const Employees = () => {
                   <small>Numeric ID used in biometric device (if applicable)</small>
                 </div>
                 <div className="form-group">
-                  <label>Department *</label>
+                  <label>Primary Department *</label>
                   <select
                     value={formData.department}
                     onChange={(e) =>
-                      setFormData({ ...formData, department: e.target.value })
+                      setFormData({ 
+                        ...formData, 
+                        department: e.target.value,
+                        // Remove from additional departments if selected as primary
+                        additionalDepartments: formData.additionalDepartments.filter(d => d !== e.target.value)
+                      })
                     }
                     required
                   >
-                    <option value="">Select Department</option>
+                    <option value="">Select Primary Department</option>
                     {departments.map((dept) => (
                       <option key={dept._id} value={dept._id}>
-                        {dept.name} ({dept.code})
+                        {"—".repeat(dept.level || 0)} {dept.name} ({dept.code})
+                        {dept.parentDepartment ? ` ← ${dept.parentDepartment.name || ''}` : ''}
                       </option>
                     ))}
                   </select>
+                  <small style={{color: '#64748b', fontSize: '12px', marginTop: '4px'}}>
+                    Used for attendance tracking and salary calculation
+                  </small>
                 </div>
+
+                <div className="form-group full-width">
+                  <label>Additional Departments (Multi-Department Assignment)</label>
+                  <div className="checkbox-grid multi-dept-grid">
+                    {departments
+                      .filter(dept => dept._id !== formData.department)
+                      .map((dept) => (
+                        <label key={dept._id} className="checkbox-label dept-checkbox">
+                          <input
+                            type="checkbox"
+                            checked={formData.additionalDepartments.includes(dept._id)}
+                            onChange={() => handleMultiDeptToggle(dept._id, 'additionalDepartments')}
+                          />
+                          <span className="dept-name">
+                            {"—".repeat(dept.level || 0)} {dept.name}
+                          </span>
+                          <span className="dept-code">({dept.code})</span>
+                        </label>
+                      ))}
+                  </div>
+                  <small style={{color: '#64748b', fontSize: '12px', marginTop: '4px'}}>
+                    Select departments where this employee also works (in addition to primary)
+                  </small>
+                </div>
+
+                <div className="form-group full-width">
+                  <label>Team Lead Of (Departments)</label>
+                  <div className="checkbox-grid multi-dept-grid leading-grid">
+                    {departments.map((dept) => (
+                      <label key={dept._id} className="checkbox-label dept-checkbox lead-checkbox">
+                        <input
+                          type="checkbox"
+                          checked={formData.leadingDepartments.includes(dept._id)}
+                          onChange={() => handleMultiDeptToggle(dept._id, 'leadingDepartments')}
+                        />
+                        <span className="dept-name">
+                          {"—".repeat(dept.level || 0)} {dept.name}
+                        </span>
+                        <span className="dept-code">({dept.code})</span>
+                      </label>
+                    ))}
+                  </div>
+                  <small style={{color: '#64748b', fontSize: '12px', marginTop: '4px'}}>
+                    Select departments where this employee is a Team Lead
+                  </small>
+                </div>
+
                 <div className="form-group">
                   <label>Position *</label>
                   <input

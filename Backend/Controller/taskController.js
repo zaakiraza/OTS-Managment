@@ -7,23 +7,29 @@ export const getAllTasks = async (req, res) => {
     const { status, department, assignedTo, priority, startDate, endDate } = req.query;
     const filter = { isActive: true };
 
-    // Role-based filtering
-    const userType = req.user.userType;
-    const roleName = req.user.role?.name;
+    const roleName = req.user.role?.name || req.user.role;
 
-    // If not superAdmin, filter by user's department
-    if (roleName !== "superAdmin") {
-      if (userType === "employee") {
-        // For employees/teamLeads, filter by their department
+    // Role-based filtering
+    if (roleName === "teamLead") {
+      // For teamLead, filter by departments they are leading
+      const currentEmployee = await Employee.findById(req.user._id)
+        .populate("leadingDepartments", "_id");
+      
+      if (currentEmployee && currentEmployee.leadingDepartments?.length > 0) {
+        const leadingDeptIds = currentEmployee.leadingDepartments.map(d => d._id);
+        filter.department = { $in: leadingDeptIds };
+      } else {
+        // If no leading departments, only show their own department's tasks
         filter.department = req.user.department?._id || req.user.department;
-      } else if (userType === "user") {
-        // For admin users (attendanceDepartment), show all tasks
-        // They can filter by department using the query params
       }
+    } else if (roleName !== "superAdmin" && roleName !== "attendanceDepartment") {
+      // For regular employees, only show their department's tasks
+      filter.department = req.user.department?._id || req.user.department;
     }
+    // superAdmin and attendanceDepartment can see all tasks
 
     if (status) filter.status = status;
-    if (department) filter.department = department;
+    if (department) filter.department = department; // Allow override by query param
     if (assignedTo) filter.assignedTo = assignedTo;
     if (priority) filter.priority = priority;
     
@@ -37,7 +43,6 @@ export const getAllTasks = async (req, res) => {
       .populate("assignedTo", "name employeeId email position")
       .populate("assignedBy", "name email employeeId")
       .populate("department", "name code")
-      .populate("comments.user", "name")
       .populate("comments.employee", "name employeeId")
       .sort({ createdAt: -1 });
 
@@ -55,21 +60,15 @@ export const getAllTasks = async (req, res) => {
   }
 };
 
-// Get tasks for employee's department (all members can view, only assignee can update)
+// Get tasks for employee's department (all can view, only assigned can update)
 export const getMyTasks = async (req, res) => {
   try {
-    const userType = req.user.userType;
-    
-    if (userType !== "employee") {
-      return res.status(400).json({
-        success: false,
-        message: "Only employees can view their tasks",
-      });
-    }
+    const userId = req.user._id.toString();
+    const userDepartment = req.user.department?._id || req.user.department;
 
-    // Get all tasks from employee's department
+    // Get all tasks from user's department
     const tasks = await Task.find({
-      department: req.user.department,
+      department: userDepartment,
       isActive: true,
     })
       .populate("assignedBy", "name email employeeId")
@@ -77,10 +76,19 @@ export const getMyTasks = async (req, res) => {
       .populate("assignedTo", "name employeeId")
       .sort({ dueDate: 1 });
 
+    // Add canUpdate flag for each task
+    const tasksWithPermissions = tasks.map(task => {
+      const taskObj = task.toObject();
+      // User can update if they are one of the assigned employees
+      taskObj.canUpdate = task.assignedTo.some(emp => emp._id.toString() === userId);
+      taskObj.isAssignedToMe = taskObj.canUpdate;
+      return taskObj;
+    });
+
     res.status(200).json({
       success: true,
-      count: tasks.length,
-      data: tasks,
+      count: tasksWithPermissions.length,
+      data: tasksWithPermissions,
     });
   } catch (error) {
     console.error("Error in getMyTasks:", error);
@@ -98,7 +106,6 @@ export const getTaskById = async (req, res) => {
       .populate("assignedTo", "name employeeId email position department")
       .populate("assignedBy", "name email")
       .populate("department", "name code")
-      .populate("comments.user", "name")
       .populate("comments.employee", "name employeeId");
 
     if (!task) {
@@ -123,21 +130,33 @@ export const getTaskById = async (req, res) => {
 // Create new task (Team leads and above)
 export const createTask = async (req, res) => {
   try {
-    const taskData = {
-      ...req.body,
-      assignedBy: req.user._id,
-    };
-
-    // Get employee details to set department
-    const employee = await Employee.findById(req.body.assignedTo);
-    if (!employee) {
-      return res.status(404).json({
+    const { assignedTo, department, ...otherData } = req.body;
+    
+    // Ensure assignedTo is an array
+    const assignees = Array.isArray(assignedTo) ? assignedTo : [assignedTo];
+    
+    if (assignees.length === 0) {
+      return res.status(400).json({
         success: false,
-        message: "Employee not found",
+        message: "At least one employee must be assigned",
       });
     }
 
-    taskData.department = employee.department;
+    // Verify all assignees exist
+    const employees = await Employee.find({ _id: { $in: assignees } });
+    if (employees.length !== assignees.length) {
+      return res.status(404).json({
+        success: false,
+        message: "One or more employees not found",
+      });
+    }
+
+    const taskData = {
+      ...otherData,
+      assignedTo: assignees,
+      department: department || employees[0].department, // Use provided department or first employee's department
+      assignedBy: req.user._id,
+    };
 
     const task = await Task.create(taskData);
 
@@ -159,7 +178,7 @@ export const createTask = async (req, res) => {
   }
 };
 
-// Update task status (Employees can update their own task status)
+// Update task status (Only assigned employees can update status)
 export const updateTaskStatus = async (req, res) => {
   try {
     const { status } = req.body;
@@ -172,13 +191,16 @@ export const updateTaskStatus = async (req, res) => {
       });
     }
 
-    // Check if user is the assigned employee
-    const employeeId = req.user._id;
+    // Check if user is one of the assigned employees
+    const employeeId = req.user._id.toString();
+    const isAssigned = task.assignedTo.some(id => id.toString() === employeeId);
+    const roleName = req.user.role?.name || req.user.role;
+    const isTeamLeadOrAbove = ["superAdmin", "teamLead"].includes(roleName);
 
-    if (task.assignedTo.toString() !== employeeId.toString()) {
+    if (!isAssigned && !isTeamLeadOrAbove) {
       return res.status(403).json({
         success: false,
-        message: "You can only update your own tasks",
+        message: "Only assigned employees or team leads can update task status",
       });
     }
 
@@ -270,7 +292,6 @@ export const addComment = async (req, res) => {
       .populate("assignedTo", "name employeeId email")
       .populate("assignedBy", "name email")
       .populate("department", "name")
-      .populate("comments.user", "name")
       .populate("comments.employee", "name employeeId");
 
     res.status(200).json({

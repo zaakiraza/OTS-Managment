@@ -97,7 +97,6 @@ export const generateAttendanceReport = async (req, res) => {
         select: "name employeeId email department position salary workSchedule",
         populate: { path: "department", select: "name code" },
       })
-      .populate("user", "name userId email")
       .sort({ date: -1, createdAt: -1 });
 
     // If week filter is applied, always generate weekly summary per employee
@@ -642,15 +641,13 @@ export const exportAttendanceData = async (req, res) => {
         select: "name employeeId email department position",
         populate: { path: "department", select: "name code" },
       })
-      .populate("user", "name userId email")
       .sort({ date: -1 });
 
     // Format data for export
     const exportData = attendanceRecords.map((record) => ({
       Date: record.date.toISOString().split("T")[0],
       EmployeeID: record.userId || "N/A",
-      EmployeeName:
-        record.employee?.name || record.user?.name || "N/A",
+      EmployeeName: record.employee?.name || "N/A",
       Department: record.employee?.department?.name || "N/A",
       Position: record.employee?.position || "N/A",
       CheckIn: record.checkIn

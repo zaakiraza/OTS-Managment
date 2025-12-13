@@ -54,6 +54,7 @@ export const userAPI = {
 
 // Role API
 export const roleAPI = {
+  getAll: () => api.get("/roles"), // Alias for consistency
   getAllRoles: () => api.get("/roles"),
   getRoleById: (id) => api.get(`/roles/${id}`),
   createRole: (roleData) => api.post("/roles", roleData),

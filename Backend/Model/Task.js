@@ -16,14 +16,13 @@ const taskSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
-    assignedTo: {
+    assignedTo: [{
       type: mongoose.Schema.Types.ObjectId,
       ref: "Employee",
-      required: [true, "Task must be assigned to an employee"],
-    },
+    }],
     assignedBy: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
+      ref: "Employee",
       required: true,
     },
     department: {
@@ -53,10 +52,6 @@ const taskSchema = new mongoose.Schema(
     },
     comments: [
       {
-        user: {
-          type: mongoose.Schema.Types.ObjectId,
-          ref: "User",
-        },
         employee: {
           type: mongoose.Schema.Types.ObjectId,
           ref: "Employee",

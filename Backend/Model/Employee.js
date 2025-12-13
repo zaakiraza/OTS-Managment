@@ -69,8 +69,16 @@ const employeeSchema = new mongoose.Schema(
     department: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Department",
-      required: [true, "Department is required"],
+      required: [true, "Primary department is required"],
     },
+    additionalDepartments: [{
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Department",
+    }],
+    leadingDepartments: [{
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Department",
+    }],
     position: {
       type: String,
       required: [true, "Position is required"],
@@ -161,6 +169,8 @@ const employeeSchema = new mongoose.Schema(
 
 // Indexes for better query performance
 employeeSchema.index({ department: 1, isActive: 1 }); // For department-based queries
+employeeSchema.index({ additionalDepartments: 1 }); // For additional department queries
+employeeSchema.index({ leadingDepartments: 1 }); // For team lead queries
 employeeSchema.index({ isActive: 1 }); // For filtering active employees
 // Note: biometricId already has unique index from schema definition
 

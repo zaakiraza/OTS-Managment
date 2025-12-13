@@ -512,3 +512,106 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* Multi-Select Employee Checkbox List */
+.employee-checkbox-list {
+  max-height: 200px;
+  overflow-y: auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 8px;
+  background: #f8fafc;
+}
+
+.employee-checkbox-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: white;
+  border-radius: 6px;
+  margin-bottom: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: 1px solid transparent;
+}
+
+.employee-checkbox-item:last-child {
+  margin-bottom: 0;
+}
+
+.employee-checkbox-item:hover {
+  background: #f1f5f9;
+  border-color: #667eea;
+}
+
+.employee-checkbox-item:has(input:checked) {
+  background: linear-gradient(135deg, #e0e7ff 0%, #ede9fe 100%);
+  border-color: #667eea;
+}
+
+.employee-checkbox-item input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: #667eea;
+}
+
+.emp-checkbox-name {
+  font-weight: 600;
+  color: #1e293b;
+  flex: 1;
+}
+
+.emp-checkbox-id {
+  font-size: 12px;
+  color: #667eea;
+  font-weight: 500;
+  background: #e0e7ff;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.emp-checkbox-position {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.selected-count {
+  display: block;
+  margin-top: 8px;
+  color: #667eea;
+  font-weight: 500;
+}
+
+.no-employees-msg {
+  color: #94a3b8;
+  text-align: center;
+  padding: 20px;
+  font-style: italic;
+}
+
+/* Multi-assignee badges in task cards */
+.assignee-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.assignee-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #e0e7ff;
+  color: #4338ca;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.assignee-badge.more {
+  background: #94a3b8;
+  color: white;
+}

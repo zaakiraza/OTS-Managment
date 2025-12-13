@@ -3,9 +3,13 @@ import SideBar from "../../Components/SideBar/SideBar";
 import { userAPI, roleAPI } from "../../Config/Api";
 import "./Users.css";
 
+// Admin roles that can be assigned through this page
+const ADMIN_ROLES = ["superAdmin", "attendanceDepartment", "ITAssetManager"];
+
 function Users() {
   const [users, setUsers] = useState([]);
   const [roles, setRoles] = useState([]);
+  const [adminRoles, setAdminRoles] = useState([]);
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -41,7 +45,10 @@ function Users() {
   const fetchRoles = async () => {
     try {
       const response = await roleAPI.getAllRoles();
-      setRoles(response.data.data || []);
+      const allRoles = response.data.data || [];
+      setRoles(allRoles);
+      // Filter to only show admin roles in this page
+      setAdminRoles(allRoles.filter(role => ADMIN_ROLES.includes(role.name)));
     } catch (err) {
       console.error("Error fetching roles:", err);
     }
@@ -140,11 +147,11 @@ function Users() {
         <div className="page-container">
           <div className="page-header">
             <div>
-              <h1>Users Management</h1>
-              <p>Manage all users in the system</p>
+              <h1>🛡️ Admin Users</h1>
+              <p>Manage system administrators and department managers</p>
             </div>
             <button className="btn-primary" onClick={() => setShowModal(true)}>
-              ➕ Add New User
+              ➕ Add Admin User
             </button>
           </div>
 
@@ -155,11 +162,11 @@ function Users() {
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>User ID</th>
+                  <th>Employee ID</th>
                   <th>Name</th>
                   <th>Email</th>
                   <th>Phone</th>
-                  <th>Role</th>
+                  <th>Admin Role</th>
                   <th>Status</th>
                   <th>Actions</th>
                 </tr>
@@ -168,13 +175,13 @@ function Users() {
                 {users.length === 0 ? (
                   <tr>
                     <td colSpan="7" style={{ textAlign: "center" }}>
-                      No users found
+                      No admin users found
                     </td>
                   </tr>
                 ) : (
                   users.map((user) => (
                     <tr key={user._id}>
-                      <td>{user.userId}</td>
+                      <td>{user.employeeId || user.userId}</td>
                       <td>{user.name}</td>
                       <td>{user.email}</td>
                       <td>{user.phone}</td>
@@ -219,7 +226,7 @@ function Users() {
         <div className="modal-overlay" onClick={() => setShowModal(false)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h2>Add New User</h2>
+              <h2>Add Admin User</h2>
               <button
                 className="close-btn"
                 onClick={() => setShowModal(false)}
@@ -232,21 +239,23 @@ function Users() {
               {error && <div className="alert alert-error">{error}</div>}
 
               <div className="form-group">
-                <label>Role *</label>
+                <label>Admin Role *</label>
                 <select
                   name="role"
                   value={formData.role}
                   onChange={handleChange}
                   required
                 >
-                  <option value="">Select Role</option>
-                  {roles.map((role) => (
+                  <option value="">Select Admin Role</option>
+                  {adminRoles.map((role) => (
                     <option key={role._id} value={role._id}>
-                      {role.name}
+                      {role.name === "superAdmin" ? "Super Admin" : 
+                       role.name === "attendanceDepartment" ? "Attendance Department" :
+                       role.name === "ITAssetManager" ? "IT Asset Manager" : role.name}
                     </option>
                   ))}
                 </select>
-                <small>User ID will be auto-generated based on role</small>
+                <small>Employee ID will be auto-generated based on role</small>
               </div>
 
               <div className="form-group">
@@ -307,7 +316,7 @@ function Users() {
                   Cancel
                 </button>
                 <button type="submit" className="btn-primary" disabled={loading}>
-                  {loading ? "Creating..." : "Create User"}
+                  {loading ? "Creating..." : "Create Admin User"}
                 </button>
               </div>
             </form>
@@ -320,7 +329,7 @@ function Users() {
         <div className="modal-overlay" onClick={() => setShowEditModal(false)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h2>Edit User Credentials</h2>
+              <h2>Edit Admin User</h2>
               <button className="close-btn" onClick={() => setShowEditModal(false)}>
                 ✕
               </button>
@@ -328,25 +337,25 @@ function Users() {
 
             <form onSubmit={handleEditSubmit} className="modal-form">
               <div className="form-group">
-                <label>User Name</label>
+                <label>Name</label>
                 <input
                   type="text"
                   value={selectedUser.name}
                   disabled
                   style={{ backgroundColor: "#f5f5f5", cursor: "not-allowed" }}
                 />
-                <small>Name cannot be changed</small>
+                <small>Name cannot be changed here</small>
               </div>
 
               <div className="form-group">
-                <label>User ID</label>
+                <label>Employee ID</label>
                 <input
                   type="text"
-                  value={selectedUser.userId}
+                  value={selectedUser.employeeId || selectedUser.userId}
                   disabled
                   style={{ backgroundColor: "#f5f5f5", cursor: "not-allowed" }}
                 />
-                <small>User ID cannot be changed</small>
+                <small>Employee ID cannot be changed</small>
               </div>
 
               <div className="form-group">

@@ -53,10 +53,36 @@ function MyTasks() {
     }
   };
 
-  // Check if current user is the assignee
+  // Check if current user is one of the assignees
   const user = JSON.parse(localStorage.getItem("user") || "{}");
   const isAssignedToMe = (task) => {
-    return task?.assignedTo?._id === user?._id || task?.assignedTo?._id === user?.employeeId;
+    if (!task?.assignedTo) return false;
+    // Handle both array (new) and single object (old) formats
+    const assignees = Array.isArray(task.assignedTo) ? task.assignedTo : [task.assignedTo];
+    return assignees.some(emp => 
+      emp?._id === user?._id || 
+      emp?._id?.toString() === user?._id?.toString()
+    );
+  };
+
+  // Helper to render multiple assignees
+  const renderAssignees = (assignedTo, showFull = false) => {
+    if (!assignedTo) return "Unassigned";
+    
+    // Handle both array and single object
+    const assignees = Array.isArray(assignedTo) ? assignedTo : [assignedTo];
+    
+    if (assignees.length === 0) return "Unassigned";
+    
+    if (showFull) {
+      return assignees.map(emp => `${emp?.name || 'Unknown'} (${emp?.employeeId || ''})`).join(", ");
+    }
+    
+    if (assignees.length === 1) {
+      return assignees[0]?.name || "Unknown";
+    }
+    
+    return `${assignees[0]?.name} +${assignees.length - 1} more`;
   };
 
   const handleAddComment = async () => {
@@ -186,7 +212,7 @@ function MyTasks() {
                       )}
                       <div className="task-meta">
                         <div className="task-assignee">
-                          👤 {task.assignedTo?.name}
+                          👤 {renderAssignees(task.assignedTo)}
                           {isAssignedToMe(task) && <span style={{ marginLeft: '5px', color: '#10b981' }}>(You)</span>}
                         </div>
                         <div
@@ -239,7 +265,7 @@ function MyTasks() {
                       )}
                       <div className="task-meta">
                         <div className="task-assignee">
-                          👤 {task.assignedTo?.name}
+                          👤 {renderAssignees(task.assignedTo)}
                           {isAssignedToMe(task) && <span style={{ marginLeft: '5px', color: '#10b981' }}>(You)</span>}
                         </div>
                         <div
@@ -292,7 +318,7 @@ function MyTasks() {
                       )}
                       <div className="task-meta">
                         <div className="task-assignee">
-                          👤 {task.assignedTo?.name}
+                          👤 {renderAssignees(task.assignedTo)}
                           {isAssignedToMe(task) && <span style={{ marginLeft: '5px', color: '#10b981' }}>(You)</span>}
                         </div>
                         <div className="task-due-date">
@@ -354,8 +380,8 @@ function MyTasks() {
                     <div className="meta-item">
                       <span className="meta-label">Assigned To</span>
                       <span className="meta-value">
-                        {selectedTask.assignedTo?.name}
-                        {isAssignedToMe(selectedTask) && <span style={{ marginLeft: '5px', color: '#10b981' }}>(You)</span>}
+                        {renderAssignees(selectedTask.assignedTo, true)}
+                        {isAssignedToMe(selectedTask) && <span style={{ marginLeft: '5px', color: '#10b981' }}>(includes you)</span>}
                       </span>
                     </div>
                     <div className="meta-item">
@@ -389,7 +415,7 @@ function MyTasks() {
                   {/* Status Update Actions */}
                   {!isAssignedToMe(selectedTask) && (
                     <div style={{ padding: '12px', background: '#fef3c7', borderRadius: '8px', marginBottom: '16px', color: '#92400e' }}>
-                      ℹ️ This task is assigned to {selectedTask.assignedTo?.name}. Only they can update the status.
+                      ℹ️ This task is assigned to {renderAssignees(selectedTask.assignedTo)}. Only assigned employees can update the status.
                     </div>
                   )}
                   <div className="status-actions">

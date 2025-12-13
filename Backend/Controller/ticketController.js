@@ -17,7 +17,7 @@ export const getAllTickets = async (req, res) => {
       .populate("reportedAgainst", "name employeeId department")
       .populate("assignedTo", "name email")
       .populate("resolvedBy", "name email")
-      .populate("comments.user", "name")
+      .populate("comments.employee", "name employeeId")
       .sort({ createdAt: -1 });
 
     res.status(200).json({
@@ -41,7 +41,7 @@ export const getTicketById = async (req, res) => {
       .populate("reportedAgainst", "name employeeId department position")
       .populate("assignedTo", "name email")
       .populate("resolvedBy", "name email")
-      .populate("comments.user", "name");
+      .populate("comments.employee", "name employeeId");
 
     if (!ticket) {
       return res.status(404).json({
@@ -152,7 +152,7 @@ export const addComment = async (req, res) => {
     }
 
     ticket.comments.push({
-      user: req.user._id,
+      employee: req.user._id,
       comment,
     });
 
@@ -162,7 +162,7 @@ export const addComment = async (req, res) => {
       .populate("reportedBy", "name email role")
       .populate("reportedAgainst", "name employeeId department")
       .populate("assignedTo", "name email")
-      .populate("comments.user", "name");
+      .populate("comments.employee", "name employeeId");
 
     res.status(200).json({
       success: true,

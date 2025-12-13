@@ -122,14 +122,14 @@ function Login() {
               className="credential-card admin"
               onClick={() =>
                 setFormData({
-                  email: "admin@organization.com",
+                  email: "USR0001",
                   password: "12345678",
                 })
               }
             >
               <div className="credential-badge">Super Admin</div>
               <div className="credential-info">
-                {/* <p className="credential-email">admin@organization.com</p>
+                {/* <p className="credential-email">USR0001</p>
                 <p className="credential-password">12345678</p> */}
               </div>
             </div>
@@ -138,14 +138,14 @@ function Login() {
               className="credential-card attendance"
               onClick={() =>
                 setFormData({
-                  email: "attendance@gmail.com",
+                  email: "SCH0001",
                   password: "12345678",
                 })
               }
             >
               <div className="credential-badge">Attendance Dept</div>
               <div className="credential-info">
-                {/* <p className="credential-email">attendance@gmail.com</p>
+                {/* <p className="credential-email">SCH0001</p>
                 <p className="credential-password">12345678</p> */}
               </div>
             </div>
@@ -154,36 +154,68 @@ function Login() {
               className="credential-card asset"
               onClick={() =>
                 setFormData({
-                  email: "itmanager@gmail.com",
+                  email: "IT0001",
                   password: "12345678",
                 })
               }
             >
               <div className="credential-badge">IT Manager</div>
               <div className="credential-info">
-                {/* <p className="credential-email">itmanager@gmail.com</p>
+                {/* <p className="credential-email">IT0001</p>
                 <p className="credential-password">12345678</p> */}
               </div>
             </div>
 
             <div
-              className="credential-card asset"
+              className="credential-card attendance"
               onClick={() =>
                 setFormData({
-                  email: "WEB0005",
+                  email: "WRK0001",
                   password: "12345678",
                 })
               }
             >
-              <div className="credential-badge">A Team Lead</div>
+              <div className="credential-badge">Team Lead1</div>
               <div className="credential-info">
-                {/* <p className="credential-email">WEB0005</p>
+                {/* <p className="credential-email">WRK0001</p>
                 <p className="credential-password">12345678</p> */}
               </div>
             </div>
 
             <div
-              className="credential-card asset"
+              className="credential-card attendance"
+              onClick={() =>
+                setFormData({
+                  email: "WEB0002",
+                  password: "12345678",
+                })
+              }
+            >
+              <div className="credential-badge">Team lead 2</div>
+              <div className="credential-info">
+                {/* <p className="credential-email">WEB0002</p>
+                <p className="credential-password">12345678</p> */}
+              </div>
+            </div>
+
+            <div
+              className="credential-card attendance"
+              onClick={() =>
+                setFormData({
+                  email: "EDT0001",
+                  password: "12345678",
+                })
+              }
+            >
+              <div className="credential-badge">Employee 1</div>
+              <div className="credential-info">
+                {/* <p className="credential-email">EDT0001</p>
+                <p className="credential-password">12345678</p> */}
+              </div>
+            </div>
+
+            <div
+              className="credential-card attendance"
               onClick={() =>
                 setFormData({
                   email: "WEB0001",
@@ -191,7 +223,7 @@ function Login() {
                 })
               }
             >
-              <div className="credential-badge">Employee</div>
+              <div className="credential-badge">Employee 2</div>
               <div className="credential-info">
                 {/* <p className="credential-email">WEB0001</p>
                 <p className="credential-password">12345678</p> */}

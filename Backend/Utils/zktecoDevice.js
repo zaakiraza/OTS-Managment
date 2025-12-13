@@ -4,6 +4,7 @@ import Employee from '../Model/Employee.js';
 import Attendance from '../Model/Attendance.js';
 import logger from './logger.js';
 import { DEVICE, TIME } from '../Config/constants.js';
+import { parseDeviceTimestamp, getDateAtMidnightUTC } from './timezone.js';
 
 // Device configuration
 const DEVICE_IP = process.env.DEVICE_IP || DEVICE.DEFAULT_IP;
@@ -27,6 +28,8 @@ function createDeviceInstance() {
  * Map ZKTeco log to AttendanceLog document
  * zkteco-js returns array of log objects with fields:
  *   { sn, user_id, record_time, type, state, ip }
+ * 
+ * Uses centralized timezone handling from Utils/timezone.js
  */
 function mapZkLogToDoc(log) {
   // Get user_id
@@ -45,26 +48,14 @@ function mapZkLogToDoc(log) {
 
   if (isNaN(dt.getTime())) return null; // invalid date
 
-  // Device sends local time (PKT), convert to UTC by subtracting offset
-  const year = dt.getFullYear();
-  const month = dt.getMonth();
-  const day = dt.getDate();
-  const hours = dt.getHours();
-  const minutes = dt.getMinutes();
-  const seconds = dt.getSeconds();
-  
-  const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-  const timeStr = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-  
-  // Subtract PKT offset (5 hours) to convert local time to UTC
-  const PKT_OFFSET_HOURS = 5;
-  const utcHours = hours - PKT_OFFSET_HOURS;
-  const localDatetime = new Date(Date.UTC(year, month, day, utcHours, minutes, seconds));
+  // Use centralized timezone utility to parse device timestamp
+  const parsed = parseDeviceTimestamp(dt);
+  if (!parsed) return null;
 
   return {
-    datetime: localDatetime,
-    date: dateStr,
-    time: timeStr,
+    datetime: parsed.datetime,  // UTC datetime for storage
+    date: parsed.dateStr,       // Local date string for display
+    time: parsed.timeStr,       // Local time string for display
     userId,
     status: Number(log.type ?? log.status ?? 0),           // verification type
     punch: Number(log.state ?? log.punch ?? 0),            // check-in/out
@@ -85,12 +76,9 @@ async function processAttendanceLog(doc) {
       return;
     }
 
-    // Get date at midnight in UTC for consistent storage
+    // Get date at midnight in UTC for consistent storage using centralized utility
     const punchTime = doc.datetime;
-    const localYear = punchTime.getFullYear();
-    const localMonth = punchTime.getMonth();
-    const localDay = punchTime.getDate();
-    const dateOnly = new Date(Date.UTC(localYear, localMonth, localDay, 0, 0, 0, 0));
+    const dateOnly = getDateAtMidnightUTC(punchTime);
 
     // Find today's attendance record
     let attendance = await Attendance.findOne({

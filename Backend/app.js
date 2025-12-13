@@ -20,6 +20,8 @@ import iclockRoutes from "./Routes/iclockRoutes.js";
 import { connectToDevice, startPolling } from "./Utils/zktecoDevice.js";
 import { scheduleAbsenteeCheck } from "./Utils/markAbsentees.js";
 import logger from "./Utils/logger.js";
+import { globalErrorHandler, notFoundHandler } from "./Middleware/errorHandler.js";
+import { globalLimiter, authLimiter, intensiveLimiter } from "./Middleware/rateLimiter.js";
 
 dotenv.config();
 
@@ -34,6 +36,13 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true })); // For form-data
 app.use(express.text({ type: 'application/octet-stream' })); // For iClock protocol
 app.use(express.raw({ type: 'application/octet-stream', limit: '10mb' })); // Raw data
+
+// Apply global rate limiting to all requests
+// Can be disabled by setting RATE_LIMIT_ENABLED=false in environment
+if (process.env.RATE_LIMIT_ENABLED !== 'false') {
+  app.use(globalLimiter);
+  logger.info('Rate limiting enabled');
+}
 
 // Log all incoming requests
 app.use((req, res, next) => {
@@ -65,23 +74,12 @@ app.use("/api/tasks", taskRoutes);
 app.use("/api/resources", resourceRoutes);
 app.use("/iclock", iclockRoutes);
 
-// 404 Handler
-app.use((req, res) => {
-  res.status(404).json({
-    success: false,
-    message: "Route not found",
-  });
-});
+// 404 Handler - catches all unmatched routes
+app.use(notFoundHandler);
 
-// Error Handler
-app.use((err, req, res, next) => {
-  logger.error(`Unhandled error: ${err.message}`, { stack: err.stack });
-  res.status(500).json({
-    success: false,
-    message: "Internal server error",
-    error: process.env.NODE_ENV === "development" ? err.message : undefined,
-  });
-});
+// Global Error Handler - must be last middleware
+// Handles all errors including validation, authentication, and operational errors
+app.use(globalErrorHandler);
 
 app.listen(process.env.PORT, async () => {
   logger.info(`Server is running on port ${process.env.PORT}`);

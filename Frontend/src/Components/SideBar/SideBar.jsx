@@ -52,8 +52,8 @@ function SideBar() {
             </NavLink>
 
             <NavLink to="/users" className="nav-item">
-              <span className="nav-icon">👥</span>
-              {!isCollapsed && <span className="nav-text">Users</span>}
+              <span className="nav-icon">🛡️</span>
+              {!isCollapsed && <span className="nav-text">Admin Users</span>}
             </NavLink>
 
             <NavLink to="/roles" className="nav-item">
@@ -150,16 +150,6 @@ function SideBar() {
               <span className="nav-icon">🎫</span>
               {!isCollapsed && <span className="nav-text">Tickets</span>}
             </NavLink>
-
-            <NavLink to="/tasks" className="nav-item">
-              <span className="nav-icon">📌</span>
-              {!isCollapsed && <span className="nav-text">Task Board</span>}
-            </NavLink>
-
-            <NavLink to="/my-tasks" className="nav-item">
-              <span className="nav-icon">✓</span>
-              {!isCollapsed && <span className="nav-text">My Tasks</span>}
-            </NavLink>
           </>
         )}
 
@@ -186,11 +176,6 @@ function SideBar() {
         {/* Team Lead Menu */}
         {isTeamLead && (
           <>
-            <NavLink to="/employees" className="nav-item">
-              <span className="nav-icon">👨‍💼</span>
-              {!isCollapsed && <span className="nav-text">Employees</span>}
-            </NavLink>
-
             <NavLink to="/tasks" className="nav-item">
               <span className="nav-icon">📌</span>
               {!isCollapsed && <span className="nav-text">Task Board</span>}

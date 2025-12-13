@@ -107,7 +107,8 @@ function Assets() {
     try {
       const response = await departmentAPI.getAll();
       if (response.data.success) {
-        setDepartments(response.data.data);
+        // Use flatData which includes all departments (root + sub-departments)
+        setDepartments(response.data.flatData || response.data.data);
       }
     } catch (error) {
       console.error("Error fetching departments:", error);

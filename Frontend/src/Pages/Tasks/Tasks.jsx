@@ -26,11 +26,16 @@ function Tasks() {
     priority: "Medium",
     dueDate: "",
     department: "",
-    assignedTo: "",
+    assignedTo: [], // Changed to array for multi-select
   });
 
   const user = JSON.parse(localStorage.getItem("user") || "{}");
+  const isSuperAdmin = user?.role?.name === "superAdmin";
   const isTeamLead = ["superAdmin", "teamLead"].includes(user?.role?.name);
+  
+  // Get departments the team lead is leading
+  const userLeadingDepts = user?.leadingDepartments || [];
+  const userPrimaryDept = user?.department;
 
   const priorities = ["Low", "Medium", "High", "Critical"];
 
@@ -78,21 +83,25 @@ function Tasks() {
 
   const fetchEmployees = async () => {
     try {
-      // For teamLead, filter by their department
       const params = { isActive: true };
-      if (user?.userType === "employee" && user?.department?._id) {
-        params.department = user.department._id;
-      }
       
       const response = await employeeAPI.getAll(params);
       if (response.data.success) {
-        setEmployees(response.data.data);
-        setFilteredEmployees(response.data.data);
+        let empList = response.data.data;
         
-        // Auto-select department for teamLead
-        if (user?.userType === "employee" && user?.department?._id) {
-          setFormData(prev => ({ ...prev, department: user.department._id }));
+        // For teamLead, filter employees by departments they lead
+        if (user?.role?.name === "teamLead" && !isSuperAdmin) {
+          const leadingDeptIds = userLeadingDepts.map(d => d._id || d);
+          
+          // Include employees from departments they lead
+          empList = empList.filter(emp => 
+            leadingDeptIds.includes(emp.department?._id) ||
+            emp.additionalDepartments?.some(d => leadingDeptIds.includes(d._id || d))
+          );
         }
+        
+        setEmployees(empList);
+        setFilteredEmployees(empList);
       }
     } catch (error) {
       console.error("Error fetching employees:", error);
@@ -103,11 +112,39 @@ function Tasks() {
     try {
       const response = await departmentAPI.getAll();
       if (response.data.success) {
-        // For teamLead, only show their department
-        if (user?.userType === "employee" && user?.department) {
-          setDepartments([user.department]);
+        const allDepts = response.data.flatData || response.data.data;
+        
+        // For superAdmin, show all departments
+        if (isSuperAdmin) {
+          setDepartments(allDepts);
+        } 
+        // For teamLead, only show departments they are leading
+        else if (user?.role?.name === "teamLead") {
+          // Get IDs of departments the user is leading
+          const leadingDeptIds = userLeadingDepts.map(d => d._id || d);
+          
+          // Filter departments to only show the ones they lead
+          const userDepts = allDepts.filter(dept => 
+            leadingDeptIds.includes(dept._id)
+          );
+          
+          // If they're not leading any department, show their primary department
+          if (userDepts.length === 0 && userPrimaryDept) {
+            const primaryDept = allDepts.find(d => d._id === (userPrimaryDept._id || userPrimaryDept));
+            if (primaryDept) {
+              userDepts.push(primaryDept);
+            }
+          }
+          
+          setDepartments(userDepts);
+          
+          // Auto-select if only one department
+          if (userDepts.length === 1) {
+            setFormData(prev => ({ ...prev, department: userDepts[0]._id }));
+            handleDepartmentChange(userDepts[0]._id);
+          }
         } else {
-          setDepartments(response.data.data);
+          setDepartments(allDepts);
         }
       }
     } catch (error) {
@@ -116,7 +153,7 @@ function Tasks() {
   };
 
   const handleDepartmentChange = (departmentId) => {
-    setFormData({ ...formData, department: departmentId, assignedTo: "" });
+    setFormData({ ...formData, department: departmentId, assignedTo: [] });
     
     if (departmentId) {
       const filtered = employees.filter(emp => emp.department?._id === departmentId);
@@ -124,6 +161,14 @@ function Tasks() {
     } else {
       setFilteredEmployees(employees);
     }
+  };
+
+  const handleEmployeeToggle = (employeeId) => {
+    const current = formData.assignedTo || [];
+    const newAssigned = current.includes(employeeId)
+      ? current.filter(id => id !== employeeId)
+      : [...current, employeeId];
+    setFormData({ ...formData, assignedTo: newAssigned });
   };
 
   const handleSubmit = async (e) => {
@@ -163,13 +208,18 @@ function Tasks() {
 
   const handleEditTask = (task) => {
     setSelectedTask(task);
+    // Handle both single assignee (old format) and array (new format)
+    const assignedToArray = Array.isArray(task.assignedTo) 
+      ? task.assignedTo.map(emp => emp._id || emp)
+      : [task.assignedTo?._id || task.assignedTo];
+    
     setFormData({
       title: task.title,
       description: task.description || "",
       priority: task.priority,
       dueDate: task.dueDate.split("T")[0],
       department: task.department?._id || "",
-      assignedTo: task.assignedTo._id,
+      assignedTo: assignedToArray,
     });
     
     if (task.department?._id) {
@@ -215,7 +265,7 @@ function Tasks() {
       priority: "Medium",
       dueDate: "",
       department: "",
-      assignedTo: "",
+      assignedTo: [],
     });
     setFilteredEmployees(employees);
     setSelectedTask(null);
@@ -234,6 +284,33 @@ function Tasks() {
 
   const isOverdue = (dueDate) => {
     return new Date(dueDate) < new Date() && selectedTask?.status !== "completed";
+  };
+
+  // Helper to render multiple assignees
+  const renderAssignees = (assignedTo, showFull = false) => {
+    if (!assignedTo) return "Unassigned";
+    
+    // Handle both array and single object (for backward compatibility)
+    const assignees = Array.isArray(assignedTo) ? assignedTo : [assignedTo];
+    
+    if (assignees.length === 0) return "Unassigned";
+    
+    if (showFull) {
+      return assignees.map(emp => `${emp.name} (${emp.employeeId})`).join(", ");
+    }
+    
+    if (assignees.length === 1) {
+      return assignees[0]?.name || "Unknown";
+    }
+    
+    return (
+      <div className="assignee-badges">
+        <span className="assignee-badge">{assignees[0]?.name}</span>
+        {assignees.length > 1 && (
+          <span className="assignee-badge more">+{assignees.length - 1}</span>
+        )}
+      </div>
+    );
   };
 
   const groupedTasks = {
@@ -374,7 +451,7 @@ function Tasks() {
                         )}
                         <div className="task-meta">
                           <div className="task-assignee">
-                            👤 {task.assignedTo?.name}
+                            👤 {renderAssignees(task.assignedTo)}
                           </div>
                           <div
                             className={`task-due-date ${
@@ -426,7 +503,7 @@ function Tasks() {
                         )}
                         <div className="task-meta">
                           <div className="task-assignee">
-                            👤 {task.assignedTo?.name}
+                            👤 {renderAssignees(task.assignedTo)}
                           </div>
                           <div
                             className={`task-due-date ${
@@ -478,7 +555,7 @@ function Tasks() {
                         )}
                         <div className="task-meta">
                           <div className="task-assignee">
-                            👤 {task.assignedTo?.name}
+                            👤 {renderAssignees(task.assignedTo)}
                           </div>
                           <div className="task-due-date">
                             ✓ {new Date(task.completedAt).toLocaleDateString()}
@@ -580,21 +657,30 @@ function Tasks() {
                     </div>
 
                     <div className="form-group">
-                      <label>Assign To *</label>
-                      <select
-                        value={formData.assignedTo}
-                        onChange={(e) =>
-                          setFormData({ ...formData, assignedTo: e.target.value })
-                        }
-                        required
-                      >
-                        <option value="">Select Employee</option>
-                        {filteredEmployees.map((emp) => (
-                          <option key={emp._id} value={emp._id}>
-                            {emp.name} - {emp.employeeId} ({emp.position})
-                          </option>
-                        ))}
-                      </select>
+                      <label>Assign To * (Select one or more employees)</label>
+                      <div className="employee-checkbox-list">
+                        {filteredEmployees.length === 0 ? (
+                          <p className="no-employees-msg">Select a department first</p>
+                        ) : (
+                          filteredEmployees.map((emp) => (
+                            <label key={emp._id} className="employee-checkbox-item">
+                              <input
+                                type="checkbox"
+                                checked={formData.assignedTo?.includes(emp._id)}
+                                onChange={() => handleEmployeeToggle(emp._id)}
+                              />
+                              <span className="emp-checkbox-name">{emp.name}</span>
+                              <span className="emp-checkbox-id">{emp.employeeId}</span>
+                              <span className="emp-checkbox-position">{emp.position}</span>
+                            </label>
+                          ))
+                        )}
+                      </div>
+                      {formData.assignedTo?.length > 0 && (
+                        <small className="selected-count">
+                          {formData.assignedTo.length} employee(s) selected
+                        </small>
+                      )}
                     </div>
                   </div>
                   <div className="modal-actions">
@@ -669,7 +755,7 @@ function Tasks() {
                     <div className="meta-item">
                       <span className="meta-label">Assigned To</span>
                       <span className="meta-value">
-                        {selectedTask.assignedTo?.name} ({selectedTask.assignedTo?.employeeId})
+                        {renderAssignees(selectedTask.assignedTo, true)}
                       </span>
                     </div>
                     <div className="meta-item">

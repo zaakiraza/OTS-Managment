@@ -24,8 +24,8 @@ router.get("/:id", getTicketById);
 // All authenticated users can add comments
 router.post("/:id/comment", addComment);
 
-// Only superAdmin can update, assign, and delete tickets
-router.put("/:id", hasRole("superAdmin"), updateTicket);
-router.delete("/:id", hasRole("superAdmin"), deleteTicket);
+// superAdmin, attendanceDepartment, and ITAssetManager can update, assign, and delete tickets
+router.put("/:id", hasRole("superAdmin", "attendanceDepartment", "ITAssetManager"), updateTicket);
+router.delete("/:id", hasRole("superAdmin", "attendanceDepartment", "ITAssetManager"), deleteTicket);
 
 export default router;

@@ -34,7 +34,7 @@ const ticketSchema = new mongoose.Schema(
     },
     reportedBy: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
+      ref: "Employee",
       required: true,
     },
     reportedAgainst: {
@@ -43,13 +43,13 @@ const ticketSchema = new mongoose.Schema(
     },
     assignedTo: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
+      ref: "Employee",
     },
     comments: [
       {
-        user: {
+        employee: {
           type: mongoose.Schema.Types.ObjectId,
-          ref: "User",
+          ref: "Employee",
         },
         comment: String,
         createdAt: {
@@ -63,7 +63,7 @@ const ticketSchema = new mongoose.Schema(
     },
     resolvedBy: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
+      ref: "Employee",
     },
     isActive: {
       type: Boolean,

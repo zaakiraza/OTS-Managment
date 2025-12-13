@@ -31,6 +31,7 @@ function Tickets() {
 
   const user = JSON.parse(localStorage.getItem("user") || "{}");
   const isSuperAdmin = user?.role?.name === "superAdmin";
+  const canManageTickets = ["superAdmin", "attendanceDepartment", "ITAssetManager"].includes(user?.role?.name);
 
   const categories = ["Maintenance", "Technical", "HR", "Administrative", "Other"];
   const priorities = ["Low", "Medium", "High", "Critical"];
@@ -89,7 +90,8 @@ function Tickets() {
     try {
       const response = await departmentAPI.getAll();
       if (response.data.success) {
-        setDepartments(response.data.data);
+        // Use flatData to get all departments including sub-departments
+        setDepartments(response.data.flatData || response.data.data || []);
       }
     } catch (error) {
       console.error("Error fetching departments:", error);
@@ -369,7 +371,7 @@ function Tickets() {
                       >
                         View
                       </button>
-                      {isSuperAdmin && (
+                      {canManageTickets && (
                         <>
                           <button
                             className="btn-edit"
@@ -472,7 +474,7 @@ function Tickets() {
                     <option value="">-- All Departments --</option>
                     {departments.map((dept) => (
                       <option key={dept._id} value={dept._id}>
-                        {dept.name}
+                        {"—".repeat(dept.level || 0)} {dept.name}
                       </option>
                     ))}
                   </select>
@@ -498,7 +500,7 @@ function Tickets() {
                   </select>
                 </div>
 
-                {selectedTicket && isSuperAdmin && (
+                {selectedTicket && canManageTickets && (
                   <>
                     <div className="form-group">
                       <label>Status</label>
@@ -511,6 +513,22 @@ function Tickets() {
                         {statuses.map((status) => (
                           <option key={status} value={status}>
                             {status}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="form-group">
+                      <label>Assign To</label>
+                      <select
+                        value={formData.assignedTo || ""}
+                        onChange={(e) =>
+                          setFormData({ ...formData, assignedTo: e.target.value })
+                        }
+                      >
+                        <option value="">-- Not Assigned --</option>
+                        {employees.map((emp) => (
+                          <option key={emp._id} value={emp._id}>
+                            {emp.name} - {emp.employeeId}
                           </option>
                         ))}
                       </select>
@@ -614,7 +632,7 @@ function Tickets() {
                     <div key={index} className="comment-item">
                       <div className="comment-header">
                         <span className="comment-author">
-                          {comment.user?.name || "Unknown"}
+                          {comment.employee?.name || "Unknown"}
                         </span>
                         <span className="comment-date">
                           {new Date(comment.createdAt).toLocaleString()}
