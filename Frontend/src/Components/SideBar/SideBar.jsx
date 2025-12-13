@@ -1,12 +1,13 @@
 import { NavLink } from "react-router-dom";
 import { useState } from "react";
 import ChangePassword from "../ChangePassword/ChangePassword";
+import { getStoredUser } from "../../Utils/storage";
 import "./SideBar.css";
 
 function SideBar() {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
-  const user = JSON.parse(localStorage.getItem("user") || "{}");
+  const user = getStoredUser();
   const isSuperAdmin = user?.role?.name === "superAdmin";
   const isAttendanceDept = user?.role?.name === "attendanceDepartment";
   const isAssetManager = user?.role?.name === "ITAssetManager";
@@ -59,6 +60,11 @@ function SideBar() {
             <NavLink to="/roles" className="nav-item">
               <span className="nav-icon">🔑</span>
               {!isCollapsed && <span className="nav-text">Roles</span>}
+            </NavLink>
+
+            <NavLink to="/audit-logs" className="nav-item">
+              <span className="nav-icon">📜</span>
+              {!isCollapsed && <span className="nav-text">Audit Logs</span>}
             </NavLink>
 
             <NavLink to="/departments" className="nav-item">
@@ -235,6 +241,10 @@ function SideBar() {
       </nav>
 
       <div className="sidebar-footer">
+        <NavLink to="/profile" className="nav-item profile-btn">
+          <span className="nav-icon">👤</span>
+          {!isCollapsed && <span className="nav-text">My Profile</span>}
+        </NavLink>
         <button 
           onClick={() => setShowChangePassword(true)} 
           className="nav-item change-password-btn"

@@ -4,7 +4,13 @@ import api from "../../Config/Api";
 import "./Dashboard.css";
 
 function Dashboard() {
-  const user = JSON.parse(localStorage.getItem("user") || "{}");
+  const user = (() => {
+    try {
+      const stored = localStorage.getItem("user");
+      if (!stored || stored === "undefined") return {};
+      return JSON.parse(stored);
+    } catch { return {}; }
+  })();
   const [stats, setStats] = useState({
     totalUsers: 0,
     totalRoles: 0,

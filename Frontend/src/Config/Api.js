@@ -76,11 +76,14 @@ export const attendanceAPI = {
 
 // Department API
 export const departmentAPI = {
-  getAll: () => api.get("/departments"),
+  getAll: (params) => api.get("/departments", { params }),
   getById: (id) => api.get(`/departments/${id}`),
   create: (data) => api.post("/departments", data),
   update: (id, data) => api.put(`/departments/${id}`, data),
   delete: (id) => api.delete(`/departments/${id}`),
+  getSubDepartments: (id, lazyLoad = false) => 
+    api.get(`/departments/${id}/sub-departments`, { params: { lazyLoad } }),
+  getRootDepartments: () => api.get("/departments", { params: { parentOnly: true } }),
 };
 
 // Employee API
@@ -124,6 +127,23 @@ export const assetAPI = {
   getHistory: (assetId) => api.get(`/assets/${assetId}/history`),
   getEmployeeAssets: (employeeId) => api.get(`/assets/employee/${employeeId}`),
   getStats: () => api.get("/assets/stats"),
+};
+
+// Export API
+export const exportAPI = {
+  exportEmployees: (format) => api.get(`/exports/employees?format=${format}`, { responseType: 'blob' }),
+  exportAttendance: (format, params) => api.get(`/exports/attendance?format=${format}`, { params, responseType: 'blob' }),
+  exportTasks: (format) => api.get(`/exports/tasks?format=${format}`, { responseType: 'blob' }),
+  exportTickets: (format) => api.get(`/exports/tickets?format=${format}`, { responseType: 'blob' }),
+  exportDepartments: (format) => api.get(`/exports/departments?format=${format}`, { responseType: 'blob' }),
+  exportAuditLogs: (format) => api.get(`/exports/audit-logs?format=${format}`, { responseType: 'blob' }),
+};
+
+// Audit Log API
+export const auditLogAPI = {
+  getAll: (params) => api.get("/audit-logs", { params }),
+  getActions: () => api.get("/audit-logs/actions"),
+  getResourceTypes: () => api.get("/audit-logs/resource-types"),
 };
 
 export default api;

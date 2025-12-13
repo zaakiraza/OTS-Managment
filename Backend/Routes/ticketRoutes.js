@@ -7,25 +7,30 @@ import {
   deleteTicket,
   addComment,
   getTicketStats,
+  getTicketsAgainstMe,
 } from "../Controller/ticketController.js";
-import { verifyToken, hasRole } from "../Middleware/auth.js";
+import { verifyToken } from "../Middleware/auth.js";
+import { ticketAttachmentUpload, handleUploadError } from "../Middleware/fileUpload.js";
+import { ticketValidation } from "../Middleware/validators.js";
 
 const router = express.Router();
 
 // All routes require authentication
 router.use(verifyToken);
 
-// All authenticated users can create and view tickets
-router.post("/", createTicket);
+// All authenticated users can create and view tickets (with file upload support)
+router.post("/", ticketAttachmentUpload, handleUploadError, ticketValidation.create, createTicket);
 router.get("/", getAllTickets);
 router.get("/stats", getTicketStats);
+router.get("/against-me", getTicketsAgainstMe); // Get tickets reported against current user
+
 router.get("/:id", getTicketById);
 
 // All authenticated users can add comments
 router.post("/:id/comment", addComment);
 
-// superAdmin, attendanceDepartment, and ITAssetManager can update, assign, and delete tickets
-router.put("/:id", hasRole("superAdmin", "attendanceDepartment", "ITAssetManager"), updateTicket);
-router.delete("/:id", hasRole("superAdmin", "attendanceDepartment", "ITAssetManager"), deleteTicket);
+// Only creator or superAdmin can update/delete (checked in controller)
+router.put("/:id", updateTicket);
+router.delete("/:id", deleteTicket);
 
 export default router;

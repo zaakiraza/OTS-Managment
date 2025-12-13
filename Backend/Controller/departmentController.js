@@ -334,6 +334,7 @@ export const deleteDepartment = async (req, res) => {
 export const getSubDepartments = async (req, res) => {
   try {
     const departmentId = req.params.id;
+    const { lazyLoad } = req.query;
     
     // Get direct children
     const directChildren = await Department.find({
@@ -343,6 +344,33 @@ export const getSubDepartments = async (req, res) => {
       .populate("head", "name email")
       .populate("teamLead", "name employeeId")
       .sort({ name: 1 });
+
+    // For lazy loading, add hasChildren flag to each child
+    if (lazyLoad === "true") {
+      const childrenWithFlags = await Promise.all(
+        directChildren.map(async (dept) => {
+          const childCount = await Department.countDocuments({
+            parentDepartment: dept._id,
+            isActive: true,
+          });
+          const employeeCount = await Employee.countDocuments({
+            department: dept._id,
+            isActive: true,
+          });
+          return {
+            ...dept.toObject(),
+            hasChildren: childCount > 0,
+            childCount,
+            employeeCount,
+          };
+        })
+      );
+
+      return res.status(200).json({
+        success: true,
+        data: childrenWithFlags,
+      });
+    }
 
     // Get all descendants (children, grandchildren, etc.)
     const allDescendants = await Department.find({

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { employeeAPI, departmentAPI, roleAPI } from "../../Config/Api";
+import { employeeAPI, departmentAPI, roleAPI, exportAPI } from "../../Config/Api";
 import SideBar from "../../Components/SideBar/SideBar";
 import "./Employees.css";
 
@@ -15,6 +15,14 @@ const Employees = () => {
   const [selectedDept, setSelectedDept] = useState("");
   const [viewMode, setViewMode] = useState('table'); // 'table' or 'tree'
   const [expandedDepts, setExpandedDepts] = useState(new Set());
+  const [searchTerm, setSearchTerm] = useState("");
+  const [exporting, setExporting] = useState(false);
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: 50,
+    total: 0,
+    pages: 1,
+  });
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -49,12 +57,19 @@ const Employees = () => {
     fetchRoles();
   }, []);
 
-  const fetchEmployees = async (deptId = "") => {
+  const fetchEmployees = async (deptId = "", page = 1, search = "") => {
     try {
       setLoading(true);
-      const response = await employeeAPI.getAll(deptId ? { department: deptId } : {});
+      const params = { page, limit: pagination.limit };
+      if (deptId) params.department = deptId;
+      if (search) params.search = search;
+      
+      const response = await employeeAPI.getAll(params);
       if (response.data.success) {
         setEmployees(response.data.data);
+        if (response.data.pagination) {
+          setPagination(response.data.pagination);
+        }
       }
     } catch (error) {
       console.error("Error fetching employees:", error);
@@ -195,6 +210,71 @@ const Employees = () => {
       }
     } catch (error) {
       console.error("Error fetching roles:", error);
+    }
+  };
+
+  // Export functions
+  const handleExportExcel = async () => {
+    try {
+      setExporting(true);
+      const params = {};
+      if (selectedDept) params.department = selectedDept;
+      
+      const response = await exportAPI.employees(params);
+      const blob = new Blob([response.data], { 
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" 
+      });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `employees_${new Date().toISOString().split("T")[0]}.xlsx`;
+      link.click();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("Export failed:", error);
+      alert("Failed to export employees");
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleExportCsv = async () => {
+    try {
+      setExporting(true);
+      const params = {};
+      if (selectedDept) params.department = selectedDept;
+      
+      const response = await exportAPI.employeesCsv(params);
+      const blob = new Blob([response.data], { type: "text/csv" });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `employees_${new Date().toISOString().split("T")[0]}.csv`;
+      link.click();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("Export failed:", error);
+      alert("Failed to export employees");
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  // Handle search
+  const handleSearch = (e) => {
+    const value = e.target.value;
+    setSearchTerm(value);
+    // Debounce search
+    clearTimeout(window.searchTimeout);
+    window.searchTimeout = setTimeout(() => {
+      fetchEmployees(selectedDept, 1, value);
+    }, 500);
+  };
+
+  // Handle pagination
+  const handlePageChange = (newPage) => {
+    if (newPage >= 1 && newPage <= pagination.pages) {
+      fetchEmployees(selectedDept, newPage, searchTerm);
     }
   };
 
@@ -457,21 +537,48 @@ const Employees = () => {
             </div>
           )}
           {viewMode === 'table' && (
-            <select
-              className="dept-filter"
-              value={selectedDept}
-              onChange={(e) => {
-                setSelectedDept(e.target.value);
-                fetchEmployees(e.target.value);
-              }}
-            >
-              <option value="">All Departments</option>
-              {departments.map((dept) => (
-                <option key={dept._id} value={dept._id}>
-                  {"—".repeat(dept.level || 0)} {dept.name}
-                </option>
-              ))}
-            </select>
+            <>
+              <input
+                type="text"
+                className="search-input"
+                placeholder="🔍 Search employees..."
+                value={searchTerm}
+                onChange={handleSearch}
+              />
+              <select
+                className="dept-filter"
+                value={selectedDept}
+                onChange={(e) => {
+                  setSelectedDept(e.target.value);
+                  fetchEmployees(e.target.value, 1, searchTerm);
+                }}
+              >
+                <option value="">All Departments</option>
+                {departments.map((dept) => (
+                  <option key={dept._id} value={dept._id}>
+                    {"—".repeat(dept.level || 0)} {dept.name}
+                  </option>
+                ))}
+              </select>
+              <div className="export-buttons">
+                <button 
+                  className="btn-export" 
+                  onClick={handleExportExcel}
+                  disabled={exporting}
+                  title="Export to Excel"
+                >
+                  {exporting ? "⏳" : "📊"} Excel
+                </button>
+                <button 
+                  className="btn-export" 
+                  onClick={handleExportCsv}
+                  disabled={exporting}
+                  title="Export to CSV"
+                >
+                  {exporting ? "⏳" : "📄"} CSV
+                </button>
+              </div>
+            </>
           )}
           <button className="btn-primary" onClick={() => setShowModal(true)}>
             + Add Employee
@@ -511,24 +618,39 @@ const Employees = () => {
                   <td>{emp.cnic || "-"}</td>
                   <td>
                     <div className="dept-badges-container">
+                      {/* Primary Department */}
                       <span className="dept-badge-primary" title="Primary Department">
                         {emp.department?.name || "-"}
+                        {emp.leadingDepartments?.some(d => d._id === emp.department?._id) && " ⭐"}
                       </span>
-                      {emp.leadingDepartments?.map((dept) => (
+                      {/* Leading Departments (excluding primary) */}
+                      {emp.leadingDepartments?.filter(dept => dept._id !== emp.department?._id).map((dept) => (
                         <span key={`lead-${dept._id}`} className="dept-badge-lead" title={`Team Lead of ${dept.name}`}>
-                          {dept.code || dept.name?.substring(0, 3)}
+                          ⭐ {dept.name}
                         </span>
                       ))}
-                      {emp.additionalDepartments?.slice(0, 2).map((dept) => (
-                        <span key={`add-${dept._id}`} className="dept-badge-secondary" title={`Also works in ${dept.name}`}>
-                          {dept.code || dept.name?.substring(0, 3)}
-                        </span>
-                      ))}
-                      {emp.additionalDepartments?.length > 2 && (
-                        <span className="more-depts" title={emp.additionalDepartments.slice(2).map(d => d.name).join(', ')}>
-                          +{emp.additionalDepartments.length - 2}
-                        </span>
-                      )}
+                      {/* Additional Departments (excluding primary and leading) */}
+                      {(() => {
+                        const primaryId = emp.department?._id;
+                        const leadingIds = emp.leadingDepartments?.map(d => d._id) || [];
+                        const filteredAdditional = emp.additionalDepartments?.filter(
+                          dept => dept._id !== primaryId && !leadingIds.includes(dept._id)
+                        ) || [];
+                        return (
+                          <>
+                            {filteredAdditional.slice(0, 2).map((dept) => (
+                              <span key={`add-${dept._id}`} className="dept-badge-secondary" title={`Also works in ${dept.name}`}>
+                                {dept.name}
+                              </span>
+                            ))}
+                            {filteredAdditional.length > 2 && (
+                              <span className="more-depts" title={filteredAdditional.slice(2).map(d => d.name).join(', ')}>
+                                +{filteredAdditional.length - 2}
+                              </span>
+                            )}
+                          </>
+                        );
+                      })()}
                     </div>
                   </td>
                   <td>{emp.position}</td>
@@ -563,6 +685,52 @@ const Employees = () => {
               ))}
             </tbody>
           </table>
+          
+          {/* Pagination Controls */}
+          {pagination.pages > 1 && (
+            <div className="pagination-controls">
+              <div className="pagination-info">
+                Showing {employees.length} of {pagination.total} employees
+              </div>
+              <div className="pagination-buttons">
+                <button 
+                  className="pagination-btn"
+                  onClick={() => handlePageChange(1)}
+                  disabled={pagination.page === 1}
+                  title="First Page"
+                >
+                  ⏮️
+                </button>
+                <button 
+                  className="pagination-btn"
+                  onClick={() => handlePageChange(pagination.page - 1)}
+                  disabled={pagination.page === 1}
+                  title="Previous Page"
+                >
+                  ◀️
+                </button>
+                <span className="pagination-current">
+                  Page {pagination.page} of {pagination.pages}
+                </span>
+                <button 
+                  className="pagination-btn"
+                  onClick={() => handlePageChange(pagination.page + 1)}
+                  disabled={pagination.page === pagination.pages}
+                  title="Next Page"
+                >
+                  ▶️
+                </button>
+                <button 
+                  className="pagination-btn"
+                  onClick={() => handlePageChange(pagination.pages)}
+                  disabled={pagination.page === pagination.pages}
+                  title="Last Page"
+                >
+                  ⏭️
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       ) : (
         <div className="employees-tree-view">
@@ -609,7 +777,6 @@ const Employees = () => {
                     onChange={(e) =>
                       setFormData({ ...formData, email: e.target.value })
                     }
-                    disabled={editMode}
                   />
                 </div>
                 <div className="form-group">

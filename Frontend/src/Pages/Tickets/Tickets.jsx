@@ -6,6 +6,7 @@ import "./Tickets.css";
 
 function Tickets() {
   const [tickets, setTickets] = useState([]);
+  const [ticketsAgainstMe, setTicketsAgainstMe] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [departments, setDepartments] = useState([]);
   const [filteredEmployees, setFilteredEmployees] = useState([]);
@@ -15,10 +16,12 @@ function Tickets() {
   const [showViewModal, setShowViewModal] = useState(false);
   const [selectedTicket, setSelectedTicket] = useState(null);
   const [newComment, setNewComment] = useState("");
+  const [showAgainstMeAlert, setShowAgainstMeAlert] = useState(true);
   const [filter, setFilter] = useState({
     status: "",
     category: "",
     priority: "",
+    showResolved: false, // Show resolved/closed tickets (inactive)
   });
   const [formData, setFormData] = useState({
     title: "",
@@ -28,10 +31,21 @@ function Tickets() {
     department: "",
     reportedAgainst: "",
   });
+  const [attachments, setAttachments] = useState([]);
 
-  const user = JSON.parse(localStorage.getItem("user") || "{}");
+  const user = (() => {
+    try {
+      const stored = localStorage.getItem("user");
+      if (!stored || stored === "undefined") return {};
+      return JSON.parse(stored);
+    } catch { return {}; }
+  })();
   const isSuperAdmin = user?.role?.name === "superAdmin";
-  const canManageTickets = ["superAdmin", "attendanceDepartment", "ITAssetManager"].includes(user?.role?.name);
+
+  // Check if current user can edit/delete a specific ticket
+  const canEditTicket = (ticket) => {
+    return isSuperAdmin || ticket.reportedBy?._id === user?._id;
+  };
 
   const categories = ["Maintenance", "Technical", "HR", "Administrative", "Other"];
   const priorities = ["Low", "Medium", "High", "Critical"];
@@ -42,7 +56,23 @@ function Tickets() {
     fetchStats();
     fetchEmployees();
     fetchDepartments();
+    fetchTicketsAgainstMe();
   }, [filter]);
+
+  const fetchTicketsAgainstMe = async () => {
+    try {
+      const response = await ticketAPI.getAgainstMe();
+      if (response.data.success) {
+        // Only show open/in-progress tickets
+        const activeTickets = response.data.data.filter(
+          t => t.status === "Open" || t.status === "In Progress"
+        );
+        setTicketsAgainstMe(activeTickets);
+      }
+    } catch (error) {
+      console.error("Error fetching tickets against me:", error);
+    }
+  };
 
   const fetchTickets = async () => {
     try {
@@ -51,6 +81,7 @@ function Tickets() {
       if (filter.status) params.status = filter.status;
       if (filter.category) params.category = filter.category;
       if (filter.priority) params.priority = filter.priority;
+      if (filter.showResolved) params.includeInactive = true;
 
       const response = await ticketAPI.getAll(params);
       if (response.data.success) {
@@ -117,18 +148,58 @@ function Tickets() {
         await ticketAPI.update(selectedTicket._id, formData);
         alert("Ticket updated successfully!");
       } else {
-        await ticketAPI.create(formData);
+        // Check if there are attachments
+        if (attachments.length > 0) {
+          const formDataWithFiles = new FormData();
+          // Add form fields
+          Object.keys(formData).forEach((key) => {
+            if (formData[key]) {
+              formDataWithFiles.append(key, formData[key]);
+            }
+          });
+          // Add files
+          attachments.forEach((file) => {
+            formDataWithFiles.append("attachments", file);
+          });
+          await ticketAPI.createWithFiles(formDataWithFiles);
+        } else {
+          await ticketAPI.create(formData);
+        }
         alert("Ticket created successfully!");
       }
       resetForm();
       fetchTickets();
       fetchStats();
+      fetchTicketsAgainstMe();
     } catch (error) {
       console.error("Error submitting ticket:", error);
       alert(error.response?.data?.message || "Failed to submit ticket");
     } finally {
       setLoading(false);
     }
+  };
+
+  // Handle file selection
+  const handleFileChange = (e) => {
+    const files = Array.from(e.target.files);
+    if (files.length + attachments.length > 5) {
+      alert("Maximum 5 files allowed");
+      return;
+    }
+    // Check file sizes (max 10MB each)
+    const validFiles = files.filter((file) => {
+      if (file.size > 10 * 1024 * 1024) {
+        alert(`File "${file.name}" is too large. Maximum size is 10MB.`);
+        return false;
+      }
+      return true;
+    });
+    setAttachments([...attachments, ...validFiles]);
+  };
+
+  // Remove attachment
+  const removeAttachment = (index) => {
+    setAttachments(attachments.filter((_, i) => i !== index));
   };
 
   const handleView = async (ticket) => {
@@ -198,6 +269,7 @@ function Tickets() {
     setFilteredEmployees(employees);
     setSelectedTicket(null);
     setShowModal(false);
+    setAttachments([]);
   };
 
   const getStatusBadge = (status) => {
@@ -273,6 +345,47 @@ function Tickets() {
         </div>
       </div>
 
+      {/* Tickets Against Me Alert */}
+      {ticketsAgainstMe.length > 0 && showAgainstMeAlert && (
+        <div className="tickets-against-me-alert">
+          <div className="alert-header">
+            <div className="alert-icon">⚠️</div>
+            <div className="alert-title">
+              <strong>Attention!</strong> You have {ticketsAgainstMe.length} ticket(s) reported against you
+            </div>
+            <button 
+              className="alert-close" 
+              onClick={() => setShowAgainstMeAlert(false)}
+              title="Dismiss"
+            >
+              ×
+            </button>
+          </div>
+          <div className="against-me-tickets-list">
+            {ticketsAgainstMe.map((ticket) => (
+              <div key={ticket._id} className="against-me-ticket-item">
+                <div className="against-me-ticket-info">
+                  <span className="ticket-id-badge">{ticket.ticketId}</span>
+                  <span className="ticket-title">{ticket.title}</span>
+                  {getPriorityBadge(ticket.priority)}
+                  {getStatusBadge(ticket.status)}
+                </div>
+                <div className="against-me-ticket-meta">
+                  <span>Reported by: <strong>{ticket.reportedBy?.name}</strong></span>
+                  <span>on {new Date(ticket.createdAt).toLocaleDateString()}</span>
+                </div>
+                <button 
+                  className="btn-view-small"
+                  onClick={() => handleView(ticket)}
+                >
+                  View Details
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Filters */}
       <div className="filters">
         <div className="filter-group">
@@ -316,6 +429,19 @@ function Tickets() {
               </option>
             ))}
           </select>
+        </div>
+        <div className="filter-group filter-checkbox">
+          <label className="checkbox-label">
+            <input
+              type="checkbox"
+              checked={filter.showResolved}
+              onChange={(e) => setFilter({ ...filter, showResolved: e.target.checked })}
+            />
+            <span>Show Resolved/Closed</span>
+          </label>
+          <small style={{ color: "#64748b", fontSize: "11px" }}>
+            Include archived tickets
+          </small>
         </div>
       </div>
 
@@ -371,7 +497,7 @@ function Tickets() {
                       >
                         View
                       </button>
-                      {canManageTickets && (
+                      {canEditTicket(ticket) && (
                         <>
                           <button
                             className="btn-edit"
@@ -500,7 +626,49 @@ function Tickets() {
                   </select>
                 </div>
 
-                {selectedTicket && canManageTickets && (
+                {/* File Attachments - Only for new tickets */}
+                {!selectedTicket && (
+                  <div className="form-group">
+                    <label>Attachments (Optional)</label>
+                    <div className="file-upload-area">
+                      <input
+                        type="file"
+                        id="ticket-attachments"
+                        multiple
+                        accept=".jpg,.jpeg,.png,.gif,.pdf,.doc,.docx,.xls,.xlsx,.txt,.csv"
+                        onChange={handleFileChange}
+                        style={{ display: "none" }}
+                      />
+                      <label htmlFor="ticket-attachments" className="file-upload-btn">
+                        📎 Choose Files
+                      </label>
+                      <span className="file-hint">Max 5 files, 10MB each</span>
+                    </div>
+                    {attachments.length > 0 && (
+                      <div className="attachments-list">
+                        {attachments.map((file, index) => (
+                          <div key={index} className="attachment-item">
+                            <span className="attachment-name">
+                              {file.type.startsWith("image/") ? "🖼️" : "📄"} {file.name}
+                            </span>
+                            <span className="attachment-size">
+                              ({(file.size / 1024).toFixed(1)} KB)
+                            </span>
+                            <button
+                              type="button"
+                              className="remove-attachment"
+                              onClick={() => removeAttachment(index)}
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {selectedTicket && (
                   <>
                     <div className="form-group">
                       <label>Status</label>
@@ -517,22 +685,24 @@ function Tickets() {
                         ))}
                       </select>
                     </div>
-                    <div className="form-group">
-                      <label>Assign To</label>
-                      <select
-                        value={formData.assignedTo || ""}
-                        onChange={(e) =>
-                          setFormData({ ...formData, assignedTo: e.target.value })
-                        }
-                      >
-                        <option value="">-- Not Assigned --</option>
-                        {employees.map((emp) => (
-                          <option key={emp._id} value={emp._id}>
-                            {emp.name} - {emp.employeeId}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
+                    {isSuperAdmin && (
+                      <div className="form-group">
+                        <label>Assign To</label>
+                        <select
+                          value={formData.assignedTo || ""}
+                          onChange={(e) =>
+                            setFormData({ ...formData, assignedTo: e.target.value })
+                          }
+                        >
+                          <option value="">-- Not Assigned --</option>
+                          {employees.map((emp) => (
+                            <option key={emp._id} value={emp._id}>
+                              {emp.name} - {emp.employeeId}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
                   </>
                 )}
               </div>

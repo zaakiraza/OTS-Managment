@@ -21,6 +21,8 @@ import MyTasks from "./Pages/MyTasks/MyTasks";
 import MyAssets from "./Pages/MyAssets/MyAssets";
 import MyAttendance from "./Pages/MyAttendance/MyAttendance";
 import Resources from "./Pages/Resources/Resources";
+import AuditLogs from "./Pages/AuditLogs/AuditLogs";
+import Profile from "./Pages/Profile/Profile";
 
 function App() {
   const isAuthenticated = () => {
@@ -88,6 +90,14 @@ function App() {
           element={
             <ProtectedRoute allowedRoles={["superAdmin"]}>
               <Roles />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/audit-logs"
+          element={
+            <ProtectedRoute allowedRoles={["superAdmin"]}>
+              <AuditLogs />
             </ProtectedRoute>
           }
         />
@@ -213,6 +223,8 @@ function App() {
             </ProtectedRoute>
           }
         />
+
+        <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
 
         <Route path="/" element={<Navigate to="/login" />} />
         <Route path="*" element={<Navigate to="/login" />} />

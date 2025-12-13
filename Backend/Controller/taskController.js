@@ -1,5 +1,8 @@
 import Task from "../Model/Task.js";
 import Employee from "../Model/Employee.js";
+import { notifyTaskAssigned, notifyTaskStatusChange } from "../Utils/emailNotifications.js";
+import { logTaskAction } from "../Utils/auditLogger.js";
+import { getFileInfo } from "../Middleware/fileUpload.js";
 
 // Get all tasks (filtered by department and role)
 export const getAllTasks = async (req, res) => {
@@ -154,9 +157,17 @@ export const createTask = async (req, res) => {
     const taskData = {
       ...otherData,
       assignedTo: assignees,
-      department: department || employees[0].department, // Use provided department or first employee's department
+      department: department || employees[0].department,
       assignedBy: req.user._id,
     };
+
+    // Handle file attachments if uploaded
+    if (req.files && req.files.length > 0) {
+      taskData.attachments = req.files.map((file) => ({
+        ...getFileInfo(file),
+        uploadedBy: req.user._id,
+      }));
+    }
 
     const task = await Task.create(taskData);
 
@@ -164,6 +175,18 @@ export const createTask = async (req, res) => {
       .populate("assignedTo", "name employeeId email")
       .populate("assignedBy", "name email")
       .populate("department", "name");
+
+    // Send email notifications to all assignees
+    for (const emp of employees) {
+      if (emp.email) {
+        notifyTaskAssigned(emp, populatedTask, req.user).catch((err) =>
+          console.error("Email notification failed:", err)
+        );
+      }
+    }
+
+    // Log the action
+    await logTaskAction(req, "CREATE", populatedTask);
 
     res.status(201).json({
       success: true,

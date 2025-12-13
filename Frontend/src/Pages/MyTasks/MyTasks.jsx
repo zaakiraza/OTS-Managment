@@ -54,7 +54,15 @@ function MyTasks() {
   };
 
   // Check if current user is one of the assignees
-  const user = JSON.parse(localStorage.getItem("user") || "{}");
+  const user = (() => {
+    try {
+      const stored = localStorage.getItem("user");
+      if (!stored || stored === "undefined") return {};
+      return JSON.parse(stored);
+    } catch { return {}; }
+  })();
+  const isSuperAdmin = user?.role?.name === "superAdmin";
+  
   const isAssignedToMe = (task) => {
     if (!task?.assignedTo) return false;
     // Handle both array (new) and single object (old) formats
@@ -63,6 +71,11 @@ function MyTasks() {
       emp?._id === user?._id || 
       emp?._id?.toString() === user?._id?.toString()
     );
+  };
+
+  // SuperAdmin can update any task, assigned employees can update their tasks
+  const canUpdateTask = (task) => {
+    return isSuperAdmin || isAssignedToMe(task);
   };
 
   // Helper to render multiple assignees
@@ -413,9 +426,9 @@ function MyTasks() {
                   </div>
 
                   {/* Status Update Actions */}
-                  {!isAssignedToMe(selectedTask) && (
+                  {!canUpdateTask(selectedTask) && (
                     <div style={{ padding: '12px', background: '#fef3c7', borderRadius: '8px', marginBottom: '16px', color: '#92400e' }}>
-                      ℹ️ This task is assigned to {renderAssignees(selectedTask.assignedTo)}. Only assigned employees can update the status.
+                      ℹ️ This task is assigned to {renderAssignees(selectedTask.assignedTo)}. Only assigned employees or superAdmin can update the status.
                     </div>
                   )}
                   <div className="status-actions">
@@ -424,7 +437,7 @@ function MyTasks() {
                         selectedTask.status === "todo" ? "active" : ""
                       }`}
                       onClick={() => handleStatusChange("todo")}
-                      disabled={selectedTask.status === "todo" || !isAssignedToMe(selectedTask)}
+                      disabled={selectedTask.status === "todo" || !canUpdateTask(selectedTask)}
                     >
                       📋 To Do
                     </button>
@@ -433,7 +446,7 @@ function MyTasks() {
                         selectedTask.status === "in-progress" ? "active" : ""
                       }`}
                       onClick={() => handleStatusChange("in-progress")}
-                      disabled={selectedTask.status === "in-progress" || !isAssignedToMe(selectedTask)}
+                      disabled={selectedTask.status === "in-progress" || !canUpdateTask(selectedTask)}
                     >
                       ⚙️ In Progress
                     </button>
@@ -442,7 +455,7 @@ function MyTasks() {
                         selectedTask.status === "completed" ? "active" : ""
                       }`}
                       onClick={() => handleStatusChange("completed")}
-                      disabled={selectedTask.status === "completed" || !isAssignedToMe(selectedTask)}
+                      disabled={selectedTask.status === "completed" || !canUpdateTask(selectedTask)}
                     >
                       ✅ Completed
                     </button>

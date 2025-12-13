@@ -16,7 +16,13 @@ function MyAssets() {
   const fetchMyAssets = async () => {
     try {
       setLoading(true);
-      const user = JSON.parse(localStorage.getItem("user") || "{}");
+      const user = (() => {
+        try {
+          const stored = localStorage.getItem("user");
+          if (!stored || stored === "undefined") return {};
+          return JSON.parse(stored);
+        } catch { return {}; }
+      })();
       const response = await assetAPI.getAll();
       
       if (response.data.success) {

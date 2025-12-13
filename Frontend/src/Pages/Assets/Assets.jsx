@@ -252,16 +252,9 @@ function Assets() {
   };
 
   const getConditionBadge = (condition) => {
-    const colors = {
-      Excellent: "#4caf50",
-      Good: "#8bc34a",
-      Fair: "#ff9800",
-      Poor: "#f44336",
-    };
     return (
       <span
-        className="condition-badge"
-        style={{ background: colors[condition] || "#999" }}
+        className={`condition-badge ${condition?.toLowerCase() || 'unknown'}`}
       >
         {condition}
       </span>

@@ -39,19 +39,6 @@ const RATE_LIMIT_CONFIG = {
 };
 
 /**
- * Custom key generator that uses IP + user ID if authenticated
- */
-const keyGenerator = (req) => {
-  // Use IP address by default
-  const ip = req.ip || req.connection?.remoteAddress || "unknown";
-  
-  // If user is authenticated, include their ID for more precise limiting
-  const userId = req.user?._id || "";
-  
-  return userId ? `${ip}-${userId}` : ip;
-};
-
-/**
  * Custom error handler for rate limit exceeded
  */
 const rateLimitHandler = (req, res, next, options) => {
@@ -96,7 +83,6 @@ const skipTrusted = (req) => {
 export const globalLimiter = rateLimit({
   windowMs: RATE_LIMIT_CONFIG.GLOBAL.WINDOW_MS,
   max: RATE_LIMIT_CONFIG.GLOBAL.MAX_REQUESTS,
-  keyGenerator,
   skip: skipTrusted,
   standardHeaders: true, // Return rate limit info in `RateLimit-*` headers
   legacyHeaders: false, // Disable `X-RateLimit-*` headers
@@ -115,7 +101,6 @@ export const globalLimiter = rateLimit({
 export const authLimiter = rateLimit({
   windowMs: RATE_LIMIT_CONFIG.AUTH.WINDOW_MS,
   max: RATE_LIMIT_CONFIG.AUTH.MAX_REQUESTS,
-  keyGenerator,
   skip: skipTrusted,
   standardHeaders: true,
   legacyHeaders: false,
@@ -141,7 +126,6 @@ export const authLimiter = rateLimit({
 export const intensiveLimiter = rateLimit({
   windowMs: RATE_LIMIT_CONFIG.INTENSIVE.WINDOW_MS,
   max: RATE_LIMIT_CONFIG.INTENSIVE.MAX_REQUESTS,
-  keyGenerator,
   skip: skipTrusted,
   standardHeaders: true,
   legacyHeaders: false,
@@ -165,7 +149,6 @@ export const createRateLimiter = (maxRequests, windowMs, message = "Too many req
   return rateLimit({
     windowMs,
     max: maxRequests,
-    keyGenerator,
     skip: skipTrusted,
     standardHeaders: true,
     legacyHeaders: false,

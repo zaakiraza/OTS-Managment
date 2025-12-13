@@ -138,15 +138,35 @@ export const createEmployee = async (req, res) => {
   }
 };
 
-// Get all employees
+// Get all employees with pagination
 export const getAllEmployees = async (req, res) => {
   try {
-    const { department, isActive } = req.query;
+    const { 
+      department, 
+      isActive, 
+      page = 1, 
+      limit = 50, 
+      search,
+      sortBy = "employeeId",
+      sortOrder = "asc",
+      noPagination // If true, returns all results (for dropdowns)
+    } = req.query;
+    
     const filter = {};
 
     if (department) filter.department = department;
     if (isActive !== undefined) filter.isActive = isActive === "true";
     else filter.isActive = true;
+
+    // Search functionality
+    if (search) {
+      filter.$or = [
+        { name: { $regex: search, $options: "i" } },
+        { email: { $regex: search, $options: "i" } },
+        { employeeId: { $regex: search, $options: "i" } },
+        { phone: { $regex: search, $options: "i" } },
+      ];
+    }
 
     // Get the superAdmin role ID to exclude superAdmin employees for non-superAdmin users
     const superAdminRole = await Role.findOne({ name: "superAdmin" });
@@ -159,37 +179,84 @@ export const getAllEmployees = async (req, res) => {
 
     // For teamLead role, only show employees from departments they lead
     if (requestingUserRole === "teamLead") {
-      // Get the current user's employee record with leadingDepartments
       const currentEmployee = await Employee.findById(req.user._id)
         .populate("leadingDepartments", "_id");
       
       if (currentEmployee && currentEmployee.leadingDepartments?.length > 0) {
-        // Get the department IDs the team lead is leading
         const leadingDeptIds = currentEmployee.leadingDepartments.map(d => d._id);
         
-        // Filter to only show employees whose primary or additional department is in the leading departments
-        filter.$or = [
-          { department: { $in: leadingDeptIds } },
-          { additionalDepartments: { $in: leadingDeptIds } }
-        ];
+        // Use $and to combine with existing $or from search
+        const deptFilter = {
+          $or: [
+            { department: { $in: leadingDeptIds } },
+            { additionalDepartments: { $in: leadingDeptIds } }
+          ]
+        };
+        
+        if (filter.$or) {
+          filter.$and = [{ $or: filter.$or }, deptFilter];
+          delete filter.$or;
+        } else {
+          filter.$or = deptFilter.$or;
+        }
       } else {
-        // If team lead has no leading departments, only show themselves
         filter._id = req.user._id;
       }
     }
 
-    const employees = await Employee.find(filter)
-      .populate("department", "name code")
-      .populate("additionalDepartments", "name code")
-      .populate("leadingDepartments", "name code")
-      .populate("role", "name description")
-      .populate("createdBy", "name")
-      .sort({ employeeId: 1 });
+    // Build sort object
+    const sort = {};
+    sort[sortBy] = sortOrder === "desc" ? -1 : 1;
+
+    // If noPagination is true, return all results
+    if (noPagination === "true") {
+      const employees = await Employee.find(filter)
+        .populate("department", "name code")
+        .populate("additionalDepartments", "name code")
+        .populate("leadingDepartments", "name code")
+        .populate("role", "name description")
+        .populate("createdBy", "name")
+        .sort(sort);
+
+      return res.status(200).json({
+        success: true,
+        count: employees.length,
+        data: employees,
+      });
+    }
+
+    // Pagination
+    const pageNum = parseInt(page) || 1;
+    const limitNum = Math.min(parseInt(limit) || 50, 100); // Max 100 per page
+    const skip = (pageNum - 1) * limitNum;
+
+    // Execute query with pagination
+    const [employees, total] = await Promise.all([
+      Employee.find(filter)
+        .populate("department", "name code")
+        .populate("additionalDepartments", "name code")
+        .populate("leadingDepartments", "name code")
+        .populate("role", "name description")
+        .populate("createdBy", "name")
+        .sort(sort)
+        .skip(skip)
+        .limit(limitNum),
+      Employee.countDocuments(filter),
+    ]);
 
     res.status(200).json({
       success: true,
       count: employees.length,
+      total,
       data: employees,
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total,
+        pages: Math.ceil(total / limitNum),
+        hasNext: pageNum < Math.ceil(total / limitNum),
+        hasPrev: pageNum > 1,
+      },
     });
   } catch (error) {
     res.status(500).json({

@@ -7,6 +7,7 @@ import {
   deleteEmployee,
 } from "../Controller/employeeController.js";
 import { verifyToken, hasRole } from "../Middleware/auth.js";
+import { employeeValidation, paginationValidation, validateMongoId } from "../Middleware/validators.js";
 
 const router = express.Router();
 
@@ -14,12 +15,12 @@ const router = express.Router();
 router.use(verifyToken);
 
 // Create, Update, Delete - Only superAdmin and attendanceDepartment
-router.post("/", hasRole("superAdmin", "attendanceDepartment"), createEmployee);
-router.put("/:id", hasRole("superAdmin", "attendanceDepartment"), updateEmployee);
-router.delete("/:id", hasRole("superAdmin", "attendanceDepartment"), deleteEmployee);
+router.post("/", hasRole("superAdmin", "attendanceDepartment"), employeeValidation.create, createEmployee);
+router.put("/:id", hasRole("superAdmin", "attendanceDepartment"), employeeValidation.update, updateEmployee);
+router.delete("/:id", hasRole("superAdmin", "attendanceDepartment"), validateMongoId(), deleteEmployee);
 
-// Read operations - Allow ITAssetManager and teamLead as well (for asset assignment and task assignment)
-router.get("/", hasRole("superAdmin", "attendanceDepartment", "ITAssetManager", "teamLead"), getAllEmployees);
-router.get("/:id", hasRole("superAdmin", "attendanceDepartment", "ITAssetManager", "teamLead"), getEmployeeById);
+// Read operations - Allow ITAssetManager and teamLead as well
+router.get("/", hasRole("superAdmin", "attendanceDepartment", "ITAssetManager", "teamLead"), paginationValidation, getAllEmployees);
+router.get("/:id", hasRole("superAdmin", "attendanceDepartment", "ITAssetManager", "teamLead"), validateMongoId(), getEmployeeById);
 
 export default router;

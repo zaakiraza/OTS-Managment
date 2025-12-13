@@ -1,6 +1,8 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
+import path from "path";
+import { fileURLToPath } from "url";
 import { connectDB } from "./Utils/DB.js";
 import authRoutes from "./Routes/authRoutes.js";
 import roleRoutes from "./Routes/roleRoutes.js";
@@ -16,12 +18,18 @@ import assetRoutes from "./Routes/assetRoutes.js";
 import ticketRoutes from "./Routes/ticketRoutes.js";
 import taskRoutes from "./Routes/taskRoutes.js";
 import resourceRoutes from "./Routes/resourceRoutes.js";
+import exportRoutes from "./Routes/exportRoutes.js";
+import auditLogRoutes from "./Routes/auditLogRoutes.js";
 import iclockRoutes from "./Routes/iclockRoutes.js";
 import { connectToDevice, startPolling } from "./Utils/zktecoDevice.js";
 import { scheduleAbsenteeCheck } from "./Utils/markAbsentees.js";
 import logger from "./Utils/logger.js";
 import { globalErrorHandler, notFoundHandler } from "./Middleware/errorHandler.js";
 import { globalLimiter, authLimiter, intensiveLimiter } from "./Middleware/rateLimiter.js";
+
+// ES module dirname workaround
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 dotenv.config();
 
@@ -57,6 +65,9 @@ app.get("/health", (req, res) => {
   res.send("Working Fine");
 });
 
+// Serve static files (uploads)
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+
 // Routes
 app.use("/api/auth", authRoutes);
 app.use("/api/roles", roleRoutes);
@@ -72,6 +83,8 @@ app.use("/api/assets", assetRoutes);
 app.use("/api/tickets", ticketRoutes);
 app.use("/api/tasks", taskRoutes);
 app.use("/api/resources", resourceRoutes);
+app.use("/api/export", exportRoutes);
+app.use("/api/audit-logs", auditLogRoutes);
 app.use("/iclock", iclockRoutes);
 
 // 404 Handler - catches all unmatched routes

@@ -29,7 +29,13 @@ function Tasks() {
     assignedTo: [], // Changed to array for multi-select
   });
 
-  const user = JSON.parse(localStorage.getItem("user") || "{}");
+  const user = (() => {
+    try {
+      const stored = localStorage.getItem("user");
+      if (!stored || stored === "undefined") return {};
+      return JSON.parse(stored);
+    } catch { return {}; }
+  })();
   const isSuperAdmin = user?.role?.name === "superAdmin";
   const isTeamLead = ["superAdmin", "teamLead"].includes(user?.role?.name);
   
@@ -255,6 +261,22 @@ function Tasks() {
     } catch (error) {
       console.error("Error adding comment:", error);
       alert("Failed to add comment");
+    }
+  };
+
+  // Handle status change for superAdmin/teamLead
+  const handleStatusChange = async (newStatus) => {
+    try {
+      const response = await taskAPI.updateStatus(selectedTask._id, newStatus);
+      if (response.data.success) {
+        setSelectedTask(response.data.data);
+        fetchTasks();
+        fetchStats();
+        alert(`Task status updated to "${newStatus.replace("-", " ")}"`);
+      }
+    } catch (error) {
+      console.error("Error updating status:", error);
+      alert(error.response?.data?.message || "Failed to update status");
     }
   };
 
@@ -734,6 +756,34 @@ function Tasks() {
                         Edit
                       </button>
                     )}
+                  </div>
+
+                  {/* Status Update Section */}
+                  <div className="status-update-section">
+                    <h4>Update Status</h4>
+                    <div className="status-buttons">
+                      <button
+                        className={`status-btn todo ${selectedTask.status === "todo" ? "active" : ""}`}
+                        onClick={() => handleStatusChange("todo")}
+                        disabled={selectedTask.status === "todo"}
+                      >
+                        📋 To Do
+                      </button>
+                      <button
+                        className={`status-btn in-progress ${selectedTask.status === "in-progress" ? "active" : ""}`}
+                        onClick={() => handleStatusChange("in-progress")}
+                        disabled={selectedTask.status === "in-progress"}
+                      >
+                        ⚙️ In Progress
+                      </button>
+                      <button
+                        className={`status-btn completed ${selectedTask.status === "completed" ? "active" : ""}`}
+                        onClick={() => handleStatusChange("completed")}
+                        disabled={selectedTask.status === "completed"}
+                      >
+                        ✅ Completed
+                      </button>
+                    </div>
                   </div>
 
                   <div className="task-detail-meta">

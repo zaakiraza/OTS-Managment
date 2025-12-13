@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { authAPI } from "../../Config/Api";
 import "./ChangePassword.css";
 
@@ -11,6 +11,22 @@ function ChangePassword({ show, onClose }) {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
+
+  // Password validation rules
+  const passwordValidation = useMemo(() => {
+    const password = formData.newPassword;
+    return {
+      minLength: password.length >= 8,
+      hasLowercase: /[a-z]/.test(password),
+      hasUppercase: /[A-Z]/.test(password),
+      hasNumber: /[0-9]/.test(password),
+      hasSpecial: /[!@#$%^&*(),.?":{}|<>]/.test(password),
+    };
+  }, [formData.newPassword]);
+
+  const isPasswordValid = useMemo(() => {
+    return Object.values(passwordValidation).every(Boolean);
+  }, [passwordValidation]);
 
   const handleChange = (e) => {
     setFormData({
@@ -27,8 +43,8 @@ function ChangePassword({ show, onClose }) {
     setSuccess("");
 
     // Validation
-    if (formData.newPassword.length < 6) {
-      setError("New password must be at least 6 characters");
+    if (!isPasswordValid) {
+      setError("Password does not meet all requirements");
       return;
     }
 
@@ -47,6 +63,7 @@ function ChangePassword({ show, onClose }) {
       const response = await authAPI.changePassword({
         currentPassword: formData.currentPassword,
         newPassword: formData.newPassword,
+        confirmPassword: formData.confirmPassword,
       });
 
       if (response.data.success) {
@@ -61,7 +78,13 @@ function ChangePassword({ show, onClose }) {
         }, 2000);
       }
     } catch (err) {
-      setError(err.response?.data?.message || "Failed to change password");
+      // Handle validation errors from server
+      if (err.response?.data?.errors) {
+        const errorMessages = err.response.data.errors.map(e => e.message).join(", ");
+        setError(errorMessages);
+      } else {
+        setError(err.response?.data?.message || "Failed to change password");
+      }
     } finally {
       setLoading(false);
     }
@@ -105,10 +128,30 @@ function ChangePassword({ show, onClose }) {
               value={formData.newPassword}
               onChange={handleChange}
               required
-              minLength={6}
+              minLength={8}
               autoComplete="new-password"
             />
-            <small>Must be at least 6 characters</small>
+            {/* Password Requirements Checklist */}
+            <div className="password-requirements">
+              <p className="requirements-title">Password Requirements:</p>
+              <ul className="requirements-list">
+                <li className={passwordValidation.minLength ? "valid" : "invalid"}>
+                  {passwordValidation.minLength ? "✓" : "○"} At least 8 characters
+                </li>
+                <li className={passwordValidation.hasLowercase ? "valid" : "invalid"}>
+                  {passwordValidation.hasLowercase ? "✓" : "○"} One lowercase letter
+                </li>
+                <li className={passwordValidation.hasUppercase ? "valid" : "invalid"}>
+                  {passwordValidation.hasUppercase ? "✓" : "○"} One uppercase letter
+                </li>
+                <li className={passwordValidation.hasNumber ? "valid" : "invalid"}>
+                  {passwordValidation.hasNumber ? "✓" : "○"} One number
+                </li>
+                <li className={passwordValidation.hasSpecial ? "valid" : "invalid"}>
+                  {passwordValidation.hasSpecial ? "✓" : "○"} One special character (!@#$%^&*...)
+                </li>
+              </ul>
+            </div>
           </div>
 
           <div className="form-group">

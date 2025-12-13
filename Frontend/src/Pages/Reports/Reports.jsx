@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import SideBar from "../../Components/SideBar/SideBar";
-import { reportAPI, departmentAPI, employeeAPI } from "../../Config/Api";
+import { reportAPI, departmentAPI, employeeAPI, exportAPI } from "../../Config/Api";
 import "./Reports.css";
 
 function Reports() {
@@ -128,8 +128,9 @@ function Reports() {
     }
   };
 
-  const exportReport = async () => {
+  const exportReport = async (format = 'csv') => {
     try {
+      setLoading(true);
       const params = {
         startDate: filters.startDate || undefined,
         endDate: filters.endDate || undefined,
@@ -139,14 +140,36 @@ function Reports() {
         status: filters.status || undefined,
       };
 
-      const response = await reportAPI.exportAttendanceData(params);
+      // Use the export API for attendance
+      const response = await exportAPI.exportAttendance(format, params);
       
-      // Convert to CSV
-      const csvData = convertToCSV(response.data.data);
-      downloadCSV(csvData, `attendance_report_${new Date().toISOString().split('T')[0]}.csv`);
+      // Download the file
+      const blob = new Blob([response.data], { 
+        type: format === 'xlsx' 
+          ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
+          : 'text/csv' 
+      });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `attendance_report_${new Date().toISOString().split('T')[0]}.${format}`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      
+      alert(`Report exported to ${format.toUpperCase()} successfully!`);
     } catch (error) {
       console.error("Error exporting report:", error);
-      alert("Failed to export report");
+      // Fallback to local CSV export if API fails
+      if (format === 'csv' && reportData?.data) {
+        const csvData = convertToCSV(reportData.data);
+        downloadCSV(csvData, `attendance_report_${new Date().toISOString().split('T')[0]}.csv`);
+      } else {
+        alert("Failed to export report. Please generate a report first.");
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -619,11 +642,18 @@ function Reports() {
                   {loading ? "Generating..." : "Generate Report"}
                 </button>
                 <button
-                  className="btn-secondary"
-                  onClick={exportReport}
-                  disabled={!reportData}
+                  className="btn-export csv"
+                  onClick={() => exportReport('csv')}
+                  disabled={loading}
                 >
-                  📥 Export CSV
+                  📄 Export CSV
+                </button>
+                <button
+                  className="btn-export excel"
+                  onClick={() => exportReport('xlsx')}
+                  disabled={loading}
+                >
+                  📊 Export Excel
                 </button>
               </div>
             </div>

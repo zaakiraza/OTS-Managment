@@ -70,7 +70,13 @@ function Attendance() {
   });
   const [stats, setStats] = useState(null);
 
-  const user = JSON.parse(localStorage.getItem("user") || "{}");
+  const user = (() => {
+    try {
+      const stored = localStorage.getItem("user");
+      if (!stored || stored === "undefined") return {};
+      return JSON.parse(stored);
+    } catch { return {}; }
+  })();
   const canManualEntry =
     user?.role?.name === "superAdmin" ||
     user?.role?.name === "attendanceDepartment";
