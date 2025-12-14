@@ -65,13 +65,13 @@ const Import = () => {
           <div className="import-card">
             {error && (
               <div className="error-message">
-                ❌ {error}
+                <i className="fas fa-times-circle"></i> {error}
               </div>
             )}
 
             {results && (
               <div className="success-message">
-                ✅ Attendance imported successfully!
+                <i className="fas fa-check-circle"></i> Attendance imported successfully!
               </div>
             )}
 
@@ -152,7 +152,7 @@ const Import = () => {
           </div>
 
           <div className="instructions-card">
-            <h3>📋 Instructions</h3>
+            <h3><i className="fas fa-info-circle"></i> Instructions</h3>
             <ol>
               <li>Format USB drive to FAT32</li>
               <li>On device: Menu → USB Manager → Download Attendance</li>

@@ -249,7 +249,7 @@
 }
 
 .form-group {
-  margin-bottom: 22px;
+  margin-bottom: 16px;
 }
 
 .form-group label {
@@ -342,7 +342,7 @@
   }
 }
 
-@media (max-width: 450px) {
+@media (max-width: 600px) {
   .roles-page {
     padding: 12px;
     padding-bottom: 80px;
@@ -350,8 +350,17 @@
   
   .page-header {
     flex-direction: column;
-    align-items: flex-start;
-    gap: 16px;
+    align-items: stretch;
+    gap: 12px;
+  }
+  
+  .header-actions {
+    width: 100%;
+  }
+  
+  .btn-primary {
+    width: 100%;
+    justify-content: center;
   }
   
   .roles-grid {

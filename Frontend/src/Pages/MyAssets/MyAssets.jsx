@@ -171,7 +171,7 @@ function MyAssets() {
                           onClick={() => handleViewDetails(asset)}
                           title="View Details"
                         >
-                          👁️
+                          <i className="fas fa-eye"></i>
                         </button>
                       </td>
                     </tr>
@@ -261,7 +261,7 @@ function MyAssets() {
               </div>
 
               <div style={{ marginTop: '20px', padding: '12px', background: '#dbeafe', borderRadius: '8px', color: '#1e40af' }}>
-                ℹ️ If you notice any issues with this asset, please create a support ticket to report it to the IT department.
+                <i className="fas fa-info-circle"></i> If you notice any issues with this asset, please create a support ticket to report it to the IT department.
               </div>
             </div>
           </div>

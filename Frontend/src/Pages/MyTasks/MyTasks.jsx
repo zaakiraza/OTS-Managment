@@ -194,7 +194,7 @@ function MyTasks() {
               <div className="kanban-column">
                 <div className="column-header">
                   <div className="column-title">
-                    📋 To Do
+                    <i className="fas fa-list"></i> To Do
                     <span className="column-count">{groupedTasks.todo.length}</span>
                   </div>
                 </div>
@@ -225,7 +225,7 @@ function MyTasks() {
                       )}
                       <div className="task-meta">
                         <div className="task-assignee">
-                          👤 {renderAssignees(task.assignedTo)}
+                          <i className="fas fa-user"></i> {renderAssignees(task.assignedTo)}
                           {isAssignedToMe(task) && <span style={{ marginLeft: '5px', color: '#10b981' }}>(You)</span>}
                         </div>
                         <div
@@ -233,7 +233,7 @@ function MyTasks() {
                             new Date(task.dueDate) < new Date() ? "overdue" : ""
                           }`}
                         >
-                          📅 {new Date(task.dueDate).toLocaleDateString()}
+                          <i className="fas fa-calendar"></i> {new Date(task.dueDate).toLocaleDateString()}
                         </div>
                       </div>
                     </div>
@@ -245,7 +245,7 @@ function MyTasks() {
               <div className="kanban-column">
                 <div className="column-header">
                   <div className="column-title">
-                    ⚙️ In Progress
+                    <i className="fas fa-spinner"></i> In Progress
                     <span className="column-count" style={{ background: "#f59e0b" }}>
                       {groupedTasks["in-progress"].length}
                     </span>
@@ -278,7 +278,7 @@ function MyTasks() {
                       )}
                       <div className="task-meta">
                         <div className="task-assignee">
-                          👤 {renderAssignees(task.assignedTo)}
+                          <i className="fas fa-user"></i> {renderAssignees(task.assignedTo)}
                           {isAssignedToMe(task) && <span style={{ marginLeft: '5px', color: '#10b981' }}>(You)</span>}
                         </div>
                         <div
@@ -286,7 +286,7 @@ function MyTasks() {
                             new Date(task.dueDate) < new Date() ? "overdue" : ""
                           }`}
                         >
-                          📅 {new Date(task.dueDate).toLocaleDateString()}
+                          <i className="fas fa-calendar"></i> {new Date(task.dueDate).toLocaleDateString()}
                         </div>
                       </div>
                     </div>
@@ -298,7 +298,7 @@ function MyTasks() {
               <div className="kanban-column">
                 <div className="column-header">
                   <div className="column-title">
-                    ✅ Completed
+                    <i className="fas fa-check-circle"></i> Completed
                     <span className="column-count" style={{ background: "#10b981" }}>
                       {groupedTasks.completed.length}
                     </span>
@@ -331,11 +331,11 @@ function MyTasks() {
                       )}
                       <div className="task-meta">
                         <div className="task-assignee">
-                          👤 {renderAssignees(task.assignedTo)}
+                          <i className="fas fa-user"></i> {renderAssignees(task.assignedTo)}
                           {isAssignedToMe(task) && <span style={{ marginLeft: '5px', color: '#10b981' }}>(You)</span>}
                         </div>
                         <div className="task-due-date">
-                          ✓ {new Date(task.completedAt).toLocaleDateString()}
+                          <i className="fas fa-check"></i> {new Date(task.completedAt).toLocaleDateString()}
                         </div>
                       </div>
                     </div>
@@ -428,7 +428,7 @@ function MyTasks() {
                   {/* Status Update Actions */}
                   {!canUpdateTask(selectedTask) && (
                     <div style={{ padding: '12px', background: '#fef3c7', borderRadius: '8px', marginBottom: '16px', color: '#92400e' }}>
-                      ℹ️ This task is assigned to {renderAssignees(selectedTask.assignedTo)}. Only assigned employees or superAdmin can update the status.
+                      <i className="fas fa-info-circle"></i> This task is assigned to {renderAssignees(selectedTask.assignedTo)}. Only assigned employees or superAdmin can update the status.
                     </div>
                   )}
                   <div className="status-actions">
@@ -439,7 +439,7 @@ function MyTasks() {
                       onClick={() => handleStatusChange("todo")}
                       disabled={selectedTask.status === "todo" || !canUpdateTask(selectedTask)}
                     >
-                      📋 To Do
+                      <i className="fas fa-list"></i> To Do
                     </button>
                     <button
                       className={`btn-status in-progress ${
@@ -448,7 +448,7 @@ function MyTasks() {
                       onClick={() => handleStatusChange("in-progress")}
                       disabled={selectedTask.status === "in-progress" || !canUpdateTask(selectedTask)}
                     >
-                      ⚙️ In Progress
+                      <i className="fas fa-spinner"></i> In Progress
                     </button>
                     <button
                       className={`btn-status completed ${
@@ -457,7 +457,7 @@ function MyTasks() {
                       onClick={() => handleStatusChange("completed")}
                       disabled={selectedTask.status === "completed" || !canUpdateTask(selectedTask)}
                     >
-                      ✅ Completed
+                      <i className="fas fa-check-circle"></i> Completed
                     </button>
                   </div>
 

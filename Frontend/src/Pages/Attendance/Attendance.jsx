@@ -380,7 +380,7 @@ function Attendance() {
         <div className="page-container">
           <div className="page-header">
             <div>
-              <h1>📋 Attendance Management</h1>
+              <h1><i className="fas fa-clipboard-check"></i> Attendance Management</h1>
               <p>Track and manage employee attendance</p>
             </div>
             {canManualEntry && (
@@ -396,7 +396,7 @@ function Attendance() {
           {/* Stats Cards */}
           <div className="stats-grid">
             <div className="stat-card">
-              <div className="stat-icon">✅</div>
+              <div className="stat-icon"><i className="fas fa-user-check"></i></div>
               <div className="stat-info">
                 <h3>Today Present</h3>
                 <p className="stat-value">
@@ -405,7 +405,7 @@ function Attendance() {
               </div>
             </div>
             <div className="stat-card">
-              <div className="stat-icon">⏰</div>
+              <div className="stat-icon"><i className="fas fa-clock"></i></div>
               <div className="stat-info">
                 <h3>Checked Out</h3>
                 <p className="stat-value">
@@ -414,7 +414,7 @@ function Attendance() {
               </div>
             </div>
             <div className="stat-card">
-              <div className="stat-icon">🕐</div>
+              <div className="stat-icon"><i className="fas fa-hourglass-half"></i></div>
               <div className="stat-info">
                 <h3>Still Working</h3>
                 <p className="stat-value">
@@ -423,7 +423,7 @@ function Attendance() {
               </div>
             </div>
             <div className="stat-card">
-              <div className="stat-icon">👥</div>
+              <div className="stat-icon"><i className="fas fa-users"></i></div>
               <div className="stat-info">
                 <h3>Total Users</h3>
                 <p className="stat-value">{stats?.totalUsers || 0}</p>
@@ -534,7 +534,7 @@ function Attendance() {
                           className="btn-edit"
                           onClick={() => handleEdit(record)}
                         >
-                          ✏️
+                          <i className="fas fa-edit"></i>
                         </button>
                       </td>
                     </tr>

@@ -378,7 +378,7 @@
   }
 }
 
-@media (max-width: 450px) {
+@media (max-width: 600px) {
   .audit-logs-page {
     padding: 12px;
     padding-bottom: 80px;

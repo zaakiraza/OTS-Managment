@@ -483,7 +483,7 @@ function Reports() {
         <div className="page-container">
           <div className="page-header">
             <div>
-              <h1>📊 Reports</h1>
+              <h1><i className="fas fa-chart-bar"></i> Reports</h1>
               <p>Generate and export attendance reports</p>
             </div>
           </div>
@@ -646,14 +646,14 @@ function Reports() {
                   onClick={() => exportReport('csv')}
                   disabled={loading}
                 >
-                  📄 Export CSV
+                  <i className="fas fa-file-csv"></i> Export CSV
                 </button>
                 <button
                   className="btn-export excel"
                   onClick={() => exportReport('xlsx')}
                   disabled={loading}
                 >
-                  📊 Export Excel
+                  <i className="fas fa-file-excel"></i> Export Excel
                 </button>
               </div>
             </div>

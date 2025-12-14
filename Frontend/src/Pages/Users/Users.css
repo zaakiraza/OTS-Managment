@@ -307,7 +307,7 @@
 }
 
 .form-group {
-  margin-bottom: 22px;
+  margin-bottom: 16px;
 }
 
 .form-group label {
@@ -374,7 +374,7 @@
   }
 }
 
-@media (max-width: 450px) {
+@media (max-width: 600px) {
   .users-page .page-container,
   .page-container {
     padding: 12px;

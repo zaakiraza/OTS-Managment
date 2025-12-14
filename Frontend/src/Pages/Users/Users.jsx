@@ -147,11 +147,11 @@ function Users() {
         <div className="page-container">
           <div className="page-header">
             <div>
-              <h1>🛡️ Admin Users</h1>
+              <h1><i className="fas fa-user-shield"></i> Admin Users</h1>
               <p>Manage system administrators and department managers</p>
             </div>
             <button className="btn-primary" onClick={() => setShowModal(true)}>
-              ➕ Add Admin User
+              <i className="fas fa-plus"></i> Add Admin User
             </button>
           </div>
 
@@ -203,14 +203,14 @@ function Users() {
                           onClick={() => handleEdit(user)}
                           title="Edit Email/Password"
                         >
-                          ✏️
+                          <i className="fas fa-edit"></i>
                         </button>
                         <button
                           className="btn-delete"
                           onClick={() => handleDelete(user._id)}
                           title="Delete"
                         >
-                          🗑️
+                          <i className="fas fa-trash"></i>
                         </button>
                       </td>
                     </tr>

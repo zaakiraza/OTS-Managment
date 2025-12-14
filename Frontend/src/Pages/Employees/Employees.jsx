@@ -140,12 +140,12 @@ const Employees = () => {
           <div className="dept-tree-header" onClick={() => toggleDeptExpand(dept._id)}>
             <div className="dept-tree-info">
               <span className="expand-icon">
-                {(hasChildren || hasEmployees) ? (isExpanded ? '▼' : '▶') : '●'}
+                {(hasChildren || hasEmployees) ? (isExpanded ? <i className="fas fa-caret-down"></i> : <i className="fas fa-caret-right"></i>) : <i className="fas fa-circle" style={{fontSize: '6px'}}></i>}
               </span>
               <span className="dept-tree-name">{dept.name}</span>
               <span className="dept-tree-code">{dept.code}</span>
               <span className="dept-tree-count">
-                👥 {deptEmployees.length} employees
+                <i className="fas fa-users"></i> {deptEmployees.length} employees
               </span>
               {dept.head && (
                 <span className="dept-tree-head">
@@ -170,7 +170,7 @@ const Employees = () => {
                         <div className="tree-emp-position">{emp.position}</div>
                         <div className="tree-emp-details">
                           <span className="tree-emp-id">{emp.employeeId}</span>
-                          {emp.isTeamLead && <span className="tree-emp-lead">⭐ Team Lead</span>}
+                          {emp.isTeamLead && <span className="tree-emp-lead"><i className="fas fa-star"></i> Team Lead</span>}
                           <span className={`tree-emp-role role-${emp.role?.name || 'employee'}`}>
                             {emp.role?.name || 'Employee'}
                           </span>
@@ -178,10 +178,10 @@ const Employees = () => {
                       </div>
                       <div className="tree-emp-actions">
                         <button className="btn-edit-small" onClick={(e) => { e.stopPropagation(); handleEdit(emp); }}>
-                          ✏️
+                          <i className="fas fa-edit"></i>
                         </button>
                         <button className="btn-delete-small" onClick={(e) => { e.stopPropagation(); handleDelete(emp._id); }}>
-                          🗑️
+                          <i className="fas fa-trash"></i>
                         </button>
                       </div>
                     </div>
@@ -516,7 +516,7 @@ const Employees = () => {
               onClick={() => setViewMode('table')}
               title="Table View"
             >
-              📋 Table
+              <i className="fas fa-table"></i> Table
             </button>
             <button 
               className={`view-btn ${viewMode === 'tree' ? 'active' : ''}`}
@@ -529,7 +529,7 @@ const Employees = () => {
           {viewMode === 'tree' && (
             <div className="tree-controls">
               <button className="btn-secondary" onClick={expandAllDepts}>
-                ➕ Expand All
+                <i className="fas fa-expand"></i> Expand All
               </button>
               <button className="btn-secondary" onClick={collapseAllDepts}>
                 ➖ Collapse All
@@ -541,7 +541,7 @@ const Employees = () => {
               <input
                 type="text"
                 className="search-input"
-                placeholder="🔍 Search employees..."
+                placeholder="Search employees..."
                 value={searchTerm}
                 onChange={handleSearch}
               />
@@ -567,7 +567,7 @@ const Employees = () => {
                   disabled={exporting}
                   title="Export to Excel"
                 >
-                  {exporting ? "⏳" : "📊"} Excel
+                  {exporting ? <i className="fas fa-spinner fa-spin"></i> : <i className="fas fa-file-excel"></i>} Excel
                 </button>
                 <button 
                   className="btn-export" 
@@ -575,7 +575,7 @@ const Employees = () => {
                   disabled={exporting}
                   title="Export to CSV"
                 >
-                  {exporting ? "⏳" : "📄"} CSV
+                  {exporting ? <i className="fas fa-spinner fa-spin"></i> : <i className="fas fa-file-csv"></i>} CSV
                 </button>
               </div>
             </>
@@ -621,12 +621,12 @@ const Employees = () => {
                       {/* Primary Department */}
                       <span className="dept-badge-primary" title="Primary Department">
                         {emp.department?.name || "-"}
-                        {emp.leadingDepartments?.some(d => d._id === emp.department?._id) && " ⭐"}
+                        {emp.leadingDepartments?.some(d => d._id === emp.department?._id) && <> <i className="fas fa-star"></i></>}
                       </span>
                       {/* Leading Departments (excluding primary) */}
                       {emp.leadingDepartments?.filter(dept => dept._id !== emp.department?._id).map((dept) => (
                         <span key={`lead-${dept._id}`} className="dept-badge-lead" title={`Team Lead of ${dept.name}`}>
-                          ⭐ {dept.name}
+                          <i className="fas fa-star"></i> {dept.name}
                         </span>
                       ))}
                       {/* Additional Departments (excluding primary and leading) */}
@@ -699,7 +699,7 @@ const Employees = () => {
                   disabled={pagination.page === 1}
                   title="First Page"
                 >
-                  ⏮️
+                  <i className="fas fa-angle-double-left"></i>
                 </button>
                 <button 
                   className="pagination-btn"
@@ -707,7 +707,7 @@ const Employees = () => {
                   disabled={pagination.page === 1}
                   title="Previous Page"
                 >
-                  ◀️
+                  <i className="fas fa-angle-left"></i>
                 </button>
                 <span className="pagination-current">
                   Page {pagination.page} of {pagination.pages}
@@ -718,7 +718,7 @@ const Employees = () => {
                   disabled={pagination.page === pagination.pages}
                   title="Next Page"
                 >
-                  ▶️
+                  <i className="fas fa-angle-right"></i>
                 </button>
                 <button 
                   className="pagination-btn"
@@ -726,7 +726,7 @@ const Employees = () => {
                   disabled={pagination.page === pagination.pages}
                   title="Last Page"
                 >
-                  ⏭️
+                  <i className="fas fa-angle-double-right"></i>
                 </button>
               </div>
             </div>

@@ -194,16 +194,16 @@ const Departments = () => {
         <p className="dept-description">{dept.description || "No description"}</p>
         <div className="dept-info">
           <span className="leverage-info">
-            ⏰ Grace: Check-in {dept.leverageTime?.checkInMinutes || 15}min | Check-out {dept.leverageTime?.checkOutMinutes || 10}min
+            <i className="fas fa-clock"></i> Grace: Check-in {dept.leverageTime?.checkInMinutes || 15}min | Check-out {dept.leverageTime?.checkOutMinutes || 10}min
           </span>
         </div>
         <div className="dept-team-info">
-          <span className="info-item">👤 Head: {dept.head?.name || "Not assigned"}</span>
-          <span className="info-item">⭐ Team Lead: {dept.teamLead?.name || "Not assigned"}</span>
+          <span className="info-item"><i className="fas fa-user-tie"></i> Head: {dept.head?.name || "Not assigned"}</span>
+          <span className="info-item"><i className="fas fa-star"></i> Team Lead: {dept.teamLead?.name || "Not assigned"}</span>
         </div>
         {hasChildren && (
           <div className="children-count">
-            📁 {dept.children.length} Sub-department{dept.children.length > 1 ? 's' : ''}
+            <i className="fas fa-folder"></i> {dept.children.length} Sub-department{dept.children.length > 1 ? 's' : ''}
           </div>
         )}
         <div className="dept-footer">
@@ -325,7 +325,7 @@ const Departments = () => {
               </div>
               <div className="organization-tree">
                 <div className="tree-header">
-                  <h3>🏢 Organization Structure</h3>
+                  <h3><i className="fas fa-sitemap"></i> Organization Structure</h3>
                 </div>
                 <div className="tree-body">
                   {departments.map((dept) => (

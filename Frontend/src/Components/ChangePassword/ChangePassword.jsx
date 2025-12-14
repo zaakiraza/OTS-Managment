@@ -136,19 +136,19 @@ function ChangePassword({ show, onClose }) {
               <p className="requirements-title">Password Requirements:</p>
               <ul className="requirements-list">
                 <li className={passwordValidation.minLength ? "valid" : "invalid"}>
-                  {passwordValidation.minLength ? "✓" : "○"} At least 8 characters
+                  {passwordValidation.minLength ? <i className="fas fa-check"></i> : <i className="far fa-circle"></i>} At least 8 characters
                 </li>
                 <li className={passwordValidation.hasLowercase ? "valid" : "invalid"}>
-                  {passwordValidation.hasLowercase ? "✓" : "○"} One lowercase letter
+                  {passwordValidation.hasLowercase ? <i className="fas fa-check"></i> : <i className="far fa-circle"></i>} One lowercase letter
                 </li>
                 <li className={passwordValidation.hasUppercase ? "valid" : "invalid"}>
-                  {passwordValidation.hasUppercase ? "✓" : "○"} One uppercase letter
+                  {passwordValidation.hasUppercase ? <i className="fas fa-check"></i> : <i className="far fa-circle"></i>} One uppercase letter
                 </li>
                 <li className={passwordValidation.hasNumber ? "valid" : "invalid"}>
-                  {passwordValidation.hasNumber ? "✓" : "○"} One number
+                  {passwordValidation.hasNumber ? <i className="fas fa-check"></i> : <i className="far fa-circle"></i>} One number
                 </li>
                 <li className={passwordValidation.hasSpecial ? "valid" : "invalid"}>
-                  {passwordValidation.hasSpecial ? "✓" : "○"} One special character (!@#$%^&*...)
+                  {passwordValidation.hasSpecial ? <i className="fas fa-check"></i> : <i className="far fa-circle"></i>} One special character (!@#$%^&*...)
                 </li>
               </ul>
             </div>

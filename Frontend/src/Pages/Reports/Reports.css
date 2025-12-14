@@ -102,12 +102,14 @@
 
 .filter-group input,
 .filter-group select {
+  width: 100%;
   padding: 11px 14px;
   border: 2px solid var(--border-light, #CED4D3);
   border-radius: 10px;
   font-size: 14px;
   transition: all 0.2s;
   background: white;
+  box-sizing: border-box;
 }
 
 .filter-group input:focus,
@@ -135,6 +137,8 @@
 
 .date-range input {
   flex: 1;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 /* Action Buttons */
@@ -480,7 +484,7 @@
   }
 }
 
-@media (max-width: 450px) {
+@media (max-width: 600px) {
   .reports-page .page-container,
   .page-container {
     padding: 12px;
@@ -489,14 +493,55 @@
   
   .btn-group {
     flex-direction: column;
+    width: 100%;
+  }
+  
+  .btn-group button {
+    width: 100%;
+  }
+  
+  .filters-container {
+    width: 100%;
   }
   
   .filter-row {
-    grid-template-columns: 1fr;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    width: 100%;
+  }
+  
+  .filter-group {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+  
+  .filter-group input,
+  .filter-group select {
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box;
+  }
+  
+  .date-range {
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+  }
+  
+  .date-range input {
+    width: 100% !important;
+    box-sizing: border-box;
+  }
+  
+  .date-range span {
+    text-align: center;
   }
   
   .action-buttons {
     flex-direction: column;
+    gap: 10px;
+    width: 100%;
   }
   
   .action-buttons button {
@@ -505,7 +550,7 @@
   }
   
   .summary-stats {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: 1fr;
   }
   
   .department-cards {

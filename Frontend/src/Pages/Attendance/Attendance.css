@@ -69,20 +69,20 @@
 /* Filters */
 .filters-container {
   background: white;
-  padding: 24px;
+  padding: 20px;
   border-radius: 14px;
   box-shadow: 0 4px 20px rgba(9, 54, 53, 0.08);
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 18px;
-  margin-bottom: 24px;
+  gap: 14px;
+  margin-bottom: 20px;
   border: 1px solid rgba(206, 212, 211, 0.5);
 }
 
 .filter-group {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
 
 .filter-group label {
@@ -331,15 +331,15 @@
 }
 
 .form-group {
-  margin-bottom: 22px;
+  margin-bottom: 16px;
 }
 
 .form-group label {
   display: block;
-  margin-bottom: 10px;
+  margin-bottom: 6px;
   font-weight: 600;
   color: var(--text-dark, #0D0D0D);
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .form-group input,
@@ -362,7 +362,7 @@
 .form-row {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 18px;
+  gap: 14px;
 }
 
 .modal-actions {
@@ -466,7 +466,7 @@
   }
 }
 
-@media (max-width: 450px) {
+@media (max-width: 600px) {
   .attendance-page {
     padding: 12px;
     padding-bottom: 80px;

@@ -431,7 +431,7 @@ tbody tr:hover {
   }
 }
 
-@media (max-width: 450px) {
+@media (max-width: 600px) {
   .main-content {
     margin-left: 0;
     padding: 12px;

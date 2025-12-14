@@ -145,7 +145,7 @@ function Profile() {
               className="btn-change-password"
               onClick={() => setShowChangePassword(true)}
             >
-              🔐 Change Password
+              <i className="fas fa-lock"></i> Change Password
             </button>
           </div>
 
@@ -155,19 +155,19 @@ function Profile() {
               className={`tab-btn ${activeTab === "info" ? "active" : ""}`}
               onClick={() => setActiveTab("info")}
             >
-              📋 Basic Info
+              <i className="fas fa-user"></i> Basic Info
             </button>
             <button
               className={`tab-btn ${activeTab === "schedule" ? "active" : ""}`}
               onClick={() => setActiveTab("schedule")}
             >
-              🕐 Work Schedule
+              <i className="fas fa-clock"></i> Work Schedule
             </button>
             <button
               className={`tab-btn ${activeTab === "attendance" ? "active" : ""}`}
               onClick={() => setActiveTab("attendance")}
             >
-              📅 Attendance
+              <i className="fas fa-calendar-check"></i> Attendance
             </button>
           </div>
 
@@ -237,7 +237,7 @@ function Profile() {
                       <div className="departments-badges">
                         {user.leadingDepartments.map((dept) => (
                           <span key={dept._id} className="dept-badge">
-                            🏢 {dept.name}
+                            <i className="fas fa-building"></i> {dept.name}
                           </span>
                         ))}
                       </div>
@@ -251,10 +251,10 @@ function Profile() {
             {activeTab === "schedule" && (
               <div className="schedule-section">
                 <div className="schedule-card">
-                  <h3>📅 Your Work Schedule</h3>
+                  <h3><i className="fas fa-calendar-alt"></i> Your Work Schedule</h3>
                   <div className="schedule-grid">
                     <div className="schedule-item">
-                      <span className="schedule-icon">🌅</span>
+                      <span className="schedule-icon"><i className="fas fa-sign-in-alt"></i></span>
                       <div className="schedule-details">
                         <span className="schedule-label">Check-In Time</span>
                         <span className="schedule-value">
@@ -263,7 +263,7 @@ function Profile() {
                       </div>
                     </div>
                     <div className="schedule-item">
-                      <span className="schedule-icon">🌆</span>
+                      <span className="schedule-icon"><i className="fas fa-sign-out-alt"></i></span>
                       <div className="schedule-details">
                         <span className="schedule-label">Check-Out Time</span>
                         <span className="schedule-value">
@@ -272,7 +272,7 @@ function Profile() {
                       </div>
                     </div>
                     <div className="schedule-item">
-                      <span className="schedule-icon">📆</span>
+                      <span className="schedule-icon"><i className="fas fa-calendar-week"></i></span>
                       <div className="schedule-details">
                         <span className="schedule-label">Working Days/Week</span>
                         <span className="schedule-value">
@@ -281,7 +281,7 @@ function Profile() {
                       </div>
                     </div>
                     <div className="schedule-item">
-                      <span className="schedule-icon">⏱️</span>
+                      <span className="schedule-icon"><i className="fas fa-stopwatch"></i></span>
                       <div className="schedule-details">
                         <span className="schedule-label">Working Hours/Week</span>
                         <span className="schedule-value">
@@ -306,7 +306,7 @@ function Profile() {
                 </div>
 
                 <div className="schedule-card">
-                  <h3>📊 This Month's Summary</h3>
+                  <h3><i className="fas fa-chart-pie"></i> This Month's Summary</h3>
                   <div className="stats-grid">
                     <div className="stat-item present">
                       <span className="stat-value">{stats.present || 0}</span>
@@ -333,7 +333,7 @@ function Profile() {
             {activeTab === "attendance" && (
               <div className="attendance-section">
                 <div className="attendance-card">
-                  <h3>📅 Recent Attendance (Last 7 Days)</h3>
+                  <h3><i className="fas fa-history"></i> Recent Attendance (Last 7 Days)</h3>
                   {attendance.length > 0 ? (
                     <table className="attendance-table">
                       <thead>

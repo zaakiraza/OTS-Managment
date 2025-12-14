@@ -349,7 +349,7 @@ function Tickets() {
       {ticketsAgainstMe.length > 0 && showAgainstMeAlert && (
         <div className="tickets-against-me-alert">
           <div className="alert-header">
-            <div className="alert-icon">⚠️</div>
+            <div className="alert-icon"><i className="fas fa-exclamation-triangle"></i></div>
             <div className="alert-title">
               <strong>Attention!</strong> You have {ticketsAgainstMe.length} ticket(s) reported against you
             </div>
@@ -649,7 +649,7 @@ function Tickets() {
                         {attachments.map((file, index) => (
                           <div key={index} className="attachment-item">
                             <span className="attachment-name">
-                              {file.type.startsWith("image/") ? "🖼️" : "📄"} {file.name}
+                              {file.type.startsWith("image/") ? <i className="fas fa-image"></i> : <i className="fas fa-file"></i>} {file.name}
                             </span>
                             <span className="attachment-size">
                               ({(file.size / 1024).toFixed(1)} KB)

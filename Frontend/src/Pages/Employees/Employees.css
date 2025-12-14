@@ -850,7 +850,7 @@
   }
 }
 
-@media (max-width: 450px) {
+@media (max-width: 600px) {
   .employees-page {
     padding: 12px;
     padding-bottom: 80px;
@@ -858,16 +858,51 @@
   
   .page-header {
     flex-direction: column;
-    align-items: flex-start;
+    align-items: stretch;
+    gap: 12px;
   }
   
   .header-actions {
     width: 100%;
-    flex-wrap: wrap;
+    flex-direction: column;
+    gap: 10px;
+  }
+  
+  .view-toggle {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  .view-toggle .toggle-btn {
+    flex: 1;
+    justify-content: center;
+  }
+  
+  .search-box {
+    width: 100%;
   }
   
   .search-box input {
     width: 100%;
+  }
+  
+  .dept-filter {
+    width: 100%;
+    min-width: unset;
+  }
+  
+  .export-buttons {
+    width: 100%;
+    flex-direction: row;
+  }
+  
+  .export-buttons .btn-export {
+    flex: 1;
+  }
+  
+  .btn-add {
+    width: 100%;
+    justify-content: center;
   }
   
   .form-grid {
@@ -891,5 +926,15 @@
     margin-top: 10px;
     width: 100%;
     justify-content: flex-end;
+  }
+  
+  .pagination-controls {
+    flex-direction: column;
+    gap: 12px;
+    align-items: stretch;
+  }
+  
+  .pagination-controls select {
+    width: 100%;
   }
 }

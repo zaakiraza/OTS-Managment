@@ -439,7 +439,7 @@
 }
 
 .form-group {
-  margin-bottom: 22px;
+  margin-bottom: 16px;
 }
 
 .form-group label {
@@ -708,7 +708,7 @@
   }
   
   .filter-group {
-    flex: 1 1 200px;
+    flex: 1 1 0;
   }
   
   .data-table {
@@ -726,7 +726,7 @@
   }
 }
 
-@media (max-width: 450px) {
+@media (max-width: 600px) {
   .tickets-page {
     padding: 12px;
     padding-bottom: 80px;

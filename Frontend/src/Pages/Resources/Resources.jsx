@@ -309,21 +309,21 @@ function Resources() {
                           onClick={() => handleViewDetails(resource)}
                           title="View Details"
                         >
-                          👁️
+                          <i className="fas fa-eye"></i>
                         </button>
                         <button
                           className="btn btn-icon"
                           onClick={() => handleEdit(resource)}
                           title="Edit"
                         >
-                          ✏️
+                          <i className="fas fa-edit"></i>
                         </button>
                         <button
                           className="btn btn-icon btn-danger"
                           onClick={() => handleDelete(resource._id)}
                           title="Delete"
                         >
-                          🗑️
+                          <i className="fas fa-trash"></i>
                         </button>
                       </td>
                     </tr>

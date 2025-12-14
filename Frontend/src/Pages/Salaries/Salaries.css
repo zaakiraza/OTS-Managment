@@ -437,7 +437,7 @@
   }
 }
 
-@media (max-width: 450px) {
+@media (max-width: 600px) {
   .salaries-page {
     padding: 12px;
     padding-bottom: 80px;
@@ -445,19 +445,40 @@
   
   .page-header {
     flex-direction: column;
-    align-items: flex-start;
+    align-items: stretch;
+    gap: 12px;
   }
   
   .header-actions {
     width: 100%;
-    flex-wrap: wrap;
+    flex-direction: column;
+    gap: 10px;
+  }
+  
+  .header-actions button,
+  .header-actions select {
+    width: 100%;
+  }
+  
+  .btn-primary {
+    justify-content: center;
   }
   
   .summary-cards {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: 1fr;
   }
   
   .salary-details {
     grid-template-columns: 1fr;
+  }
+  
+  .filters-section {
+    flex-direction: column;
+    gap: 10px;
+  }
+  
+  .filters-section select,
+  .filters-section input {
+    width: 100%;
   }
 }

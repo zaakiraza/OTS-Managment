@@ -130,7 +130,7 @@ function Roles() {
               <p>Manage system roles and permissions</p>
             </div>
             <button className="btn-primary" onClick={() => setShowModal(true)}>
-              ➕ Add New Role
+              <i className="fas fa-plus"></i> Add New Role
             </button>
           </div>
 
@@ -151,14 +151,14 @@ function Roles() {
                         onClick={() => handleEdit(role)}
                         title="Edit role"
                       >
-                        ✏️
+                        <i className="fas fa-edit"></i>
                       </button>
                       <button
                         className="btn-delete"
                         onClick={() => handleDelete(role._id)}
                         title="Delete role"
                       >
-                        🗑️
+                        <i className="fas fa-trash"></i>
                       </button>
                     </div>
                   </div>

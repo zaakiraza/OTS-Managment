@@ -581,7 +581,7 @@
   }
 }
 
-@media (max-width: 450px) {
+@media (max-width: 600px) {
   .profile-page {
     padding: 12px;
     padding-bottom: 80px;

@@ -268,7 +268,7 @@ function Assets() {
         <div className="page-container">
           <div className="page-header">
             <div>
-              <h1>🖥️ Asset Management</h1>
+              <h1><i className="fas fa-laptop"></i> Asset Management</h1>
               <p>Manage IT assets and equipment</p>
             </div>
             <button
@@ -286,28 +286,28 @@ function Assets() {
           {stats && (
             <div className="stats-grid">
               <div className="stat-card">
-                <div className="stat-icon">📦</div>
+                <div className="stat-icon"><i className="fas fa-box"></i></div>
                 <div className="stat-info">
                   <h3>Total Assets</h3>
                   <p className="stat-value">{stats.totalAssets}</p>
                 </div>
               </div>
               <div className="stat-card">
-                <div className="stat-icon">✅</div>
+                <div className="stat-icon"><i className="fas fa-check-circle"></i></div>
                 <div className="stat-info">
                   <h3>Available</h3>
                   <p className="stat-value">{stats.available}</p>
                 </div>
               </div>
               <div className="stat-card">
-                <div className="stat-icon">👤</div>
+                <div className="stat-icon"><i className="fas fa-user"></i></div>
                 <div className="stat-info">
                   <h3>Assigned</h3>
                   <p className="stat-value">{stats.assigned}</p>
                 </div>
               </div>
               <div className="stat-card">
-                <div className="stat-icon">⚠️</div>
+                <div className="stat-icon"><i className="fas fa-exclamation-triangle"></i></div>
                 <div className="stat-info">
                   <h3>Under Repair</h3>
                   <p className="stat-value">{stats.underRepair}</p>
@@ -422,7 +422,7 @@ function Assets() {
                             onClick={() => handleEdit(asset)}
                             title="Edit"
                           >
-                            ✏️
+                            <i className="fas fa-edit"></i>
                           </button>
                           {asset.status === "Available" && (
                             <button
@@ -433,7 +433,7 @@ function Assets() {
                               }}
                               title="Assign"
                             >
-                              👤
+                              <i className="fas fa-user"></i>
                             </button>
                           )}
                           <button
@@ -441,7 +441,7 @@ function Assets() {
                             onClick={() => handleDelete(asset._id)}
                             title="Delete"
                           >
-                            🗑️
+                            <i className="fas fa-trash"></i>
                           </button>
                         </div>
                       </td>

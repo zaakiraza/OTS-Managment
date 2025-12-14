@@ -442,7 +442,7 @@ function Tasks() {
                 <div className="kanban-column">
                   <div className="column-header">
                     <div className="column-title">
-                      📋 To Do
+                      <i className="fas fa-list"></i> To Do
                       <span className="column-count">{groupedTasks.todo.length}</span>
                     </div>
                   </div>
@@ -473,14 +473,14 @@ function Tasks() {
                         )}
                         <div className="task-meta">
                           <div className="task-assignee">
-                            👤 {renderAssignees(task.assignedTo)}
+                            <i className="fas fa-user"></i> {renderAssignees(task.assignedTo)}
                           </div>
                           <div
                             className={`task-due-date ${
                               isOverdue(task.dueDate) ? "overdue" : ""
                             }`}
                           >
-                            📅 {new Date(task.dueDate).toLocaleDateString()}
+                            <i className="fas fa-calendar"></i> {new Date(task.dueDate).toLocaleDateString()}
                           </div>
                         </div>
                       </div>
@@ -492,7 +492,7 @@ function Tasks() {
                 <div className="kanban-column">
                   <div className="column-header">
                     <div className="column-title">
-                      ⚙️ In Progress
+                      <i className="fas fa-spinner"></i> In Progress
                       <span className="column-count" style={{ background: "#f59e0b" }}>
                         {groupedTasks["in-progress"].length}
                       </span>
@@ -525,14 +525,14 @@ function Tasks() {
                         )}
                         <div className="task-meta">
                           <div className="task-assignee">
-                            👤 {renderAssignees(task.assignedTo)}
+                            <i className="fas fa-user"></i> {renderAssignees(task.assignedTo)}
                           </div>
                           <div
                             className={`task-due-date ${
                               isOverdue(task.dueDate) ? "overdue" : ""
                             }`}
                           >
-                            📅 {new Date(task.dueDate).toLocaleDateString()}
+                            <i className="fas fa-calendar"></i> {new Date(task.dueDate).toLocaleDateString()}
                           </div>
                         </div>
                       </div>
@@ -544,7 +544,7 @@ function Tasks() {
                 <div className="kanban-column">
                   <div className="column-header">
                     <div className="column-title">
-                      ✅ Completed
+                      <i className="fas fa-check-circle"></i> Completed
                       <span className="column-count" style={{ background: "#10b981" }}>
                         {groupedTasks.completed.length}
                       </span>
@@ -577,10 +577,10 @@ function Tasks() {
                         )}
                         <div className="task-meta">
                           <div className="task-assignee">
-                            👤 {renderAssignees(task.assignedTo)}
+                            <i className="fas fa-user"></i> {renderAssignees(task.assignedTo)}
                           </div>
                           <div className="task-due-date">
-                            ✓ {new Date(task.completedAt).toLocaleDateString()}
+                            <i className="fas fa-check"></i> {new Date(task.completedAt).toLocaleDateString()}
                           </div>
                         </div>
                       </div>
@@ -767,21 +767,21 @@ function Tasks() {
                         onClick={() => handleStatusChange("todo")}
                         disabled={selectedTask.status === "todo"}
                       >
-                        📋 To Do
+                        <i className="fas fa-list"></i> To Do
                       </button>
                       <button
                         className={`status-btn in-progress ${selectedTask.status === "in-progress" ? "active" : ""}`}
                         onClick={() => handleStatusChange("in-progress")}
                         disabled={selectedTask.status === "in-progress"}
                       >
-                        ⚙️ In Progress
+                        <i className="fas fa-spinner"></i> In Progress
                       </button>
                       <button
                         className={`status-btn completed ${selectedTask.status === "completed" ? "active" : ""}`}
                         onClick={() => handleStatusChange("completed")}
                         disabled={selectedTask.status === "completed"}
                       >
-                        ✅ Completed
+                        <i className="fas fa-check-circle"></i> Completed
                       </button>
                     </div>
                   </div>

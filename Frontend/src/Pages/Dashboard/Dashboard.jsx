@@ -62,7 +62,7 @@ function Dashboard() {
 
           <div className="stats-grid">
             <div className="stat-card">
-              <div className="stat-icon">👥</div>
+              <div className="stat-icon"><i className="fas fa-users"></i></div>
               <div className="stat-info">
                 <h3>Total Users</h3>
                 <p className="stat-value">
@@ -72,7 +72,7 @@ function Dashboard() {
             </div>
 
             <div className="stat-card">
-              <div className="stat-icon">🔑</div>
+              <div className="stat-icon"><i className="fas fa-key"></i></div>
               <div className="stat-info">
                 <h3>Total Roles</h3>
                 <p className="stat-value">
@@ -82,7 +82,7 @@ function Dashboard() {
             </div>
 
             <div className="stat-card">
-              <div className="stat-icon">📋</div>
+              <div className="stat-icon"><i className="fas fa-clipboard-list"></i></div>
               <div className="stat-info">
                 <h3>Attendance Today</h3>
                 <p className="stat-value">
@@ -92,7 +92,7 @@ function Dashboard() {
             </div>
 
             <div className="stat-card">
-              <div className="stat-icon">✅</div>
+              <div className="stat-icon"><i className="fas fa-check-square"></i></div>
               <div className="stat-info">
                 <h3>Active Users</h3>
                 <p className="stat-value">
@@ -103,22 +103,22 @@ function Dashboard() {
           </div>
 
           <div className="welcome-section">
-            <h2>🎯 Quick Actions</h2>
+            <h2><i className="fas fa-bolt"></i> Quick Actions</h2>
             <div className="actions-grid">
               <a href="/users" className="action-card">
-                <span className="action-icon">➕</span>
+                <span className="action-icon"><i className="fas fa-plus"></i></span>
                 <span>Add New User</span>
               </a>
               <a href="/roles" className="action-card">
-                <span className="action-icon">🔐</span>
+                <span className="action-icon"><i className="fas fa-lock"></i></span>
                 <span>Manage Roles</span>
               </a>
               <a href="/attendance" className="action-card">
-                <span className="action-icon">📝</span>
+                <span className="action-icon"><i className="fas fa-edit"></i></span>
                 <span>Mark Attendance</span>
               </a>
               <a href="/reports" className="action-card">
-                <span className="action-icon">📊</span>
+                <span className="action-icon"><i className="fas fa-chart-pie"></i></span>
                 <span>View Reports</span>
               </a>
             </div>

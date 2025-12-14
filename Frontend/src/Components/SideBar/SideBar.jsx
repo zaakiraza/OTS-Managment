@@ -27,7 +27,7 @@ function SideBar() {
           className="toggle-btn"
           onClick={() => setIsCollapsed(!isCollapsed)}
         >
-          {isCollapsed ? "→" : "←"}
+          <i className={`fas fa-chevron-${isCollapsed ? "right" : "left"}`}></i>
         </button>
       </div>
 
@@ -48,72 +48,72 @@ function SideBar() {
         {isSuperAdmin && (
           <>
             <NavLink to="/dashboard" className="nav-item">
-              <span className="nav-icon">📊</span>
+              <span className="nav-icon"><i className="fas fa-chart-line"></i></span>
               {!isCollapsed && <span className="nav-text">Dashboard</span>}
             </NavLink>
 
             <NavLink to="/users" className="nav-item">
-              <span className="nav-icon">🛡️</span>
+              <span className="nav-icon"><i className="fas fa-user-shield"></i></span>
               {!isCollapsed && <span className="nav-text">Admin Users</span>}
             </NavLink>
 
             <NavLink to="/roles" className="nav-item">
-              <span className="nav-icon">🔑</span>
+              <span className="nav-icon"><i className="fas fa-key"></i></span>
               {!isCollapsed && <span className="nav-text">Roles</span>}
             </NavLink>
 
             <NavLink to="/audit-logs" className="nav-item">
-              <span className="nav-icon">📜</span>
+              <span className="nav-icon"><i className="fas fa-scroll"></i></span>
               {!isCollapsed && <span className="nav-text">Audit Logs</span>}
             </NavLink>
 
             <NavLink to="/departments" className="nav-item">
-              <span className="nav-icon">🏢</span>
+              <span className="nav-icon"><i className="fas fa-building"></i></span>
               {!isCollapsed && <span className="nav-text">Departments</span>}
             </NavLink>
 
             <NavLink to="/employees" className="nav-item">
-              <span className="nav-icon">👨‍💼</span>
+              <span className="nav-icon"><i className="fas fa-users"></i></span>
               {!isCollapsed && <span className="nav-text">Employees</span>}
             </NavLink>
 
             <NavLink to="/attendance" className="nav-item">
-              <span className="nav-icon">📋</span>
+              <span className="nav-icon"><i className="fas fa-clipboard-check"></i></span>
               {!isCollapsed && <span className="nav-text">Attendance</span>}
             </NavLink>
 
             <NavLink to="/salaries" className="nav-item">
-              <span className="nav-icon">💰</span>
+              <span className="nav-icon"><i className="fas fa-money-bill-wave"></i></span>
               {!isCollapsed && <span className="nav-text">Salaries</span>}
             </NavLink>
 
             <NavLink to="/reports" className="nav-item">
-              <span className="nav-icon">📈</span>
+              <span className="nav-icon"><i className="fas fa-chart-bar"></i></span>
               {!isCollapsed && <span className="nav-text">Reports</span>}
             </NavLink>
 
             <NavLink to="/import" className="nav-item">
-              <span className="nav-icon">📥</span>
+              <span className="nav-icon"><i className="fas fa-file-import"></i></span>
               {!isCollapsed && <span className="nav-text">Import</span>}
             </NavLink>
 
             <NavLink to="/assets" className="nav-item">
-              <span className="nav-icon">🖥️</span>
+              <span className="nav-icon"><i className="fas fa-laptop"></i></span>
               {!isCollapsed && <span className="nav-text">Assets</span>}
             </NavLink>
 
             <NavLink to="/tickets" className="nav-item">
-              <span className="nav-icon">🎫</span>
+              <span className="nav-icon"><i className="fas fa-ticket-alt"></i></span>
               {!isCollapsed && <span className="nav-text">Tickets</span>}
             </NavLink>
 
             <NavLink to="/tasks" className="nav-item">
-              <span className="nav-icon">📌</span>
+              <span className="nav-icon"><i className="fas fa-tasks"></i></span>
               {!isCollapsed && <span className="nav-text">Task Board</span>}
             </NavLink>
 
             <NavLink to="/my-tasks" className="nav-item">
-              <span className="nav-icon">✓</span>
+              <span className="nav-icon"><i className="fas fa-check-circle"></i></span>
               {!isCollapsed && <span className="nav-text">My Tasks</span>}
             </NavLink>
           </>
@@ -123,37 +123,37 @@ function SideBar() {
         {isAttendanceDept && (
           <>
             <NavLink to="/departments" className="nav-item">
-              <span className="nav-icon">🏢</span>
+              <span className="nav-icon"><i className="fas fa-building"></i></span>
               {!isCollapsed && <span className="nav-text">Departments</span>}
             </NavLink>
 
             <NavLink to="/employees" className="nav-item">
-              <span className="nav-icon">👨‍💼</span>
+              <span className="nav-icon"><i className="fas fa-users"></i></span>
               {!isCollapsed && <span className="nav-text">Employees</span>}
             </NavLink>
 
             <NavLink to="/attendance" className="nav-item">
-              <span className="nav-icon">📋</span>
+              <span className="nav-icon"><i className="fas fa-clipboard-check"></i></span>
               {!isCollapsed && <span className="nav-text">Attendance</span>}
             </NavLink>
 
             <NavLink to="/salaries" className="nav-item">
-              <span className="nav-icon">💰</span>
+              <span className="nav-icon"><i className="fas fa-money-bill-wave"></i></span>
               {!isCollapsed && <span className="nav-text">Salaries</span>}
             </NavLink>
 
             <NavLink to="/reports" className="nav-item">
-              <span className="nav-icon">📈</span>
+              <span className="nav-icon"><i className="fas fa-chart-bar"></i></span>
               {!isCollapsed && <span className="nav-text">Reports</span>}
             </NavLink>
 
             <NavLink to="/import" className="nav-item">
-              <span className="nav-icon">📥</span>
+              <span className="nav-icon"><i className="fas fa-file-import"></i></span>
               {!isCollapsed && <span className="nav-text">Import</span>}
             </NavLink>
 
             <NavLink to="/tickets" className="nav-item">
-              <span className="nav-icon">🎫</span>
+              <span className="nav-icon"><i className="fas fa-ticket-alt"></i></span>
               {!isCollapsed && <span className="nav-text">Tickets</span>}
             </NavLink>
           </>
@@ -163,17 +163,17 @@ function SideBar() {
         {isAssetManager && (
           <>
             <NavLink to="/assets" className="nav-item">
-              <span className="nav-icon">🖥️</span>
+              <span className="nav-icon"><i className="fas fa-laptop"></i></span>
               {!isCollapsed && <span className="nav-text">Assets</span>}
             </NavLink>
 
             <NavLink to="/tickets" className="nav-item">
-              <span className="nav-icon">🎫</span>
+              <span className="nav-icon"><i className="fas fa-ticket-alt"></i></span>
               {!isCollapsed && <span className="nav-text">Tickets</span>}
             </NavLink>
 
             <NavLink to="/my-tasks" className="nav-item">
-              <span className="nav-icon">✓</span>
+              <span className="nav-icon"><i className="fas fa-check-circle"></i></span>
               {!isCollapsed && <span className="nav-text">My Tasks</span>}
             </NavLink>
           </>
@@ -183,32 +183,32 @@ function SideBar() {
         {isTeamLead && (
           <>
             <NavLink to="/tasks" className="nav-item">
-              <span className="nav-icon">📌</span>
+              <span className="nav-icon"><i className="fas fa-tasks"></i></span>
               {!isCollapsed && <span className="nav-text">Task Board</span>}
             </NavLink>
 
             <NavLink to="/my-tasks" className="nav-item">
-              <span className="nav-icon">✓</span>
+              <span className="nav-icon"><i className="fas fa-check-circle"></i></span>
               {!isCollapsed && <span className="nav-text">My Tasks</span>}
             </NavLink>
 
             <NavLink to="/my-assets" className="nav-item">
-              <span className="nav-icon">💼</span>
+              <span className="nav-icon"><i className="fas fa-briefcase"></i></span>
               {!isCollapsed && <span className="nav-text">My Assets</span>}
             </NavLink>
 
             <NavLink to="/my-attendance" className="nav-item">
-              <span className="nav-icon">📋</span>
+              <span className="nav-icon"><i className="fas fa-calendar-check"></i></span>
               {!isCollapsed && <span className="nav-text">My Attendance</span>}
             </NavLink>
 
             <NavLink to="/resources" className="nav-item">
-              <span className="nav-icon">📦</span>
+              <span className="nav-icon"><i className="fas fa-box"></i></span>
               {!isCollapsed && <span className="nav-text">Resources</span>}
             </NavLink>
 
             <NavLink to="/tickets" className="nav-item">
-              <span className="nav-icon">🎫</span>
+              <span className="nav-icon"><i className="fas fa-ticket-alt"></i></span>
               {!isCollapsed && <span className="nav-text">Tickets</span>}
             </NavLink>
           </>
@@ -218,22 +218,22 @@ function SideBar() {
         {isEmployee && (
           <>
             <NavLink to="/my-tasks" className="nav-item">
-              <span className="nav-icon">✓</span>
+              <span className="nav-icon"><i className="fas fa-check-circle"></i></span>
               {!isCollapsed && <span className="nav-text">My Tasks</span>}
             </NavLink>
 
             <NavLink to="/my-assets" className="nav-item">
-              <span className="nav-icon">💼</span>
+              <span className="nav-icon"><i className="fas fa-briefcase"></i></span>
               {!isCollapsed && <span className="nav-text">My Assets</span>}
             </NavLink>
 
             <NavLink to="/my-attendance" className="nav-item">
-              <span className="nav-icon">📋</span>
+              <span className="nav-icon"><i className="fas fa-calendar-check"></i></span>
               {!isCollapsed && <span className="nav-text">My Attendance</span>}
             </NavLink>
 
             <NavLink to="/tickets" className="nav-item">
-              <span className="nav-icon">🎫</span>
+              <span className="nav-icon"><i className="fas fa-ticket-alt"></i></span>
               {!isCollapsed && <span className="nav-text">Tickets</span>}
             </NavLink>
           </>
@@ -242,18 +242,18 @@ function SideBar() {
 
       <div className="sidebar-footer">
         <NavLink to="/profile" className="nav-item profile-btn">
-          <span className="nav-icon">👤</span>
+          <span className="nav-icon"><i className="fas fa-user-circle"></i></span>
           {!isCollapsed && <span className="nav-text">My Profile</span>}
         </NavLink>
         <button 
           onClick={() => setShowChangePassword(true)} 
           className="nav-item change-password-btn"
         >
-          <span className="nav-icon">🔐</span>
+          <span className="nav-icon"><i className="fas fa-lock"></i></span>
           {!isCollapsed && <span className="nav-text">Change Password</span>}
         </button>
         <button onClick={handleLogout} className="nav-item logout-btn">
-          <span className="nav-icon">🚪</span>
+          <span className="nav-icon"><i className="fas fa-sign-out-alt"></i></span>
           {!isCollapsed && <span className="nav-text">Logout</span>}
         </button>
       </div>

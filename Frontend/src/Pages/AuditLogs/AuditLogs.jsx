@@ -121,7 +121,7 @@ function AuditLogs() {
     const isSuccess = status === "success";
     return (
       <span className={`status-badge ${isSuccess ? "success" : "failed"}`}>
-        {isSuccess ? "✓" : "✗"} {status}
+        {isSuccess ? <i className="fas fa-check"></i> : <i className="fas fa-times"></i>} {status}
       </span>
     );
   };
@@ -134,7 +134,7 @@ function AuditLogs() {
           {/* Header */}
           <div className="page-header">
             <div>
-              <h1>📜 Audit Logs</h1>
+              <h1><i className="fas fa-history"></i> Audit Logs</h1>
               <p className="page-subtitle">Track all system activities and changes</p>
             </div>
             <button
@@ -142,7 +142,7 @@ function AuditLogs() {
               onClick={handleExport}
               disabled={exporting}
             >
-              {exporting ? "⏳ Exporting..." : "📊 Export to Excel"}
+              {exporting ? <><i className="fas fa-spinner fa-spin"></i> Exporting...</> : <><i className="fas fa-file-excel"></i> Export to Excel</>}
             </button>
           </div>
 
@@ -278,14 +278,14 @@ function AuditLogs() {
                   onClick={() => handlePageChange(1)}
                   disabled={pagination.page === 1}
                 >
-                  ⏮️
+                  <i className="fas fa-angle-double-left"></i>
                 </button>
                 <button
                   className="pagination-btn"
                   onClick={() => handlePageChange(pagination.page - 1)}
                   disabled={pagination.page === 1}
                 >
-                  ◀️
+                  <i className="fas fa-angle-left"></i>
                 </button>
                 <span className="pagination-current">
                   Page {pagination.page} of {pagination.pages}
@@ -295,14 +295,14 @@ function AuditLogs() {
                   onClick={() => handlePageChange(pagination.page + 1)}
                   disabled={pagination.page === pagination.pages}
                 >
-                  ▶️
+                  <i className="fas fa-angle-right"></i>
                 </button>
                 <button
                   className="pagination-btn"
                   onClick={() => handlePageChange(pagination.pages)}
                   disabled={pagination.page === pagination.pages}
                 >
-                  ⏭️
+                  <i className="fas fa-angle-double-right"></i>
                 </button>
               </div>
             </div>
