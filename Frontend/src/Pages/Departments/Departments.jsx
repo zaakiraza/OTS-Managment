@@ -340,25 +340,33 @@ const Departments = () => {
         <div className="modal-overlay" onClick={handleCloseModal}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h2>{editMode ? "Edit Department" : "Add Department"}</h2>
+              <h2>
+                <i className={editMode ? "fas fa-edit" : "fas fa-plus-circle"}></i>
+                {editMode ? " Edit Department" : " Add Department"}
+              </h2>
               <button className="close-btn" onClick={handleCloseModal}>
-                ×
+                <i className="fas fa-times"></i>
               </button>
             </div>
-            <form onSubmit={handleSubmit}>
+            <form onSubmit={handleSubmit} className="modal-body">
+              <div className="form-section-title">
+                <i className="fas fa-info-circle"></i> Basic Information
+              </div>
+              
               <div className="form-group">
-                <label>Department Name *</label>
+                <label><i className="fas fa-building"></i> Department Name <span className="required">*</span></label>
                 <input
                   type="text"
                   value={formData.name}
                   onChange={(e) =>
                     setFormData({ ...formData, name: e.target.value })
                   }
+                  placeholder="e.g., Human Resources, Information Technology"
                   required
                 />
               </div>
               <div className="form-group">
-                <label>Department Code *</label>
+                <label><i className="fas fa-code"></i> Department Code <span className="required">*</span></label>
                 <input
                   type="text"
                   value={formData.code}
@@ -369,22 +377,29 @@ const Departments = () => {
                   required
                   maxLength={5}
                   disabled={editMode}
+                  style={editMode ? { background: 'linear-gradient(to right, #e0f2f4, #f5f5f5)', cursor: 'not-allowed' } : {}}
                 />
+                <small className={editMode ? "helper-text info" : "helper-text"}>
+                  {editMode ? <><i className="fas fa-lock"></i> Department code cannot be changed</> : "2-5 uppercase letters (auto-converted)"}
+                </small>
               </div>
               <div className="form-group">
-                <label>Description</label>
+                <label><i className="fas fa-align-left"></i> Description</label>
                 <textarea
                   value={formData.description}
                   onChange={(e) =>
                     setFormData({ ...formData, description: e.target.value })
                   }
                   rows={3}
+                  placeholder="Brief description of the department's responsibilities..."
                 />
               </div>
               
-              <h3 className="section-title">Hierarchy</h3>
+              <div className="form-section-title">
+                <i className="fas fa-sitemap"></i> Hierarchy
+              </div>
               <div className="form-group">
-                <label>Parent Department (Optional)</label>
+                <label><i className="fas fa-level-up-alt"></i> Parent Department</label>
                 <select
                   value={formData.parentDepartment}
                   onChange={(e) =>
@@ -400,17 +415,21 @@ const Departments = () => {
                       </option>
                     ))}
                 </select>
-                <small>Leave empty for a top-level department, or select a parent to create a sub-department</small>
+                <small className="helper-text info"><i className="fas fa-lightbulb"></i> Leave empty for a top-level department</small>
               </div>
               
-              <h3 className="section-title">Team Lead Assignment</h3>
+              <div className="form-section-title">
+                <i className="fas fa-user-tie"></i> Team Lead Assignment
+              </div>
               <div className="form-group">
-                <label>Team Lead (Employee)</label>
+                <label><i className="fas fa-star"></i> Team Lead</label>
                 <select
                   value={formData.teamLead}
                   onChange={(e) =>
                     setFormData({ ...formData, teamLead: e.target.value })
                   }
+                  disabled={!editMode}
+                  style={!editMode ? { background: 'linear-gradient(to right, #e0f2f4, #f5f5f5)', cursor: 'not-allowed' } : {}}
                 >
                   <option value="">Select Team Lead</option>
                   {editMode ? (
@@ -425,20 +444,22 @@ const Departments = () => {
                         </option>
                       ))
                   ) : (
-                    <option value="" disabled>Create department first, then edit to assign team lead</option>
+                    <option value="" disabled>Create department first</option>
                   )}
                 </select>
-                <small>
+                <small className={editMode ? "helper-text" : "helper-text warning"}>
                   {editMode 
-                    ? "Select an employee from this department to be the team lead" 
-                    : "You can assign a team lead after creating the department"}
+                    ? <><i className="fas fa-info-circle"></i> Only employees from this department are shown</> 
+                    : <><i className="fas fa-exclamation-triangle"></i> Create department first, then edit to assign team lead</>}
                 </small>
               </div>
               
-              <h3 className="section-title">Attendance Leverage Time (Grace Period)</h3>
+              <div className="form-section-title">
+                <i className="fas fa-clock"></i> Attendance Grace Period
+              </div>
               <div className="form-grid">
                 <div className="form-group">
-                  <label>Check-in Grace (minutes) *</label>
+                  <label><i className="fas fa-sign-in-alt"></i> Check-in Grace <span className="required">*</span></label>
                   <input
                     type="number"
                     value={formData.leverageTime.checkInMinutes}
@@ -454,10 +475,10 @@ const Departments = () => {
                     min="0"
                     required
                   />
-                  <small>Minutes allowed after scheduled check-in time</small>
+                  <small className="helper-text">Minutes allowed after scheduled check-in</small>
                 </div>
                 <div className="form-group">
-                  <label>Check-out Grace (minutes) *</label>
+                  <label><i className="fas fa-sign-out-alt"></i> Check-out Grace <span className="required">*</span></label>
                   <input
                     type="number"
                     value={formData.leverageTime.checkOutMinutes}
@@ -473,7 +494,7 @@ const Departments = () => {
                     min="0"
                     required
                   />
-                  <small>Minutes allowed before scheduled check-out time</small>
+                  <small className="helper-text">Minutes allowed before scheduled check-out</small>
                 </div>
               </div>
               
@@ -483,10 +504,11 @@ const Departments = () => {
                   className="btn-secondary"
                   onClick={handleCloseModal}
                 >
-                  Cancel
+                  <i className="fas fa-times"></i> Cancel
                 </button>
                 <button type="submit" className="btn-primary" disabled={loading}>
-                  {loading ? (editMode ? "Updating..." : "Creating...") : (editMode ? "Update Department" : "Create Department")}
+                  <i className={loading ? "fas fa-spinner fa-spin" : (editMode ? "fas fa-save" : "fas fa-plus")}></i>
+                  {loading ? (editMode ? " Updating..." : " Creating...") : (editMode ? " Update Department" : " Create Department")}
                 </button>
               </div>
             </form>

@@ -59,17 +59,33 @@ export const employeeValidation = {
       .withMessage("Name must be less than 100 characters")
       .escape(),
     body("email")
+      .optional({ checkFalsy: true })
       .trim()
-      .notEmpty()
-      .withMessage("Email is required")
       .isEmail()
       .withMessage("Invalid email format")
       .normalizeEmail(),
     body("phone")
-      .optional()
+      .optional({ checkFalsy: true })
       .trim()
       .isMobilePhone("any")
       .withMessage("Invalid phone number"),
+    body("cnic")
+      .optional({ checkFalsy: true })
+      .trim()
+      .matches(/^\d{5}-\d{7}-\d{1}$/)
+      .withMessage("Invalid CNIC format. Use: XXXXX-XXXXXXX-X"),
+    body("salary.monthlySalary")
+      .optional({ checkFalsy: true })
+      .isNumeric()
+      .withMessage("Monthly salary must be a number"),
+    body("salary.leaveThreshold")
+      .optional()
+      .isInt({ min: 0 })
+      .withMessage("Leave threshold must be a positive number"),
+    body("joiningDate")
+      .optional({ checkFalsy: true })
+      .isISO8601()
+      .withMessage("Invalid joining date format"),
     body("department")
       .notEmpty()
       .withMessage("Department is required")
@@ -81,16 +97,12 @@ export const employeeValidation = {
       .isMongoId()
       .withMessage("Invalid role ID"),
     body("position")
-      .optional()
       .trim()
+      .notEmpty()
+      .withMessage("Position is required")
       .isLength({ max: 100 })
       .withMessage("Position must be less than 100 characters")
       .escape(),
-    body("salary")
-      .optional()
-      .isNumeric()
-      .withMessage("Salary must be a number")
-      .toFloat(),
     handleValidation,
   ],
   update: [

@@ -60,18 +60,24 @@ export const calculateSalary = async (req, res) => {
 
     // Calculate attendance statistics
     let presentDays = 0;
-    let absentDays = 0;
+    let recordedAbsentDays = 0;
     let halfDays = 0;
     let lateDays = 0;
     let earlyArrivals = 0;
     let leaveDays = 0;
 
+    // Create a set of dates that have attendance records
+    const datesWithRecords = new Set();
+
     attendanceRecords.forEach((record) => {
+      const dateStr = new Date(record.date).toISOString().split('T')[0];
+      datesWithRecords.add(dateStr);
+      
       if (record.status === "present" || record.status === "early-arrival") {
         presentDays++;
         if (record.status === "early-arrival") earlyArrivals++;
       }
-      else if (record.status === "absent") absentDays++;
+      else if (record.status === "absent") recordedAbsentDays++;
       else if (record.status === "half-day") halfDays++;
       else if (record.status === "leave") leaveDays++;
       else if (record.status === "late" || record.status === "late-early-arrival") {
@@ -79,9 +85,38 @@ export const calculateSalary = async (req, res) => {
         presentDays++; // Late is still considered present
         if (record.status === "late-early-arrival") earlyArrivals++;
       }
+      else if (record.status === "pending" && record.checkIn) {
+        // Pending with check-in counts as present
+        presentDays++;
+      }
     });
 
-    logger.debug(`Attendance stats: Present=${presentDays}, Absent=${absentDays}, Late=${lateDays}, HalfDays=${halfDays}, Leaves=${leaveDays}, EarlyArrivals=${earlyArrivals}`);
+    // Calculate missing days (working days without any attendance record)
+    let missingDays = 0;
+    const today = new Date();
+    today.setHours(23, 59, 59, 999);
+    
+    for (let day = 1; day <= totalDaysInMonth; day++) {
+      const date = new Date(year, month - 1, day);
+      const dayName = date.toLocaleDateString("en-US", { weekday: "long" });
+      const dateStr = date.toISOString().split('T')[0];
+      
+      // Skip weekly offs
+      if (weeklyOffs.includes(dayName)) continue;
+      
+      // Skip future dates
+      if (date > today) continue;
+      
+      // If no record exists for this working day, count as missing (absent)
+      if (!datesWithRecords.has(dateStr)) {
+        missingDays++;
+      }
+    }
+
+    // Total absent = explicitly marked absent + missing days
+    const absentDays = recordedAbsentDays + missingDays;
+
+    logger.debug(`Attendance stats: Present=${presentDays}, Recorded Absent=${recordedAbsentDays}, Missing Days=${missingDays}, Total Absent=${absentDays}, Late=${lateDays}, HalfDays=${halfDays}, Leaves=${leaveDays}, EarlyArrivals=${earlyArrivals}`);
 
     let totalDeductions = 0;
     let bonus = 0;
@@ -261,26 +296,61 @@ export const calculateAllSalaries = async (req, res) => {
         logger.debug(`${employee.employeeId}: Found ${attendanceRecords.length} records`);
 
         let presentDays = 0;
-        let absentDays = 0;
+        let recordedAbsentDays = 0; // Days explicitly marked as absent
         let halfDays = 0;
         let lateDays = 0;
         let earlyArrivals = 0;
 
+        // Create a set of dates that have attendance records
+        const datesWithRecords = new Set();
+
         attendanceRecords.forEach((record) => {
+          const dateStr = new Date(record.date).toISOString().split('T')[0];
+          datesWithRecords.add(dateStr);
+          
           if (record.status === "present" || record.status === "early-arrival") {
             presentDays++;
             if (record.status === "early-arrival") earlyArrivals++;
           }
-          else if (record.status === "absent") absentDays++;
+          else if (record.status === "absent") recordedAbsentDays++;
           else if (record.status === "half-day") halfDays++;
           else if (record.status === "late" || record.status === "late-early-arrival") {
             lateDays++;
             presentDays++; // Late is still considered present
             if (record.status === "late-early-arrival") earlyArrivals++;
           }
+          else if (record.status === "pending" && record.checkIn) {
+            // Pending with check-in counts as present
+            presentDays++;
+          }
         });
 
-        logger.debug(`${employee.employeeId}: Present=${presentDays}, Absent=${absentDays}, Late=${lateDays}`);
+        // Calculate missing days (working days without any attendance record)
+        let missingDays = 0;
+        const today = new Date();
+        today.setHours(23, 59, 59, 999);
+        
+        for (let day = 1; day <= totalDaysInMonth; day++) {
+          const date = new Date(year, month - 1, day);
+          const dayName = date.toLocaleDateString("en-US", { weekday: "long" });
+          const dateStr = date.toISOString().split('T')[0];
+          
+          // Skip weekly offs
+          if (weeklyOffs.includes(dayName)) continue;
+          
+          // Skip future dates
+          if (date > today) continue;
+          
+          // If no record exists for this working day, count as missing (absent)
+          if (!datesWithRecords.has(dateStr)) {
+            missingDays++;
+          }
+        }
+
+        // Total absent = explicitly marked absent + missing days
+        const absentDays = recordedAbsentDays + missingDays;
+
+        logger.debug(`${employee.employeeId}: Present=${presentDays}, Recorded Absent=${recordedAbsentDays}, Missing Days=${missingDays}, Total Absent=${absentDays}, Late=${lateDays}`);
 
         let totalDeductions = 0;
         let bonus = 0;
@@ -398,6 +468,7 @@ export const calculateAllSalaries = async (req, res) => {
       data: {
         calculated: results.length,
         errors: errors.length,
+        errorDetails: errors, // Include error details
         results,
       },
     });

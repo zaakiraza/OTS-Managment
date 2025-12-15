@@ -10,6 +10,7 @@ import Attendance from "../Model/Attendance.js";
 import Task from "../Model/Task.js";
 import Ticket from "../Model/Ticket.js";
 import AuditLog from "../Model/AuditLog.js";
+import Salary from "../Model/Salary.js";
 import { logExportAction } from "../Utils/auditLogger.js";
 
 /**
@@ -139,13 +140,42 @@ export const exportEmployees = async (req, res) => {
  */
 export const exportAttendance = async (req, res) => {
   try {
-    const { startDate, endDate, departmentId, employeeId, format = 'xlsx' } = req.query;
+    const { startDate, endDate, departmentId, employeeId, status, month, format = 'xlsx' } = req.query;
     const filter = {};
 
+    // Handle date range
     if (startDate && endDate) {
       filter.date = { $gte: new Date(startDate), $lte: new Date(endDate) };
+    } else if (month) {
+      // Parse month in format "YYYY-MM"
+      const [year, monthNum] = month.split('-');
+      const startOfMonth = new Date(year, parseInt(monthNum) - 1, 1);
+      const endOfMonth = new Date(year, parseInt(monthNum), 0, 23, 59, 59);
+      filter.date = { $gte: startOfMonth, $lte: endOfMonth };
     }
-    if (employeeId) filter.employee = employeeId;
+
+    // Handle status filter
+    if (status) {
+      filter.status = status;
+    }
+
+    // Handle employeeId - need to find by string employeeId, not MongoDB _id
+    let employeeObjectId = null;
+    if (employeeId) {
+      // Check if it's a MongoDB ObjectId or a string employeeId
+      if (employeeId.match(/^[0-9a-fA-F]{24}$/)) {
+        employeeObjectId = employeeId;
+      } else {
+        // Find employee by their string employeeId
+        const employee = await Employee.findOne({ employeeId: employeeId });
+        if (employee) {
+          employeeObjectId = employee._id;
+        }
+      }
+      if (employeeObjectId) {
+        filter.employee = employeeObjectId;
+      }
+    }
 
     let query = Attendance.find(filter)
       .populate("employee", "name employeeId department")
@@ -161,14 +191,44 @@ export const exportAttendance = async (req, res) => {
       );
     }
 
+    // Helper function to format time - ensures proper time extraction
+    const formatTime = (dateTime) => {
+      if (!dateTime) return "N/A";
+      try {
+        const date = new Date(dateTime);
+        if (isNaN(date.getTime())) return "N/A";
+        const hours = String(date.getHours()).padStart(2, '0');
+        const minutes = String(date.getMinutes()).padStart(2, '0');
+        // Return as text with space prefix to prevent Excel auto-formatting
+        return `${hours}:${minutes}`;
+      } catch (e) {
+        return "N/A";
+      }
+    };
+
+    // Helper function to format date
+    const formatDate = (dateValue) => {
+      if (!dateValue) return "N/A";
+      try {
+        const date = new Date(dateValue);
+        if (isNaN(date.getTime())) return "N/A";
+        const day = String(date.getDate()).padStart(2, '0');
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const year = date.getFullYear();
+        return `${day}/${month}/${year}`;
+      } catch (e) {
+        return "N/A";
+      }
+    };
+
     // Prepare data rows
     const dataRows = filteredRecords.map((record) => ({
-      date: new Date(record.date).toLocaleDateString(),
+      date: formatDate(record.date),
       employeeId: record.employee?.employeeId || "N/A",
       name: record.employee?.name || "N/A",
-      checkIn: record.checkIn || "N/A",
-      checkOut: record.checkOut || "N/A",
-      workingHours: record.workingHours?.toFixed(2) || "0",
+      checkIn: formatTime(record.checkIn),
+      checkOut: formatTime(record.checkOut),
+      workingHours: record.workingHours?.toFixed(2) || "0.00",
       status: record.status || "N/A",
       late: record.isLate ? "Yes" : "No",
     }));
@@ -214,7 +274,13 @@ export const exportAttendance = async (req, res) => {
         cell.alignment = headerStyle.alignment;
       });
 
-      dataRows.forEach((row) => worksheet.addRow(row));
+      // Add data rows with explicit text formatting for time columns
+      dataRows.forEach((row) => {
+        const newRow = worksheet.addRow(row);
+        // Set Check In and Check Out cells as text to prevent auto-formatting
+        newRow.getCell('checkIn').numFmt = '@'; // Text format
+        newRow.getCell('checkOut').numFmt = '@'; // Text format
+      });
 
       setExcelHeaders(res, `attendance_${new Date().toISOString().split("T")[0]}.xlsx`);
       await workbook.xlsx.write(res);
@@ -460,6 +526,135 @@ export const exportDepartments = async (req, res) => {
     await workbook.xlsx.write(res);
     res.end();
   } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+/**
+ * Export Salaries to Excel or CSV
+ */
+export const exportSalaries = async (req, res) => {
+  try {
+    console.log("Export salaries called with query:", req.query);
+    const { month, year, departmentId, format = 'xlsx' } = req.query;
+    const filter = {};
+
+    if (month) filter.month = parseInt(month);
+    if (year) filter.year = parseInt(year);
+
+    let salaries = await Salary.find(filter)
+      .populate({
+        path: "employee",
+        select: "name employeeId department position",
+        populate: {
+          path: "department",
+          select: "name code"
+        }
+      })
+      .sort({ createdAt: -1 });
+
+    // Filter by department if specified
+    if (departmentId) {
+      salaries = salaries.filter(
+        (s) => s.employee?.department?._id?.toString() === departmentId
+      );
+    }
+
+    const months = ["January", "February", "March", "April", "May", "June",
+      "July", "August", "September", "October", "November", "December"];
+
+    // Prepare data rows
+    const dataRows = salaries.map((salary) => ({
+      employeeId: salary.employee?.employeeId || salary.employeeId || "N/A",
+      name: salary.employee?.name || "N/A",
+      department: salary.employee?.department?.name || "N/A",
+      position: salary.employee?.position || "N/A",
+      period: `${months[(salary.month || 1) - 1]} ${salary.year}`,
+      baseSalary: salary.baseSalary || 0,
+      workingDays: salary.calculations?.totalWorkingDays || 0,
+      presentDays: salary.calculations?.presentDays || 0,
+      absentDays: salary.calculations?.absentDays || 0,
+      lateDays: salary.calculations?.lateDays || 0,
+      halfDays: salary.calculations?.halfDays || 0,
+      absentDeduction: salary.deductions?.absentDeduction || 0,
+      lateDeduction: salary.deductions?.lateDeduction || 0,
+      otherDeductions: salary.deductions?.otherDeductions || 0,
+      totalDeductions: salary.deductions?.totalDeductions || 0,
+      bonus: salary.additions?.bonus || 0,
+      overtime: salary.additions?.overtime || 0,
+      netSalary: salary.netSalary || 0,
+      status: salary.status || "pending",
+    }));
+
+    await logExportAction(req, "Salary", `Exported ${salaries.length} salary records to ${format.toUpperCase()}`);
+
+    if (format === 'csv') {
+      // Export as CSV
+      const headers = [
+        "Employee ID", "Name", "Department", "Position", "Period",
+        "Base Salary", "Working Days", "Present", "Absent", "Late", "Half Days",
+        "Absent Deduction", "Late Deduction", "Other Deductions", "Total Deductions",
+        "Bonus", "Overtime", "Net Salary", "Status"
+      ];
+      const rows = dataRows.map((row) => [
+        row.employeeId, row.name, row.department, row.position, row.period,
+        row.baseSalary, row.workingDays, row.presentDays, row.absentDays, row.lateDays, row.halfDays,
+        row.absentDeduction, row.lateDeduction, row.otherDeductions, row.totalDeductions,
+        row.bonus, row.overtime, row.netSalary, row.status
+      ]);
+      const csvContent = [headers.join(","), ...rows.map((row) => row.map((cell) => `"${cell}"`).join(","))].join("\n");
+      
+      const periodStr = month && year ? `${months[parseInt(month) - 1]}_${year}` : new Date().toISOString().split("T")[0];
+      setCsvHeaders(res, `salaries_${periodStr}.csv`);
+      res.send(csvContent);
+    } else {
+      // Export as Excel
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet("Salaries");
+
+      worksheet.columns = [
+        { header: "Employee ID", key: "employeeId", width: 15 },
+        { header: "Name", key: "name", width: 25 },
+        { header: "Department", key: "department", width: 20 },
+        { header: "Position", key: "position", width: 20 },
+        { header: "Period", key: "period", width: 18 },
+        { header: "Base Salary", key: "baseSalary", width: 15 },
+        { header: "Working Days", key: "workingDays", width: 14 },
+        { header: "Present", key: "presentDays", width: 10 },
+        { header: "Absent", key: "absentDays", width: 10 },
+        { header: "Late", key: "lateDays", width: 10 },
+        { header: "Half Days", key: "halfDays", width: 12 },
+        { header: "Absent Ded.", key: "absentDeduction", width: 14 },
+        { header: "Late Ded.", key: "lateDeduction", width: 12 },
+        { header: "Other Ded.", key: "otherDeductions", width: 12 },
+        { header: "Total Ded.", key: "totalDeductions", width: 14 },
+        { header: "Bonus", key: "bonus", width: 12 },
+        { header: "Overtime", key: "overtime", width: 12 },
+        { header: "Net Salary", key: "netSalary", width: 15 },
+        { header: "Status", key: "status", width: 12 },
+      ];
+
+      worksheet.getRow(1).eachCell((cell) => {
+        cell.font = headerStyle.font;
+        cell.fill = headerStyle.fill;
+        cell.alignment = headerStyle.alignment;
+      });
+
+      dataRows.forEach((row) => {
+        const newRow = worksheet.addRow(row);
+        // Format currency columns
+        ['baseSalary', 'absentDeduction', 'lateDeduction', 'otherDeductions', 'totalDeductions', 'bonus', 'overtime', 'netSalary'].forEach(key => {
+          newRow.getCell(key).numFmt = '#,##0';
+        });
+      });
+
+      const periodStr = month && year ? `${months[parseInt(month) - 1]}_${year}` : new Date().toISOString().split("T")[0];
+      setExcelHeaders(res, `salaries_${periodStr}.xlsx`);
+      await workbook.xlsx.write(res);
+      res.end();
+    }
+  } catch (error) {
+    console.error("Export salaries error:", error);
     res.status(500).json({ success: false, message: error.message });
   }
 };

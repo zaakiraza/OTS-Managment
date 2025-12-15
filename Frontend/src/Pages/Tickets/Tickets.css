@@ -333,7 +333,7 @@
 }
 
 .btn-view, .btn-edit-sm, .btn-delete-sm {
-  padding: 6px 14px;
+  padding: 6px 14px !important;
   border: none;
   border-radius: 6px;
   font-size: 12px;
@@ -729,7 +729,7 @@
 @media (max-width: 600px) {
   .tickets-page {
     padding: 12px;
-    padding-bottom: 80px;
+    padding-bottom: 100px;
   }
   
   .page-header {
@@ -749,6 +749,8 @@
   
   .filters {
     flex-direction: column;
+    padding: 16px;
+    gap: 12px;
   }
   
   .filter-group {
@@ -758,16 +760,35 @@
   .filter-group select,
   .filter-group input {
     width: 100%;
+    min-width: unset;
   }
   
   .filter-checkbox {
     width: 100%;
+    box-sizing: border-box;
+  }
+
+  .checkbox-label input[type="checkbox"] {
+    flex-shrink: 0;
+    width: 0% !important;
+    min-width: 0 !important;
+    height: 10px !important;
+}
+  
+  .checkbox-label {
+    flex-wrap: nowrap;
+    white-space: nowrap;
+    font-size: 13px;
+  }
+  
+  .checkbox-label input[type="checkbox"] {
+    flex-shrink: 0;
   }
   
   .table-container {
     overflow-x: auto;
-    margin: 0 -16px;
-    padding: 0 16px;
+    margin: 0 -12px;
+    padding: 0 12px;
   }
   
   .data-table {
@@ -785,6 +806,34 @@
   .modal-content {
     width: 95%;
     max-height: 90vh;
+  }
+  
+  .stats-container {
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+  
+  .stat-card {
+    padding: 16px;
+  }
+  
+  .stat-card .value {
+    font-size: 26px;
+  }
+}
+
+@media (max-width: 400px) {
+  .stats-container {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+  
+  .stat-card {
+    padding: 14px;
+  }
+  
+  .stat-card .value {
+    font-size: 24px;
   }
 }
 

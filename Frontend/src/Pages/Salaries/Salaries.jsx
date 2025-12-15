@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { salaryAPI, employeeAPI, departmentAPI, attendanceAPI } from "../../Config/Api";
+import { salaryAPI, employeeAPI, departmentAPI, attendanceAPI, exportAPI } from "../../Config/Api";
 import SideBar from "../../Components/SideBar/SideBar";
 import "./Salaries.css";
 
@@ -31,6 +31,7 @@ const Salaries = () => {
     perfectAttendanceThreshold: 100,
     perfectAttendanceBonusAmount: 0,
   });
+  const [exporting, setExporting] = useState(false);
 
   const user = (() => {
     try {
@@ -87,7 +88,8 @@ const Salaries = () => {
     try {
       const response = await departmentAPI.getAll();
       if (response.data.success) {
-        setDepartments(response.data.data);
+        // Use flatData to get all departments including sub-departments
+        setDepartments(response.data.flatData || response.data.data);
       }
     } catch (error) {
       console.error("Error fetching departments:", error);
@@ -257,7 +259,18 @@ const Salaries = () => {
         criteria: criteriaData,
       });
       if (response.data.success) {
-        alert(`Calculated! ${response.data.data.calculated} salaries saved successfully.`);
+        const { calculated, errors, errorDetails } = response.data.data;
+        
+        let message = `Calculated! ${calculated} salaries saved successfully.`;
+        
+        if (errors > 0 && errorDetails && errorDetails.length > 0) {
+          message += `\n\n⚠️ ${errors} employees could not be calculated:\n\n`;
+          errorDetails.forEach((err, idx) => {
+            message += `${idx + 1}. ${err.employeeId}: ${err.message}\n`;
+          });
+        }
+        
+        alert(message);
         setShowCriteriaModal(false);
         fetchSalaries();
         fetchAttendanceForMonth();
@@ -313,6 +326,38 @@ const Salaries = () => {
     "July", "August", "September", "October", "November", "December"
   ];
 
+  const handleExport = async (format) => {
+    try {
+      setExporting(true);
+      
+      const params = {
+        month: selectedMonth,
+        year: selectedYear,
+      };
+      if (selectedDepartment) params.departmentId = selectedDepartment;
+      
+      const response = await exportAPI.exportSalaries(format, params);
+      
+      const blob = new Blob([response.data], {
+        type: format === 'xlsx' 
+          ? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+          : "text/csv"
+      });
+      
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `salaries_${months[selectedMonth - 1]}_${selectedYear}.${format === 'xlsx' ? 'xlsx' : 'csv'}`;
+      link.click();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("Export error:", error);
+      alert(error.response?.data?.message || "Failed to export salaries");
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <div className="dashboard-layout">
       <SideBar />
@@ -329,7 +374,7 @@ const Salaries = () => {
             <option value="">All Departments</option>
             {departments.map((dept) => (
               <option key={dept._id} value={dept._id}>
-                {dept.name} ({dept.code})
+                {"—".repeat(dept.level || 0)} {dept.name} ({dept.code})
               </option>
             ))}
           </select>
@@ -356,7 +401,21 @@ const Salaries = () => {
             ))}
           </select>
           <button className="btn-primary" onClick={() => openCriteriaModal('all')} disabled={loading}>
-            Calculate All
+            <i className="fas fa-calculator"></i> Calculate All
+          </button>
+          <button 
+            className="btn-export excel" 
+            onClick={() => handleExport('xlsx')} 
+            disabled={exporting || displayData.length === 0}
+          >
+            {exporting ? <i className="fas fa-spinner fa-spin"></i> : <i className="fas fa-file-excel"></i>} Export Excel
+          </button>
+          <button 
+            className="btn-export csv" 
+            onClick={() => handleExport('csv')} 
+            disabled={exporting || displayData.length === 0}
+          >
+            {exporting ? <i className="fas fa-spinner fa-spin"></i> : <i className="fas fa-file-csv"></i>} Export CSV
           </button>
         </div>
       </div>
@@ -556,56 +615,66 @@ const Salaries = () => {
         <div className="modal-overlay" onClick={() => setShowCriteriaModal(false)}>
           <div className="modal-content modal-large" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h2>Salary Calculation Criteria</h2>
+              <h2>
+                <i className="fas fa-calculator"></i> Salary Calculation Criteria
+              </h2>
               <button className="close-btn" onClick={() => setShowCriteriaModal(false)}>
-                ×
+                <i className="fas fa-times"></i>
               </button>
             </div>
-            <form onSubmit={handleCriteriaSubmit}>
-              <div className="criteria-section">
-                <h3>Attendance Marking Method</h3>
-                <div className="form-group">
-                  <label>How should attendance be marked?</label>
-                  <div style={{ marginTop: '10px' }}>
-                    <label style={{ display: 'block', marginBottom: '10px' }}>
-                      <input
-                        type="radio"
-                        name="attendanceMethod"
-                        value="checkinCheckout"
-                        checked={criteriaData.attendanceMarkingMethod === 'checkinCheckout'}
-                        onChange={(e) =>
-                          setCriteriaData({
-                            ...criteriaData,
-                            attendanceMarkingMethod: e.target.value,
-                          })
-                        }
-                      />
-                      {' '}Mark by check-in/check-out timings each day
-                    </label>
-                    <label style={{ display: 'block' }}>
-                      <input
-                        type="radio"
-                        name="attendanceMethod"
-                        value="weeklyHours"
-                        checked={criteriaData.attendanceMarkingMethod === 'weeklyHours'}
-                        onChange={(e) =>
-                          setCriteriaData({
-                            ...criteriaData,
-                            attendanceMarkingMethod: e.target.value,
-                          })
-                        }
-                      />
-                      {' '}Mark by weekly hours
-                    </label>
-                  </div>
+            <form onSubmit={handleCriteriaSubmit} className="modal-body">
+              <div className="form-section-title">
+                <i className="fas fa-clipboard-check"></i> Attendance Marking Method
+              </div>
+              <div className="form-group">
+                <label><i className="fas fa-cog"></i> How should attendance be marked?</label>
+                <div className="radio-group">
+                  <label className="radio-option">
+                    <input
+                      type="radio"
+                      name="attendanceMethod"
+                      value="checkinCheckout"
+                      checked={criteriaData.attendanceMarkingMethod === 'checkinCheckout'}
+                      onChange={(e) =>
+                        setCriteriaData({
+                          ...criteriaData,
+                          attendanceMarkingMethod: e.target.value,
+                        })
+                      }
+                    />
+                    <span className="radio-custom"></span>
+                    <span className="radio-label">
+                      <i className="fas fa-clock"></i> Mark by check-in/check-out timings each day
+                    </span>
+                  </label>
+                  <label className="radio-option">
+                    <input
+                      type="radio"
+                      name="attendanceMethod"
+                      value="weeklyHours"
+                      checked={criteriaData.attendanceMarkingMethod === 'weeklyHours'}
+                      onChange={(e) =>
+                        setCriteriaData({
+                          ...criteriaData,
+                          attendanceMarkingMethod: e.target.value,
+                        })
+                      }
+                    />
+                    <span className="radio-custom"></span>
+                    <span className="radio-label">
+                      <i className="fas fa-calendar-week"></i> Mark by weekly hours
+                    </span>
+                  </label>
                 </div>
               </div>
 
               {criteriaData.attendanceMarkingMethod === 'weeklyHours' && (
-                <div className="criteria-section">
-                  <h3>Hourly Deduction</h3>
+                <>
+                  <div className="form-section-title">
+                    <i className="fas fa-hourglass-half"></i> Hourly Deduction
+                  </div>
                   <div className="form-group">
-                    <label>Deduction per missing hour (PKR)</label>
+                    <label><i className="fas fa-rupee-sign"></i> Deduction per missing hour (PKR)</label>
                     <input
                       type="number"
                       min="0"
@@ -620,148 +689,151 @@ const Salaries = () => {
                       placeholder="e.g., 50"
                       required
                     />
-                    <small className="help-text">
-                      Amount to deduct from salary for each hour short of required weekly hours
+                    <small className="helper-text info">
+                      <i className="fas fa-info-circle"></i> Amount to deduct for each hour short of required weekly hours
                     </small>
-                  </div>
-                </div>
-              )}
-
-              {criteriaData.attendanceMarkingMethod === 'checkinCheckout' && (
-                <>
-                  <div className="criteria-section">
-                    <h3>Late Penalty Rules</h3>
-                    <div className="form-group">
-                      <label>How many lates = 1 absent?</label>
-                      <input
-                        type="number"
-                        min="1"
-                        max="30"
-                        value={criteriaData.lateThreshold}
-                        onChange={(e) =>
-                          setCriteriaData({
-                            ...criteriaData,
-                            lateThreshold: parseInt(e.target.value) || 1,
-                          })
-                        }
-                        required
-                      />
-                      <small className="help-text">
-                        Example: 3 lates = 1 absent day
-                      </small>
-                    </div>
-                  </div>
-
-                  <div className="criteria-section">
-                    <h3>Early Arrival Bonus</h3>
-                    <div className="form-group">
-                      <label>How many early arrivals = 1 bonus day?</label>
-                      <input
-                        type="number"
-                        min="0"
-                        max="30"
-                        value={criteriaData.earlyArrivalBonus}
-                        onChange={(e) =>
-                          setCriteriaData({
-                            ...criteriaData,
-                            earlyArrivalBonus: parseInt(e.target.value) || 0,
-                          })
-                        }
-                      />
-                      <small className="help-text">
-                        Example: 5 early arrivals = 1 bonus day (0 = disabled)
-                      </small>
-                    </div>
-                  </div>
-
-                  <div className="criteria-section">
-                    <h3>Absent Deduction</h3>
-                    <div className="form-group">
-                      <label>Salary deduction per absent day (PKR)</label>
-                      <input
-                        type="number"
-                        min="0"
-                        step="10"
-                        value={criteriaData.absentDeduction}
-                        onChange={(e) =>
-                          setCriteriaData({
-                            ...criteriaData,
-                            absentDeduction: parseFloat(e.target.value) || 0,
-                          })
-                        }
-                        placeholder="e.g., 500"
-                        required
-                      />
-                      <small className="help-text">
-                        Amount to deduct from salary for each absent day
-                      </small>
-                    </div>
                   </div>
                 </>
               )}
 
-              <div className="criteria-section">
-                <h3>Perfect Attendance Bonus</h3>
-                <div className="form-group">
-                  <label>
+              {criteriaData.attendanceMarkingMethod === 'checkinCheckout' && (
+                <>
+                  <div className="form-section-title">
+                    <i className="fas fa-exclamation-triangle"></i> Late Penalty Rules
+                  </div>
+                  <div className="form-group">
+                    <label><i className="fas fa-clock"></i> How many lates = 1 absent?</label>
                     <input
-                      type="checkbox"
-                      checked={criteriaData.perfectAttendanceBonusEnabled}
+                      type="number"
+                      min="1"
+                      max="30"
+                      value={criteriaData.lateThreshold}
                       onChange={(e) =>
                         setCriteriaData({
                           ...criteriaData,
-                          perfectAttendanceBonusEnabled: e.target.checked,
+                          lateThreshold: parseInt(e.target.value) || 1,
+                        })
+                      }
+                      required
+                    />
+                    <small className="helper-text info">
+                      <i className="fas fa-lightbulb"></i> Example: 3 lates = 1 absent day deduction
+                    </small>
+                  </div>
+
+                  <div className="form-section-title">
+                    <i className="fas fa-sunrise"></i> Early Arrival Bonus
+                  </div>
+                  <div className="form-group">
+                    <label><i className="fas fa-gift"></i> How many early arrivals = 1 bonus day?</label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="30"
+                      value={criteriaData.earlyArrivalBonus}
+                      onChange={(e) =>
+                        setCriteriaData({
+                          ...criteriaData,
+                          earlyArrivalBonus: parseInt(e.target.value) || 0,
                         })
                       }
                     />
-                    {' '}Enable perfect attendance bonus
-                  </label>
-                </div>
-                {criteriaData.perfectAttendanceBonusEnabled && (
-                  <>
-                    <div className="form-group">
-                      <label>Minimum attendance percentage for bonus (%)</label>
-                      <input
-                        type="number"
-                        min="50"
-                        max="100"
-                        step="1"
-                        value={criteriaData.perfectAttendanceThreshold}
-                        onChange={(e) =>
-                          setCriteriaData({
-                            ...criteriaData,
-                            perfectAttendanceThreshold: parseFloat(e.target.value) || 100,
-                          })
-                        }
-                        required
-                      />
-                      <small className="help-text">
-                        Example: 95% means employee must have 95% or higher attendance
-                      </small>
-                    </div>
-                    <div className="form-group">
-                      <label>Bonus amount (PKR)</label>
-                      <input
-                        type="number"
-                        min="0"
-                        step="100"
-                        value={criteriaData.perfectAttendanceBonusAmount}
-                        onChange={(e) =>
-                          setCriteriaData({
-                            ...criteriaData,
-                            perfectAttendanceBonusAmount: parseFloat(e.target.value) || 0,
-                          })
-                        }
-                        placeholder="e.g., 5000"
-                        required
-                      />
-                      <small className="help-text">
-                        Bonus awarded when attendance threshold is met
-                      </small>
-                    </div>
-                  </>
-                )}
+                    <small className="helper-text info">
+                      <i className="fas fa-lightbulb"></i> Example: 5 early arrivals = 1 bonus day (0 = disabled)
+                    </small>
+                  </div>
+
+                  <div className="form-section-title">
+                    <i className="fas fa-user-times"></i> Absent Deduction
+                  </div>
+                  <div className="form-group">
+                    <label><i className="fas fa-rupee-sign"></i> Deduction per absent day (PKR)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="10"
+                      value={criteriaData.absentDeduction}
+                      onChange={(e) =>
+                        setCriteriaData({
+                          ...criteriaData,
+                          absentDeduction: parseFloat(e.target.value) || 0,
+                        })
+                      }
+                      placeholder="e.g., 500"
+                      required
+                    />
+                    <small className="helper-text info">
+                      <i className="fas fa-info-circle"></i> Amount to deduct for each absent day
+                    </small>
+                  </div>
+                </>
+              )}
+
+              <div className="form-section-title">
+                <i className="fas fa-trophy"></i> Perfect Attendance Bonus
               </div>
+              <div className="form-group">
+                <label className="checkbox-option">
+                  <input
+                    type="checkbox"
+                    checked={criteriaData.perfectAttendanceBonusEnabled}
+                    onChange={(e) =>
+                      setCriteriaData({
+                        ...criteriaData,
+                        perfectAttendanceBonusEnabled: e.target.checked,
+                      })
+                    }
+                  />
+                  <span className="checkbox-custom"></span>
+                  <span className="checkbox-label">
+                    <i className="fas fa-star"></i> Enable perfect attendance bonus
+                  </span>
+                </label>
+              </div>
+              {criteriaData.perfectAttendanceBonusEnabled && (
+                <div className="bonus-settings">
+                  <div className="form-group">
+                    <label><i className="fas fa-percentage"></i> Minimum attendance for bonus (%)</label>
+                    <input
+                      type="number"
+                      min="50"
+                      max="100"
+                      step="1"
+                      value={criteriaData.perfectAttendanceThreshold}
+                      onChange={(e) =>
+                        setCriteriaData({
+                          ...criteriaData,
+                          perfectAttendanceThreshold: parseFloat(e.target.value) || 100,
+                        })
+                      }
+                      required
+                    />
+                    <small className="helper-text info">
+                      <i className="fas fa-lightbulb"></i> Employee must achieve this percentage to receive bonus
+                    </small>
+                  </div>
+                  <div className="form-group">
+                    <label><i className="fas fa-rupee-sign"></i> Bonus amount (PKR)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="100"
+                      value={criteriaData.perfectAttendanceBonusAmount}
+                      onChange={(e) =>
+                        setCriteriaData({
+                          ...criteriaData,
+                          perfectAttendanceBonusAmount: parseFloat(e.target.value) || 0,
+                        })
+                      }
+                      placeholder="e.g., 5000"
+                      required
+                    />
+                    <small className="helper-text info">
+                      <i className="fas fa-info-circle"></i> Bonus awarded when attendance threshold is met
+                    </small>
+                  </div>
+                </div>
+              )}
 
               <div className="modal-actions">
                 <button
@@ -769,10 +841,11 @@ const Salaries = () => {
                   className="btn-secondary"
                   onClick={() => setShowCriteriaModal(false)}
                 >
-                  Cancel
+                  <i className="fas fa-times"></i> Cancel
                 </button>
                 <button type="submit" className="btn-primary" disabled={loading}>
-                  {loading ? "Calculating..." : calculationType === 'single' ? "Calculate Salary" : "Calculate & Save All Salaries"}
+                  <i className={loading ? "fas fa-spinner fa-spin" : "fas fa-calculator"}></i>
+                  {loading ? " Calculating..." : calculationType === 'single' ? " Calculate Salary" : " Calculate All Salaries"}
                 </button>
               </div>
             </form>

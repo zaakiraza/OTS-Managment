@@ -11,6 +11,7 @@ import {
   exportTickets,
   exportAuditLogs,
   exportDepartments,
+  exportSalaries,
 } from "../Controller/exportController.js";
 import { verifyToken, hasRole } from "../Middleware/auth.js";
 import { intensiveLimiter } from "../Middleware/rateLimiter.js";
@@ -69,6 +70,14 @@ router.get(
   "/audit-logs",
   hasRole("superAdmin"),
   exportAuditLogs
+);
+
+// Salary exports (superAdmin only)
+// GET /exports/salaries?format=csv|xlsx&month=&year=&departmentId=
+router.get(
+  "/salaries",
+  hasRole("superAdmin"),
+  exportSalaries
 );
 
 export default router;

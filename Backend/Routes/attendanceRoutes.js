@@ -9,6 +9,7 @@ import {
   deleteAttendance,
   getAttendanceStats,
   deviceCheckIn,
+  markAbsent,
 } from "../Controller/attendanceController.js";
 import { verifyToken, hasRole } from "../Middleware/auth.js";
 
@@ -46,6 +47,14 @@ router.delete(
   verifyToken,
   hasRole("superAdmin", "attendanceDepartment"),
   deleteAttendance
+);
+
+// Mark absent employees for a date or date range (superAdmin only)
+router.post(
+  "/mark-absent",
+  verifyToken,
+  hasRole("superAdmin"),
+  markAbsent
 );
 
 export default router;

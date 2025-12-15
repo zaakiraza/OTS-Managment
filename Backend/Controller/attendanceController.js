@@ -544,3 +544,53 @@ export const getAttendanceStats = async (req, res) => {
     });
   }
 };
+
+// Mark absent employees for a specific date or date range
+export const markAbsent = async (req, res) => {
+  try {
+    const { date, startDate, endDate } = req.body;
+    
+    // Import the markAbsentEmployees function
+    const { markAbsentEmployees, markAbsentForDateRange } = await import("../Utils/markAbsentees.js");
+    
+    let result;
+    
+    if (startDate && endDate) {
+      // Mark for date range
+      result = await markAbsentForDateRange(new Date(startDate), new Date(endDate));
+      
+      // Calculate totals
+      const totals = result.reduce((acc, day) => ({
+        markedAbsent: acc.markedAbsent + day.markedAbsent,
+        alreadyMarked: acc.alreadyMarked + day.alreadyMarked,
+        weeklyOffSkipped: acc.weeklyOffSkipped + day.weeklyOffSkipped
+      }), { markedAbsent: 0, alreadyMarked: 0, weeklyOffSkipped: 0 });
+      
+      res.status(200).json({
+        success: true,
+        message: `Processed ${result.length} days. Marked ${totals.markedAbsent} employees as absent.`,
+        data: {
+          days: result.length,
+          ...totals,
+          details: result
+        }
+      });
+    } else {
+      // Mark for single date (default to today)
+      const targetDate = date ? new Date(date) : new Date();
+      result = await markAbsentEmployees(targetDate);
+      
+      res.status(200).json({
+        success: true,
+        message: `Marked ${result.markedAbsent} employees as absent for ${targetDate.toISOString().split('T')[0]}`,
+        data: result
+      });
+    }
+  } catch (error) {
+    logger.error(`Error in markAbsent: ${error.message}`, { stack: error.stack });
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};

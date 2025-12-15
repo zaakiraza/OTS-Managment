@@ -7,6 +7,10 @@ import nodemailer from "nodemailer";
 import dotenv from "dotenv";
 dotenv.config();
 
+// Get email credentials (support both EMAIL_* and MAIL_* env vars)
+const getEmailUser = () => process.env.EMAIL_USER || process.env.MAIL_USER;
+const getEmailPass = () => process.env.EMAIL_PASS || process.env.MAIL_PASS;
+
 // Create reusable transporter
 const createTransporter = () => {
   return nodemailer.createTransport({
@@ -15,15 +19,15 @@ const createTransporter = () => {
     port: process.env.MAIL_PORT || 587,
     secure: process.env.MAIL_SECURE === "true",
     auth: {
-      user: process.env.MAIL_USER,
-      pass: process.env.MAIL_PASS,
+      user: getEmailUser(),
+      pass: getEmailPass(),
     },
   });
 };
 
 // Check if email is configured
 const isEmailConfigured = () => {
-  return process.env.MAIL_USER && process.env.MAIL_PASS;
+  return getEmailUser() && getEmailPass();
 };
 
 // Base email template
@@ -81,7 +85,7 @@ const sendEmail = async (to, subject, htmlContent) => {
   try {
     const transporter = createTransporter();
     await transporter.sendMail({
-      from: `"AMS Notifications" <${process.env.MAIL_USER}>`,
+      from: `"AMS Notifications" <${getEmailUser()}>`,
       to,
       subject: `[AMS] ${subject}`,
       html: htmlContent,

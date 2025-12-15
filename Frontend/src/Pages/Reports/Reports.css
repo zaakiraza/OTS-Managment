@@ -341,7 +341,7 @@
   border-radius: 20px;
   font-size: 12px;
   font-weight: 600;
-  color: white;
+  color: black !important;
 }
 
 .status-badge.status-present, .status.status-present {

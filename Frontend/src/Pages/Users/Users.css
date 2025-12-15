@@ -278,28 +278,44 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 24px 28px;
-  border-bottom: 1px solid var(--border-light, #e5e7eb);
-  background: linear-gradient(135deg, #f0f4f3 0%, white 100%);
+  padding: 20px 28px;
+  border-bottom: 1px solid rgba(31, 106, 117, 0.1);
+  background: linear-gradient(135deg, #1F6A75 0%, #093635 100%);
+  border-radius: 20px 20px 0 0;
 }
 
 .modal-header h2 {
+  font-size: 18px;
+  color: white;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.modal-header h2 i {
   font-size: 20px;
-  color: var(--text-dark, #0D0D0D);
-  font-weight: 700;
+  opacity: 0.9;
 }
 
 .close-btn {
-  background: none;
+  background: rgba(255, 255, 255, 0.15);
   border: none;
-  font-size: 28px;
-  color: var(--text-light, #A2ABAA);
+  font-size: 20px;
+  color: white;
   cursor: pointer;
   transition: all 0.2s;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .close-btn:hover {
-  color: var(--text-dark, #0D0D0D);
+  background: rgba(255, 255, 255, 0.25);
+  transform: rotate(90deg);
 }
 
 .modal-body {
@@ -307,25 +323,38 @@
 }
 
 .form-group {
-  margin-bottom: 16px;
+  margin-bottom: 20px;
 }
 
 .form-group label {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 6px;
   margin-bottom: 10px;
   font-weight: 600;
   color: var(--text-dark, #0D0D0D);
   font-size: 14px;
 }
 
+.form-group label .required {
+  color: #ef4444;
+  font-weight: 700;
+}
+
+.form-group label i {
+  color: var(--primary, #1F6A75);
+  font-size: 14px;
+}
+
 .form-group input,
 .form-group select {
   width: 100%;
-  padding: 12px 16px;
+  padding: 14px 16px;
   border: 2px solid var(--border-light, #CED4D3);
   border-radius: 12px;
   font-size: 14px;
   transition: all 0.2s;
+  background: white;
 }
 
 .form-group input:focus,
@@ -333,6 +362,97 @@
   outline: none;
   border-color: var(--primary, #1F6A75);
   box-shadow: 0 0 0 3px rgba(31, 106, 117, 0.12);
+}
+
+/* Disabled/Readonly Fields */
+.form-group input:disabled,
+.form-group input[readonly],
+.form-group select:disabled {
+  background: linear-gradient(135deg, #f0f4f3 0%, #e8eceb 100%);
+  color: #1F6A75;
+  font-weight: 600;
+  cursor: not-allowed;
+  border-color: rgba(31, 106, 117, 0.2);
+}
+
+/* Helper Text */
+.form-group .helper-text,
+.form-group small {
+  display: block;
+  margin-top: 6px;
+  font-size: 12px;
+  color: #A2ABAA;
+  font-style: italic;
+}
+
+.form-group .helper-text.info {
+  color: #1F6A75;
+}
+
+.form-group .helper-text.warning {
+  color: #F49040;
+}
+
+/* Form Section Divider */
+.form-section-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--primary, #1F6A75);
+  margin: 24px 0 16px 0;
+  padding-bottom: 8px;
+  border-bottom: 2px solid rgba(31, 106, 117, 0.15);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.form-section-title i {
+  font-size: 16px;
+}
+
+/* Input with Icon */
+.input-with-icon {
+  position: relative;
+}
+
+.input-with-icon i {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #A2ABAA;
+  font-size: 16px;
+}
+
+.input-with-icon input {
+  padding-left: 42px;
+}
+
+.input-with-icon input:focus + i,
+.input-with-icon input:not(:placeholder-shown) + i {
+  color: var(--primary, #1F6A75);
+}
+
+/* Password Field */
+.password-field {
+  position: relative;
+}
+
+.password-toggle {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: #A2ABAA;
+  cursor: pointer;
+  font-size: 16px;
+  padding: 4px;
+}
+
+.password-toggle:hover {
+  color: var(--primary, #1F6A75);
 }
 
 .modal-actions {
@@ -351,14 +471,30 @@
   font-size: 16px;
 }
 
-.alert-error {
+.alert {
   padding: 14px 18px;
-  background: #fee2e2;
+  border-radius: 10px;
+  margin-bottom: 20px;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.alert i {
+  font-size: 16px;
+}
+
+.alert-error {
+  background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
   color: #dc2626;
   border-left: 4px solid #ef4444;
-  border-radius: 10px;
-  margin-bottom: 22px;
-  font-size: 14px;
+}
+
+.alert-success {
+  background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+  color: #059669;
+  border-left: 4px solid #10b981;
 }
 
 /* Responsive */

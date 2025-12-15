@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import SideBar from "../../Components/SideBar/SideBar";
-import { attendanceAPI, employeeAPI, departmentAPI } from "../../Config/Api";
+import { attendanceAPI, employeeAPI, departmentAPI, exportAPI } from "../../Config/Api";
 import "./Attendance.css";
 
 // Utility function to calculate working hours
@@ -69,6 +69,7 @@ function Attendance() {
     workingHours: "",
   });
   const [stats, setStats] = useState(null);
+  const [exporting, setExporting] = useState(false);
 
   const user = (() => {
     try {
@@ -370,6 +371,42 @@ function Attendance() {
     fetchEmployeesByDepartment(deptId);
   };
 
+  const handleExport = async (format) => {
+    try {
+      setExporting(true);
+      
+      // Build params from current filter
+      const params = {};
+      if (filter.date) {
+        // For single date export, set both startDate and endDate to the same value
+        params.startDate = filter.date;
+        params.endDate = filter.date;
+      }
+      if (filter.userId) params.employeeId = filter.userId;
+      if (filter.status) params.status = filter.status;
+      
+      const response = await exportAPI.exportAttendance(format, params);
+      
+      const blob = new Blob([response.data], {
+        type: format === 'xlsx' 
+          ? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+          : "text/csv"
+      });
+      
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `attendance_${filter.date || 'report'}.${format === 'xlsx' ? 'xlsx' : 'csv'}`;
+      link.click();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("Export error:", error);
+      alert(error.response?.data?.message || "Failed to export attendance");
+    } finally {
+      setExporting(false);
+    }
+  };
+
   // Always use attendanceRecords which is filtered properly
   const displayRecords = attendanceRecords;
 
@@ -467,6 +504,27 @@ function Attendance() {
                 <option value="pending">Pending</option>
               </select>
             </div>
+            <div className="filter-group export-buttons">
+              <label>Export</label>
+              <div className="btn-group">
+                <button
+                  type="button"
+                  className="btn-export excel"
+                  onClick={() => handleExport('xlsx')}
+                  disabled={exporting || displayRecords.length === 0}
+                >
+                  {exporting ? <><i className="fas fa-spinner fa-spin"></i></> : <><i className="fas fa-file-excel"></i> Excel</>}
+                </button>
+                <button
+                  type="button"
+                  className="btn-export csv"
+                  onClick={() => handleExport('csv')}
+                  disabled={exporting || displayRecords.length === 0}
+                >
+                  {exporting ? <><i className="fas fa-spinner fa-spin"></i></> : <><i className="fas fa-file-csv"></i> CSV</>}
+                </button>
+              </div>
+            </div>
           </div>
 
           {/* Attendance Table */}
@@ -555,17 +613,23 @@ function Attendance() {
                 onClick={(e) => e.stopPropagation()}
               >
                 <div className="modal-header">
-                  <h2>Manual Attendance Entry</h2>
+                  <h2>
+                    <i className="fas fa-plus-circle"></i> Manual Attendance Entry
+                  </h2>
                   <button
                     className="close-btn"
                     onClick={() => setShowManualModal(false)}
                   >
-                    ×
+                    <i className="fas fa-times"></i>
                   </button>
                 </div>
-                <form onSubmit={handleManualSubmit}>
+                <form onSubmit={handleManualSubmit} className="modal-body">
+                  <div className="form-section-title">
+                    <i className="fas fa-user"></i> Employee Selection
+                  </div>
+                  
                   <div className="form-group">
-                    <label>Select Department *</label>
+                    <label><i className="fas fa-building"></i> Department <span className="required">*</span></label>
                     <select
                       value={manualFormData.department}
                       onChange={(e) => handleDepartmentChange(e.target.value)}
@@ -580,7 +644,7 @@ function Attendance() {
                     </select>
                   </div>
                   <div className="form-group">
-                    <label>Select Employee *</label>
+                    <label><i className="fas fa-user-tie"></i> Employee <span className="required">*</span></label>
                     <select
                       value={manualFormData.userId}
                       onChange={(e) =>
@@ -591,6 +655,7 @@ function Attendance() {
                       }
                       required
                       disabled={!manualFormData.department}
+                      style={!manualFormData.department ? { background: 'linear-gradient(to right, #e0f2f4, #f5f5f5)', cursor: 'not-allowed' } : {}}
                     >
                       <option value="">
                         {manualFormData.department
@@ -603,9 +668,17 @@ function Attendance() {
                         </option>
                       ))}
                     </select>
+                    {!manualFormData.department && (
+                      <small className="helper-text warning"><i className="fas fa-info-circle"></i> Select a department first</small>
+                    )}
                   </div>
+                  
+                  <div className="form-section-title">
+                    <i className="fas fa-clock"></i> Time Details
+                  </div>
+                  
                   <div className="form-group">
-                    <label>Date *</label>
+                    <label><i className="fas fa-calendar-day"></i> Date <span className="required">*</span></label>
                     <input
                       type="date"
                       value={manualFormData.date}
@@ -619,46 +692,53 @@ function Attendance() {
                       required
                     />
                   </div>
-                  <div className="form-group">
-                    <label>Check-in Time</label>
-                    <input
-                      type="time"
-                      value={manualFormData.checkIn}
-                      onChange={(e) => {
-                        const newCheckIn = e.target.value;
-                        const workingHours = calculateWorkingHours(
-                          newCheckIn,
-                          manualFormData.checkOut
-                        );
-                        setManualFormData({
-                          ...manualFormData,
-                          checkIn: newCheckIn,
-                          workingHours,
-                        });
-                      }}
-                    />
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label><i className="fas fa-sign-in-alt"></i> Check-in Time</label>
+                      <input
+                        type="time"
+                        value={manualFormData.checkIn}
+                        onChange={(e) => {
+                          const newCheckIn = e.target.value;
+                          const workingHours = calculateWorkingHours(
+                            newCheckIn,
+                            manualFormData.checkOut
+                          );
+                          setManualFormData({
+                            ...manualFormData,
+                            checkIn: newCheckIn,
+                            workingHours,
+                          });
+                        }}
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label><i className="fas fa-sign-out-alt"></i> Check-out Time</label>
+                      <input
+                        type="time"
+                        value={manualFormData.checkOut}
+                        onChange={(e) => {
+                          const newCheckOut = e.target.value;
+                          const workingHours = calculateWorkingHours(
+                            manualFormData.checkIn,
+                            newCheckOut
+                          );
+                          setManualFormData({
+                            ...manualFormData,
+                            checkOut: newCheckOut,
+                            workingHours,
+                          });
+                        }}
+                      />
+                    </div>
                   </div>
-                  <div className="form-group">
-                    <label>Check-out Time</label>
-                    <input
-                      type="time"
-                      value={manualFormData.checkOut}
-                      onChange={(e) => {
-                        const newCheckOut = e.target.value;
-                        const workingHours = calculateWorkingHours(
-                          manualFormData.checkIn,
-                          newCheckOut
-                        );
-                        setManualFormData({
-                          ...manualFormData,
-                          checkOut: newCheckOut,
-                          workingHours,
-                        });
-                      }}
-                    />
+                  
+                  <div className="form-section-title">
+                    <i className="fas fa-cog"></i> Additional Options
                   </div>
+                  
                   <div className="form-group">
-                    <label>Status (Optional - Auto-calculated if not set)</label>
+                    <label><i className="fas fa-flag"></i> Status</label>
                     <select
                       value={manualFormData.status}
                       onChange={(e) =>
@@ -678,9 +758,10 @@ function Attendance() {
                       <option value="leave">Leave</option>
                       <option value="pending">Pending</option>
                     </select>
+                    <small className="helper-text info"><i className="fas fa-lightbulb"></i> Leave empty for auto-calculation</small>
                   </div>
                   <div className="form-group">
-                    <label>Remarks</label>
+                    <label><i className="fas fa-comment-alt"></i> Remarks</label>
                     <textarea
                       value={manualFormData.remarks}
                       onChange={(e) =>
@@ -699,14 +780,15 @@ function Attendance() {
                       className="btn-secondary"
                       onClick={() => setShowManualModal(false)}
                     >
-                      Cancel
+                      <i className="fas fa-times"></i> Cancel
                     </button>
                     <button
                       type="submit"
                       className="btn-primary"
                       disabled={loading}
                     >
-                      {loading ? "Creating..." : "Create Entry"}
+                      <i className={loading ? "fas fa-spinner fa-spin" : "fas fa-plus"}></i>
+                      {loading ? " Creating..." : " Create Entry"}
                     </button>
                   </div>
                 </form>
@@ -725,87 +807,108 @@ function Attendance() {
                 onClick={(e) => e.stopPropagation()}
               >
                 <div className="modal-header">
-                  <h2>Edit Attendance</h2>
+                  <h2>
+                    <i className="fas fa-edit"></i> Edit Attendance
+                  </h2>
                   <button
                     className="close-btn"
                     onClick={() => setShowEditModal(false)}
                   >
-                    ×
+                    <i className="fas fa-times"></i>
                   </button>
                 </div>
-                <form onSubmit={handleEditSubmit}>
+                <form onSubmit={handleEditSubmit} className="modal-body">
+                  <div className="form-section-title">
+                    <i className="fas fa-user"></i> Employee Information
+                  </div>
+                  
                   <div className="form-group">
-                    <label>Employee</label>
+                    <label><i className="fas fa-id-badge"></i> Employee</label>
                     <input
                       type="text"
-                      value={`${selectedRecord.userId} - ${
+                      value={`${selectedRecord.employee?.employeeId || selectedRecord.userId} - ${
                         selectedRecord.user?.name ||
                         selectedRecord.employee?.name ||
                         "N/A"
                       }`}
                       disabled
-                      style={{ background: "#f5f5f5", cursor: "not-allowed" }}
+                      style={{ background: 'linear-gradient(to right, #e0f2f4, #f5f5f5)', cursor: 'not-allowed' }}
                     />
+                    <small className="helper-text info"><i className="fas fa-lock"></i> Employee cannot be changed</small>
                   </div>
                   <div className="form-group">
-                    <label>Date</label>
+                    <label><i className="fas fa-calendar-day"></i> Date</label>
                     <input
                       type="text"
                       value={new Date(selectedRecord.date).toLocaleDateString()}
                       disabled
-                      style={{ background: "#f5f5f5", cursor: "not-allowed" }}
+                      style={{ background: 'linear-gradient(to right, #e0f2f4, #f5f5f5)', cursor: 'not-allowed' }}
                     />
+                    <small className="helper-text info"><i className="fas fa-lock"></i> Date cannot be changed</small>
+                  </div>
+                  
+                  <div className="form-section-title">
+                    <i className="fas fa-clock"></i> Time Details
+                  </div>
+                  
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label><i className="fas fa-sign-in-alt"></i> Check-in Time</label>
+                      <input
+                        type="time"
+                        value={editFormData.checkIn}
+                        onChange={(e) => {
+                          const newCheckIn = e.target.value;
+                          const workingHours = calculateWorkingHours(
+                            newCheckIn,
+                            editFormData.checkOut
+                          );
+                          setEditFormData({
+                            ...editFormData,
+                            checkIn: newCheckIn,
+                            workingHours,
+                          });
+                        }}
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label><i className="fas fa-sign-out-alt"></i> Check-out Time</label>
+                      <input
+                        type="time"
+                        value={editFormData.checkOut}
+                        onChange={(e) => {
+                          const newCheckOut = e.target.value;
+                          const workingHours = calculateWorkingHours(
+                            editFormData.checkIn,
+                            newCheckOut
+                          );
+                          setEditFormData({
+                            ...editFormData,
+                            checkOut: newCheckOut,
+                            workingHours,
+                          });
+                        }}
+                      />
+                    </div>
                   </div>
                   <div className="form-group">
-                    <label>Check-in Time</label>
-                    <input
-                      type="time"
-                      value={editFormData.checkIn}
-                      onChange={(e) => {
-                        const newCheckIn = e.target.value;
-                        const workingHours = calculateWorkingHours(
-                          newCheckIn,
-                          editFormData.checkOut
-                        );
-                        setEditFormData({
-                          ...editFormData,
-                          checkIn: newCheckIn,
-                          workingHours,
-                        });
-                      }}
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label>Check-out Time</label>
-                    <input
-                      type="time"
-                      value={editFormData.checkOut}
-                      onChange={(e) => {
-                        const newCheckOut = e.target.value;
-                        const workingHours = calculateWorkingHours(
-                          editFormData.checkIn,
-                          newCheckOut
-                        );
-                        setEditFormData({
-                          ...editFormData,
-                          checkOut: newCheckOut,
-                          workingHours,
-                        });
-                      }}
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label>Working Hours</label>
+                    <label><i className="fas fa-hourglass-half"></i> Working Hours</label>
                     <input
                       type="text"
                       value={editFormData.workingHours || ""}
                       readOnly
                       placeholder="Auto-calculated"
-                      style={{ background: "#f5f5f5", cursor: "not-allowed" }}
+                      style={{ background: 'linear-gradient(to right, #e0f2f4, #f5f5f5)', cursor: 'not-allowed' }}
                     />
+                    <small className="helper-text info"><i className="fas fa-calculator"></i> Auto-calculated from check-in/out times</small>
                   </div>
+                  
+                  <div className="form-section-title">
+                    <i className="fas fa-cog"></i> Additional Options
+                  </div>
+                  
                   <div className="form-group">
-                    <label>Status (Optional - Auto-calculated if not set)</label>
+                    <label><i className="fas fa-flag"></i> Status</label>
                     <select
                       value={editFormData.status}
                       onChange={(e) =>
@@ -825,9 +928,10 @@ function Attendance() {
                       <option value="leave">Leave</option>
                       <option value="pending">Pending</option>
                     </select>
+                    <small className="helper-text info"><i className="fas fa-lightbulb"></i> Leave empty for auto-calculation</small>
                   </div>
                   <div className="form-group">
-                    <label>Remarks</label>
+                    <label><i className="fas fa-comment-alt"></i> Remarks</label>
                     <textarea
                       value={editFormData.remarks}
                       onChange={(e) =>
@@ -846,14 +950,15 @@ function Attendance() {
                       className="btn-secondary"
                       onClick={() => setShowEditModal(false)}
                     >
-                      Cancel
+                      <i className="fas fa-times"></i> Cancel
                     </button>
                     <button
                       type="submit"
                       className="btn-primary"
                       disabled={loading}
                     >
-                      {loading ? "Updating..." : "Update Attendance"}
+                      <i className={loading ? "fas fa-spinner fa-spin" : "fas fa-save"}></i>
+                      {loading ? " Updating..." : " Update Attendance"}
                     </button>
                   </div>
                 </form>

@@ -226,20 +226,25 @@ function Users() {
         <div className="modal-overlay" onClick={() => setShowModal(false)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h2>Add Admin User</h2>
+              <h2><i className="fas fa-user-plus"></i> Add Admin User</h2>
               <button
                 className="close-btn"
                 onClick={() => setShowModal(false)}
               >
-                ✕
+                <i className="fas fa-times"></i>
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="modal-form">
-              {error && <div className="alert alert-error">{error}</div>}
+            <form onSubmit={handleSubmit} className="modal-body">
+              {error && <div className="alert alert-error"><i className="fas fa-exclamation-circle"></i> {error}</div>}
+              {success && <div className="alert alert-success"><i className="fas fa-check-circle"></i> {success}</div>}
+
+              <div className="form-section-title">
+                <i className="fas fa-user-tag"></i> Role Selection
+              </div>
 
               <div className="form-group">
-                <label>Admin Role *</label>
+                <label><i className="fas fa-user-shield"></i> Admin Role <span className="required">*</span></label>
                 <select
                   name="role"
                   value={formData.role}
@@ -249,17 +254,21 @@ function Users() {
                   <option value="">Select Admin Role</option>
                   {adminRoles.map((role) => (
                     <option key={role._id} value={role._id}>
-                      {role.name === "superAdmin" ? "Super Admin" : 
-                       role.name === "attendanceDepartment" ? "Attendance Department" :
-                       role.name === "ITAssetManager" ? "IT Asset Manager" : role.name}
+                      {role.name === "superAdmin" ? "🛡️ Super Admin" : 
+                       role.name === "attendanceDepartment" ? "📋 Attendance Department" :
+                       role.name === "ITAssetManager" ? "💻 IT Asset Manager" : role.name}
                     </option>
                   ))}
                 </select>
-                <small>Employee ID will be auto-generated based on role</small>
+                <small className="helper-text info"><i className="fas fa-magic"></i> Employee ID will be auto-generated based on role</small>
+              </div>
+
+              <div className="form-section-title">
+                <i className="fas fa-id-card"></i> Personal Information
               </div>
 
               <div className="form-group">
-                <label>Name *</label>
+                <label><i className="fas fa-user"></i> Full Name <span className="required">*</span></label>
                 <input
                   type="text"
                   name="name"
@@ -271,7 +280,7 @@ function Users() {
               </div>
 
               <div className="form-group">
-                <label>Email *</label>
+                <label><i className="fas fa-envelope"></i> Email <span className="required">*</span></label>
                 <input
                   type="email"
                   name="email"
@@ -280,10 +289,11 @@ function Users() {
                   required
                   placeholder="Enter email address"
                 />
+                <small className="helper-text">Used for login and notifications</small>
               </div>
 
               <div className="form-group">
-                <label>Phone *</label>
+                <label><i className="fas fa-phone"></i> Phone <span className="required">*</span></label>
                 <input
                   type="tel"
                   name="phone"
@@ -294,8 +304,12 @@ function Users() {
                 />
               </div>
 
+              <div className="form-section-title">
+                <i className="fas fa-shield-alt"></i> Security
+              </div>
+
               <div className="form-group">
-                <label>Password *</label>
+                <label><i className="fas fa-key"></i> Password <span className="required">*</span></label>
                 <input
                   type="password"
                   name="password"
@@ -305,6 +319,7 @@ function Users() {
                   minLength="6"
                   placeholder="Enter password (min 6 characters)"
                 />
+                <small className="helper-text warning"><i className="fas fa-info-circle"></i> Password must be at least 6 characters</small>
               </div>
 
               <div className="modal-actions">
@@ -313,10 +328,11 @@ function Users() {
                   className="btn-secondary"
                   onClick={() => setShowModal(false)}
                 >
-                  Cancel
+                  <i className="fas fa-times"></i> Cancel
                 </button>
                 <button type="submit" className="btn-primary" disabled={loading}>
-                  {loading ? "Creating..." : "Create Admin User"}
+                  <i className={loading ? "fas fa-spinner fa-spin" : "fas fa-user-plus"}></i>
+                  {loading ? " Creating..." : " Create Admin User"}
                 </button>
               </div>
             </form>
@@ -329,49 +345,59 @@ function Users() {
         <div className="modal-overlay" onClick={() => setShowEditModal(false)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h2>Edit Admin User</h2>
+              <h2><i className="fas fa-user-edit"></i> Edit Admin User</h2>
               <button className="close-btn" onClick={() => setShowEditModal(false)}>
-                ✕
+                <i className="fas fa-times"></i>
               </button>
             </div>
 
-            <form onSubmit={handleEditSubmit} className="modal-form">
+            <form onSubmit={handleEditSubmit} className="modal-body">
+              {error && <div className="alert alert-error"><i className="fas fa-exclamation-circle"></i> {error}</div>}
+              {success && <div className="alert alert-success"><i className="fas fa-check-circle"></i> {success}</div>}
+              
+              <div className="form-section-title">
+                <i className="fas fa-id-card"></i> User Information
+              </div>
+
               <div className="form-group">
-                <label>Name</label>
+                <label><i className="fas fa-user"></i> Name</label>
                 <input
                   type="text"
                   value={selectedUser.name}
                   disabled
-                  style={{ backgroundColor: "#f5f5f5", cursor: "not-allowed" }}
                 />
-                <small>Name cannot be changed here</small>
+                <small className="helper-text info"><i className="fas fa-lock"></i> Name cannot be changed from here</small>
               </div>
 
               <div className="form-group">
-                <label>Employee ID</label>
+                <label><i className="fas fa-id-badge"></i> Employee ID</label>
                 <input
                   type="text"
                   value={selectedUser.employeeId || selectedUser.userId}
                   disabled
-                  style={{ backgroundColor: "#f5f5f5", cursor: "not-allowed" }}
                 />
-                <small>Employee ID cannot be changed</small>
+                <small className="helper-text info"><i className="fas fa-lock"></i> System-generated ID cannot be modified</small>
+              </div>
+
+              <div className="form-section-title">
+                <i className="fas fa-shield-alt"></i> Credentials
               </div>
 
               <div className="form-group">
-                <label>Email *</label>
+                <label><i className="fas fa-envelope"></i> Email <span className="required">*</span></label>
                 <input
                   type="email"
                   name="email"
                   value={editData.email}
                   onChange={(e) => setEditData({ ...editData, email: e.target.value })}
                   required
-                  placeholder="Enter new email address"
+                  placeholder="Enter email address"
                 />
+                <small className="helper-text">Used for login and notifications</small>
               </div>
 
               <div className="form-group">
-                <label>New Password</label>
+                <label><i className="fas fa-key"></i> New Password</label>
                 <input
                   type="password"
                   name="password"
@@ -380,7 +406,7 @@ function Users() {
                   minLength="6"
                   placeholder="Leave blank to keep current password"
                 />
-                <small>Only fill if you want to change the password (min 6 characters)</small>
+                <small className="helper-text warning"><i className="fas fa-info-circle"></i> Only fill if you want to change the password (min 6 characters)</small>
               </div>
 
               <div className="modal-actions">
@@ -389,10 +415,11 @@ function Users() {
                   className="btn-secondary"
                   onClick={() => setShowEditModal(false)}
                 >
-                  Cancel
+                  <i className="fas fa-times"></i> Cancel
                 </button>
                 <button type="submit" className="btn-primary" disabled={loading}>
-                  {loading ? "Updating..." : "Update User"}
+                  <i className={loading ? "fas fa-spinner fa-spin" : "fas fa-save"}></i>
+                  {loading ? " Updating..." : " Save Changes"}
                 </button>
               </div>
             </form>

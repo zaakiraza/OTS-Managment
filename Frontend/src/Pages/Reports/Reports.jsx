@@ -48,7 +48,8 @@ function Reports() {
     try {
       const response = await departmentAPI.getAll();
       if (response.data.success) {
-        setDepartments(response.data.data);
+        // Use flatData to get all departments including sub-departments
+        setDepartments(response.data.flatData || response.data.data || []);
       }
     } catch (error) {
       console.error("Error fetching departments:", error);
@@ -591,7 +592,7 @@ function Reports() {
                     <option value="">All Departments</option>
                     {departments.map((dept) => (
                       <option key={dept._id} value={dept._id}>
-                        {dept.name} ({dept.code})
+                        {"—".repeat(dept.level || 0)} {dept.name} ({dept.code})
                       </option>
                     ))}
                   </select>

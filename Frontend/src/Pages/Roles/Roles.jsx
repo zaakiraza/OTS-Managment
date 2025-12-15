@@ -197,51 +197,75 @@ function Roles() {
         <div className="modal-overlay" onClick={handleCloseModal}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h2>{editMode ? "Edit Role" : "Add New Role"}</h2>
-              <button
-                className="close-btn"
-                onClick={handleCloseModal}
-              >
-                ✕
+              <h2>
+                <i className={editMode ? "fas fa-edit" : "fas fa-plus-circle"}></i>
+                {editMode ? " Edit Role" : " Add New Role"}
+              </h2>
+              <button className="close-btn" onClick={handleCloseModal}>
+                <i className="fas fa-times"></i>
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="modal-form">
-              {error && <div className="alert alert-error">{error}</div>}
+            <form onSubmit={handleSubmit} className="modal-body">
+              {error && <div className="alert alert-error"><i className="fas fa-exclamation-circle"></i> {error}</div>}
+              {success && <div className="alert alert-success"><i className="fas fa-check-circle"></i> {success}</div>}
+
+              <div className="form-section-title">
+                <i className="fas fa-info-circle"></i> Role Details
+              </div>
 
               <div className="form-group">
-                <label>Role Name *</label>
+                <label><i className="fas fa-tag"></i> Role Name <span className="required">*</span></label>
                 <input
                   type="text"
                   name="name"
                   value={formData.name}
                   onChange={handleChange}
                   required
-                  placeholder="e.g., Manager, HR, etc."
+                  placeholder="e.g., Manager, HR, Team Lead"
                 />
+                <small className="helper-text">Use camelCase without spaces (e.g., teamLead, hrManager)</small>
               </div>
 
               <div className="form-group">
-                <label>Description</label>
+                <label><i className="fas fa-align-left"></i> Description</label>
                 <textarea
                   name="description"
                   value={formData.description}
                   onChange={handleChange}
                   rows="3"
-                  placeholder="Enter role description"
+                  placeholder="Describe what this role can do..."
                 />
+                <small className="helper-text">Brief description of the role's responsibilities</small>
+              </div>
+
+              <div className="form-section-title">
+                <i className="fas fa-key"></i> Access Control
               </div>
 
               <div className="form-group">
-                <label>Permissions (comma-separated)</label>
+                <label><i className="fas fa-shield-alt"></i> Permissions</label>
                 <input
                   type="text"
                   name="permissions"
                   value={formData.permissions}
                   onChange={handleChange}
-                  placeholder="e.g., view_users, edit_users, delete_users"
+                  placeholder="view_users, edit_users, delete_users"
                 />
-                <small>Separate multiple permissions with commas</small>
+                <small className="helper-text info"><i className="fas fa-lightbulb"></i> Separate multiple permissions with commas</small>
+              </div>
+
+              <div className="permissions-preview">
+                <label><i className="fas fa-eye"></i> Preview:</label>
+                <div className="preview-tags">
+                  {formData.permissions.split(',').filter(p => p.trim()).length > 0 ? (
+                    formData.permissions.split(',').filter(p => p.trim()).map((perm, idx) => (
+                      <span key={idx} className="permission-tag-preview">{perm.trim()}</span>
+                    ))
+                  ) : (
+                    <span className="no-permissions-preview">No permissions added yet</span>
+                  )}
+                </div>
               </div>
 
               <div className="modal-actions">
@@ -250,10 +274,11 @@ function Roles() {
                   className="btn-secondary"
                   onClick={handleCloseModal}
                 >
-                  Cancel
+                  <i className="fas fa-times"></i> Cancel
                 </button>
                 <button type="submit" className="btn-primary" disabled={loading}>
-                  {loading ? (editMode ? "Updating..." : "Creating...") : (editMode ? "Update Role" : "Create Role")}
+                  <i className={loading ? "fas fa-spinner fa-spin" : (editMode ? "fas fa-save" : "fas fa-plus")}></i>
+                  {loading ? (editMode ? " Updating..." : " Creating...") : (editMode ? " Update Role" : " Create Role")}
                 </button>
               </div>
             </form>

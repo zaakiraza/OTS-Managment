@@ -72,7 +72,7 @@ function AuditLogs() {
   const handleExport = async () => {
     try {
       setExporting(true);
-      const response = await exportAPI.auditLogs(filters);
+      const response = await exportAPI.exportAuditLogs('xlsx');
       const blob = new Blob([response.data], {
         type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       });

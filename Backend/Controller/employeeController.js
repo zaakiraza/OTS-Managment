@@ -2,6 +2,7 @@ import Employee from "../Model/Employee.js";
 import Department from "../Model/Department.js";
 import Role from "../Model/Role.js";
 import bcrypt from "bcrypt";
+import { notifyPasswordChanged } from "../Utils/emailNotifications.js";
 
 // Create employee
 export const createEmployee = async (req, res) => {
@@ -348,7 +349,8 @@ export const updateEmployee = async (req, res) => {
     }
     
     // Handle password: hash if provided, otherwise remove from update
-    if (updateData.password && updateData.password !== '') {
+    const passwordChanged = !!(updateData.password && updateData.password !== '');
+    if (passwordChanged) {
       // Hash the password before updating
       updateData.password = await bcrypt.hash(updateData.password, 10);
     } else {
@@ -369,6 +371,13 @@ export const updateEmployee = async (req, res) => {
       return res.status(404).json({
         success: false,
         message: "Employee not found",
+      });
+    }
+
+    // Send email notification if password was changed
+    if (passwordChanged && employee.email) {
+      notifyPasswordChanged(employee).catch(err => {
+        console.error("Failed to send password change notification:", err.message);
       });
     }
 

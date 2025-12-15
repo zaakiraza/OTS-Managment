@@ -350,25 +350,117 @@ tbody tr:hover {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 20px 24px;
-  border-bottom: 1px solid var(--border-light);
+  padding: 20px 28px;
+  border-bottom: none;
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+  border-radius: 20px 20px 0 0;
+  color: white;
 }
 
 .modal-header h2 {
+  font-size: 18px;
+  color: white;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.modal-header h2 i {
   font-size: 20px;
-  color: var(--text-dark);
+  opacity: 0.9;
+}
+
+.close-btn {
+  background: rgba(255, 255, 255, 0.15);
+  border: none;
+  font-size: 16px;
+  color: white;
+  cursor: pointer;
+  transition: all 0.2s;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.close-btn:hover {
+  background: rgba(255, 255, 255, 0.25);
+  transform: rotate(90deg);
 }
 
 .modal-body {
-  padding: 24px;
+  padding: 28px;
 }
 
-.modal-footer {
+.modal-footer, .modal-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 12px;
-  padding: 16px 24px;
-  border-top: 1px solid var(--border-light);
+  gap: 14px;
+  padding: 20px 28px;
+  border-top: 1px solid rgba(31, 106, 117, 0.1);
+  background: linear-gradient(135deg, #f8fafa 0%, #f0f4f3 100%);
+  border-radius: 0 0 20px 20px;
+}
+
+/* Form Section Title */
+.form-section-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--primary);
+  margin: 20px 0 16px 0;
+  padding-bottom: 8px;
+  border-bottom: 2px solid rgba(31, 106, 117, 0.15);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.form-section-title:first-child {
+  margin-top: 0;
+}
+
+/* Form Group Styling */
+.form-group label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+  font-weight: 600;
+  color: var(--text-dark);
+  font-size: 14px;
+}
+
+.form-group label i {
+  color: var(--primary);
+  font-size: 14px;
+}
+
+.form-group label .required {
+  color: #ef4444;
+  font-weight: 700;
+}
+
+/* Helper Text */
+.helper-text {
+  display: block;
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.helper-text i {
+  margin-right: 4px;
+}
+
+.helper-text.info {
+  color: var(--primary);
+}
+
+.helper-text.warning {
+  color: var(--secondary);
 }
 
 /* Loading Spinner */

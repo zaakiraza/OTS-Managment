@@ -131,12 +131,16 @@ export const assetAPI = {
 
 // Export API
 export const exportAPI = {
-  exportEmployees: (format) => api.get(`/exports/employees?format=${format}`, { responseType: 'blob' }),
-  exportAttendance: (format, params) => api.get(`/exports/attendance?format=${format}`, { params, responseType: 'blob' }),
-  exportTasks: (format) => api.get(`/exports/tasks?format=${format}`, { responseType: 'blob' }),
-  exportTickets: (format) => api.get(`/exports/tickets?format=${format}`, { responseType: 'blob' }),
-  exportDepartments: (format) => api.get(`/exports/departments?format=${format}`, { responseType: 'blob' }),
-  exportAuditLogs: (format) => api.get(`/exports/audit-logs?format=${format}`, { responseType: 'blob' }),
+  exportEmployees: (format) => api.get(`/export/employees?format=${format}`, { responseType: 'blob' }),
+  exportAttendance: (format, params) => api.get(`/export/attendance?format=${format}`, { params, responseType: 'blob' }),
+  exportTasks: (format) => api.get(`/export/tasks?format=${format}`, { responseType: 'blob' }),
+  exportTickets: (format) => api.get(`/export/tickets?format=${format}`, { responseType: 'blob' }),
+  exportDepartments: (format) => api.get(`/export/departments?format=${format}`, { responseType: 'blob' }),
+  exportAuditLogs: (format) => api.get(`/export/audit-logs?format=${format}`, { responseType: 'blob' }),
+  exportSalaries: (format, params) => api.get(`/export/salaries?format=${format}`, { params, responseType: 'blob' }),
+  // Legacy aliases
+  employees: (params) => api.get(`/export/employees?format=xlsx`, { params, responseType: 'blob' }),
+  employeesCsv: (params) => api.get(`/export/employees?format=csv`, { params, responseType: 'blob' }),
 };
 
 // Audit Log API

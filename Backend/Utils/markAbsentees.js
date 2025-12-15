@@ -6,34 +6,46 @@ import { TIME, SCHEDULED_TASKS } from '../Config/constants.js';
 /**
  * Mark employees as absent if they have no attendance record for the day
  * This should be run at the end of each day (e.g., midnight)
+ * @param {Date} targetDate - Optional date to check (defaults to today)
  */
-export const markAbsentEmployees = async () => {
+export const markAbsentEmployees = async (targetDate = null) => {
   try {
     logger.info('Starting daily absentee marking...');
     
-    // Get today's date range (from midnight to midnight)
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
+    // Get the target date (default to today)
+    const checkDate = targetDate ? new Date(targetDate) : new Date();
+    checkDate.setHours(0, 0, 0, 0);
+    const nextDay = new Date(checkDate);
+    nextDay.setDate(nextDay.getDate() + 1);
     
-    logger.info(`Checking for date: ${today.toISOString().split('T')[0]}`);
+    // Get day name for weekly off check
+    const dayName = checkDate.toLocaleDateString("en-US", { weekday: "long" });
     
-    // Get all active employees
-    const activeEmployees = await Employee.find({ isActive: true }).select('_id employeeId name');
+    logger.info(`Checking for date: ${checkDate.toISOString().split('T')[0]} (${dayName})`);
+    
+    // Get all active employees with their work schedule
+    const activeEmployees = await Employee.find({ isActive: true }).select('_id employeeId name workSchedule');
     logger.info(`Total active employees: ${activeEmployees.length}`);
     
     let markedAbsent = 0;
     let alreadyMarked = 0;
+    let weeklyOffSkipped = 0;
     
     // Check each employee for attendance
     for (const employee of activeEmployees) {
-      // Check if attendance record exists for today
+      // Check if today is a weekly off for this employee
+      const weeklyOffs = employee.workSchedule?.weeklyOffs || ["Saturday", "Sunday"];
+      if (weeklyOffs.includes(dayName)) {
+        weeklyOffSkipped++;
+        continue; // Skip marking absent on weekly offs
+      }
+      
+      // Check if attendance record exists for the target date
       const existingAttendance = await Attendance.findOne({
-        employee: employee._id,
+        $or: [{ employee: employee._id }, { userId: employee.employeeId }],
         date: {
-          $gte: today,
-          $lt: tomorrow,
+          $gte: checkDate,
+          $lt: nextDay,
         },
       });
       
@@ -42,7 +54,7 @@ export const markAbsentEmployees = async () => {
         await Attendance.create({
           employee: employee._id,
           userId: employee.employeeId,
-          date: today,
+          date: checkDate,
           checkIn: null,
           checkOut: null,
           status: 'absent',
@@ -58,11 +70,42 @@ export const markAbsentEmployees = async () => {
       }
     }
     
-    logger.info(`Absentee marking completed - Marked absent: ${markedAbsent}, Already had attendance: ${alreadyMarked}, Total: ${activeEmployees.length}`);
+    logger.info(`Absentee marking completed - Marked absent: ${markedAbsent}, Already had attendance: ${alreadyMarked}, Weekly off skipped: ${weeklyOffSkipped}, Total: ${activeEmployees.length}`);
     
-    return { markedAbsent, alreadyMarked, total: activeEmployees.length };
+    return { markedAbsent, alreadyMarked, weeklyOffSkipped, total: activeEmployees.length };
   } catch (error) {
     logger.error(`Error marking absentees: ${error.message}`, { stack: error.stack });
+    throw error;
+  }
+};
+
+/**
+ * Mark absent employees for a date range (useful for backfilling)
+ * @param {Date} startDate - Start date
+ * @param {Date} endDate - End date
+ */
+export const markAbsentForDateRange = async (startDate, endDate) => {
+  try {
+    logger.info(`Marking absences for date range: ${startDate.toISOString().split('T')[0]} to ${endDate.toISOString().split('T')[0]}`);
+    
+    const results = [];
+    const currentDate = new Date(startDate);
+    currentDate.setHours(0, 0, 0, 0);
+    const end = new Date(endDate);
+    end.setHours(23, 59, 59, 999);
+    
+    while (currentDate <= end) {
+      const result = await markAbsentEmployees(currentDate);
+      results.push({
+        date: currentDate.toISOString().split('T')[0],
+        ...result
+      });
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+    
+    return results;
+  } catch (error) {
+    logger.error(`Error marking absences for date range: ${error.message}`, { stack: error.stack });
     throw error;
   }
 };

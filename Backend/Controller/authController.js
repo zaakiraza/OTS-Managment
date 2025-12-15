@@ -3,6 +3,7 @@ import Role from "../Model/Role.js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { SECURITY } from "../Config/constants.js";
+import { notifyPasswordChanged } from "../Utils/emailNotifications.js";
 
 // Login employee (unified authentication)
 export const login = async (req, res) => {
@@ -174,6 +175,11 @@ export const changePassword = async (req, res) => {
     // Hash and update new password
     employee.password = newPassword; // Will be hashed by pre-save hook
     await employee.save();
+
+    // Send email notification (don't wait for it)
+    notifyPasswordChanged(employee).catch(err => {
+      console.error("Failed to send password change notification:", err.message);
+    });
 
     res.status(200).json({
       success: true,

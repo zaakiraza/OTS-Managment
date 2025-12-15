@@ -10,6 +10,7 @@ import Employee from "../Model/Employee.js";
 import Department from "../Model/Department.js";
 import Role from "../Model/Role.js";
 import { SECURITY } from "../Config/constants.js";
+import { notifyPasswordChanged } from "../Utils/emailNotifications.js";
 
 /**
  * Generate a unique employee ID based on role
@@ -260,6 +261,7 @@ export const updateUser = async (req, res) => {
     if (email) updateData.email = email;
 
     // Handle password update
+    const passwordChanged = !!password;
     if (password) {
       const bcrypt = await import("bcrypt");
       updateData.password = await bcrypt.default.hash(password, SECURITY.BCRYPT_SALT_ROUNDS);
@@ -276,6 +278,13 @@ export const updateUser = async (req, res) => {
       return res.status(404).json({
         success: false,
         message: "User not found",
+      });
+    }
+
+    // Send email notification if password was changed
+    if (passwordChanged && employee.email) {
+      notifyPasswordChanged(employee).catch(err => {
+        console.error("Failed to send password change notification:", err.message);
       });
     }
 

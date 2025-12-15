@@ -251,3 +251,78 @@
   margin-bottom: 0.5rem;
   line-height: 1.6;
 }
+
+/* Responsive */
+@media (max-width: 768px) {
+  .import-container {
+    padding: 1rem;
+  }
+  
+  .page-header p {
+    padding-right: 0;
+  }
+  
+  .detail-item {
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+  }
+}
+
+@media (max-width: 600px) {
+  .import-container {
+    padding: 12px;
+    padding-bottom: 100px;
+  }
+  
+  .page-header h1 {
+    font-size: 1.5rem;
+  }
+  
+  .import-card {
+    padding: 1rem;
+  }
+  
+  .file-label {
+    min-width: 100%;
+    max-width: 100%;
+    padding: 1rem;
+  }
+  
+  .btn-import {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  .stats-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+  }
+  
+  .stat-card {
+    padding: 1rem;
+  }
+  
+  .stat-value {
+    font-size: 1.5rem;
+  }
+  
+  .detail-item {
+    grid-template-columns: 1fr;
+    gap: 0.5rem;
+    padding: 0.75rem;
+  }
+  
+  .instructions-card {
+    padding: 1rem;
+  }
+}
+
+@media (max-width: 400px) {
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .stat-value {
+    font-size: 1.25rem;
+  }
+}
