@@ -679,29 +679,41 @@ function Tasks() {
                     </div>
 
                     <div className="form-group">
-                      <label>Assign To * (Select one or more employees)</label>
-                      <div className="employee-checkbox-list">
+                      <label>Assign To *</label>
+                      <div className="employee-select-grid">
                         {filteredEmployees.length === 0 ? (
-                          <p className="no-employees-msg">Select a department first</p>
+                          <p className="no-employees-msg">
+                            <i className="fas fa-info-circle"></i> Select a department first
+                          </p>
                         ) : (
                           filteredEmployees.map((emp) => (
-                            <label key={emp._id} className="employee-checkbox-item">
+                            <label 
+                              key={emp._id} 
+                              className={`employee-select-item ${formData.assignedTo?.includes(emp._id) ? 'selected' : ''}`}
+                            >
                               <input
                                 type="checkbox"
                                 checked={formData.assignedTo?.includes(emp._id)}
                                 onChange={() => handleEmployeeToggle(emp._id)}
                               />
-                              <span className="emp-checkbox-name">{emp.name}</span>
-                              <span className="emp-checkbox-id">{emp.employeeId}</span>
-                              <span className="emp-checkbox-position">{emp.position}</span>
+                              <div className="emp-avatar">
+                                {emp.name?.charAt(0).toUpperCase()}
+                              </div>
+                              <div className="emp-details">
+                                <span className="emp-name">{emp.name}</span>
+                                <span className="emp-meta">{emp.employeeId} • {emp.position || 'Employee'}</span>
+                              </div>
+                              <div className="emp-check">
+                                <i className="fas fa-check"></i>
+                              </div>
                             </label>
                           ))
                         )}
                       </div>
                       {formData.assignedTo?.length > 0 && (
-                        <small className="selected-count">
-                          {formData.assignedTo.length} employee(s) selected
-                        </small>
+                        <div className="selected-count">
+                          <i className="fas fa-users"></i> {formData.assignedTo.length} employee(s) selected
+                        </div>
                       )}
                     </div>
                   </div>
@@ -725,156 +737,165 @@ function Tasks() {
           {/* Task Detail Modal */}
           {showDetailModal && selectedTask && (
             <div className="modal-overlay" onClick={() => setShowDetailModal(false)}>
-              <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-content task-detail-modal" onClick={(e) => e.stopPropagation()}>
                 <div className="modal-header">
-                  <h2>Task Details - {selectedTask.taskId}</h2>
-                  <button
-                    className="close-btn"
-                    onClick={() => setShowDetailModal(false)}
-                  >
+                  <div className="task-detail-header-info">
+                    <span className="task-id-badge">{selectedTask.taskId}</span>
+                    <span 
+                      className="priority-badge-lg"
+                      style={{ background: getPriorityColor(selectedTask.priority) }}
+                    >
+                      {selectedTask.priority}
+                    </span>
+                  </div>
+                  <button className="close-btn" onClick={() => setShowDetailModal(false)}>
                     ×
                   </button>
                 </div>
-                <div className="modal-body">
-                  <div className="task-detail-header">
-                    <div>
-                      <div className="task-detail-title">{selectedTask.title}</div>
-                      {selectedTask.description && (
-                        <p style={{ color: "#64748b", marginTop: "8px" }}>
-                          {selectedTask.description}
-                        </p>
-                      )}
-                    </div>
+                
+                <div className="task-detail-body">
+                  {/* Task Title & Description */}
+                  <div className="task-detail-top">
+                    <h2 className="task-detail-title">{selectedTask.title}</h2>
+                    {selectedTask.description && (
+                      <p className="task-detail-desc">{selectedTask.description}</p>
+                    )}
                     {isTeamLead && (
                       <button
-                        className="btn-secondary"
+                        className="btn-edit-task"
                         onClick={() => {
                           setShowDetailModal(false);
                           handleEditTask(selectedTask);
                         }}
                       >
-                        Edit
+                        <i className="fas fa-edit"></i> Edit Task
                       </button>
                     )}
                   </div>
 
                   {/* Status Update Section */}
-                  <div className="status-update-section">
-                    <h4>Update Status</h4>
+                  <div className="status-section">
+                    <h4><i className="fas fa-sync-alt"></i> Update Status</h4>
                     <div className="status-buttons">
                       <button
-                        className={`status-btn todo ${selectedTask.status === "todo" ? "active" : ""}`}
+                        className={`status-btn ${selectedTask.status === "todo" ? "active" : ""}`}
                         onClick={() => handleStatusChange("todo")}
                         disabled={selectedTask.status === "todo"}
                       >
-                        <i className="fas fa-list"></i> To Do
+                        <i className="fas fa-list"></i>
+                        <span>To Do</span>
                       </button>
                       <button
                         className={`status-btn in-progress ${selectedTask.status === "in-progress" ? "active" : ""}`}
                         onClick={() => handleStatusChange("in-progress")}
                         disabled={selectedTask.status === "in-progress"}
                       >
-                        <i className="fas fa-spinner"></i> In Progress
+                        <i className="fas fa-spinner"></i>
+                        <span>In Progress</span>
                       </button>
                       <button
                         className={`status-btn completed ${selectedTask.status === "completed" ? "active" : ""}`}
                         onClick={() => handleStatusChange("completed")}
                         disabled={selectedTask.status === "completed"}
                       >
-                        <i className="fas fa-check-circle"></i> Completed
+                        <i className="fas fa-check-circle"></i>
+                        <span>Completed</span>
                       </button>
                     </div>
                   </div>
 
-                  <div className="task-detail-meta">
-                    <div className="meta-item">
-                      <span className="meta-label">Status</span>
-                      <span className="meta-value" style={{ textTransform: "capitalize" }}>
-                        {selectedTask.status.replace("-", " ")}
-                      </span>
+                  {/* Task Meta Grid */}
+                  <div className="task-meta-grid">
+                    <div className="meta-card">
+                      <div className="meta-icon"><i className="fas fa-user"></i></div>
+                      <div className="meta-content">
+                        <span className="meta-label">Assigned To</span>
+                        <span className="meta-value">{renderAssignees(selectedTask.assignedTo, true)}</span>
+                      </div>
                     </div>
-                    <div className="meta-item">
-                      <span className="meta-label">Priority</span>
-                      <span
-                        className="meta-value"
-                        style={{ color: getPriorityColor(selectedTask.priority) }}
-                      >
-                        {selectedTask.priority}
-                      </span>
+                    <div className="meta-card">
+                      <div className="meta-icon"><i className="fas fa-building"></i></div>
+                      <div className="meta-content">
+                        <span className="meta-label">Department</span>
+                        <span className="meta-value">{selectedTask.department?.name || '-'}</span>
+                      </div>
                     </div>
-                    <div className="meta-item">
-                      <span className="meta-label">Assigned To</span>
-                      <span className="meta-value">
-                        {renderAssignees(selectedTask.assignedTo, true)}
-                      </span>
+                    <div className="meta-card">
+                      <div className="meta-icon"><i className="fas fa-user-tie"></i></div>
+                      <div className="meta-content">
+                        <span className="meta-label">Assigned By</span>
+                        <span className="meta-value">{selectedTask.assignedBy?.name || '-'}</span>
+                      </div>
                     </div>
-                    <div className="meta-item">
-                      <span className="meta-label">Department</span>
-                      <span className="meta-value">{selectedTask.department?.name}</span>
-                    </div>
-                    <div className="meta-item">
-                      <span className="meta-label">Assigned By</span>
-                      <span className="meta-value">{selectedTask.assignedBy?.name}</span>
-                    </div>
-                    <div className="meta-item">
-                      <span className="meta-label">Due Date</span>
-                      <span className="meta-value">
-                        {new Date(selectedTask.dueDate).toLocaleDateString()}
-                      </span>
+                    <div className="meta-card">
+                      <div className="meta-icon"><i className="fas fa-calendar-alt"></i></div>
+                      <div className="meta-content">
+                        <span className="meta-label">Due Date</span>
+                        <span className="meta-value">{new Date(selectedTask.dueDate).toLocaleDateString()}</span>
+                      </div>
                     </div>
                     {selectedTask.startedAt && (
-                      <div className="meta-item">
-                        <span className="meta-label">Started At</span>
-                        <span className="meta-value">
-                          {new Date(selectedTask.startedAt).toLocaleString()}
-                        </span>
+                      <div className="meta-card">
+                        <div className="meta-icon"><i className="fas fa-play-circle"></i></div>
+                        <div className="meta-content">
+                          <span className="meta-label">Started At</span>
+                          <span className="meta-value">{new Date(selectedTask.startedAt).toLocaleString()}</span>
+                        </div>
                       </div>
                     )}
                     {selectedTask.completedAt && (
-                      <div className="meta-item">
-                        <span className="meta-label">Completed At</span>
-                        <span className="meta-value">
-                          {new Date(selectedTask.completedAt).toLocaleString()}
-                        </span>
+                      <div className="meta-card">
+                        <div className="meta-icon"><i className="fas fa-check-double"></i></div>
+                        <div className="meta-content">
+                          <span className="meta-label">Completed At</span>
+                          <span className="meta-value">{new Date(selectedTask.completedAt).toLocaleString()}</span>
+                        </div>
                       </div>
                     )}
                   </div>
 
                   {/* Comments Section */}
                   <div className="comments-section">
-                    <h3>Comments</h3>
-                    {selectedTask.comments && selectedTask.comments.length > 0 ? (
-                      selectedTask.comments.map((comment, index) => (
-                        <div key={index} className="comment-item">
-                          <div className="comment-header">
-                            <span className="comment-author">
-                              {comment.employee?.name || comment.user?.name || "Unknown"}
-                              {comment.employee && ` (${comment.employee.employeeId})`}
-                            </span>
-                            <span className="comment-date">
-                              {new Date(comment.createdAt).toLocaleString()}
-                            </span>
+                    <h4><i className="fas fa-comments"></i> Comments</h4>
+                    <div className="comments-list">
+                      {selectedTask.comments && selectedTask.comments.length > 0 ? (
+                        selectedTask.comments.map((comment, index) => (
+                          <div key={index} className="comment-item">
+                            <div className="comment-avatar">
+                              {(comment.employee?.name || comment.user?.name || "U").charAt(0).toUpperCase()}
+                            </div>
+                            <div className="comment-body">
+                              <div className="comment-header">
+                                <span className="comment-author">
+                                  {comment.employee?.name || comment.user?.name || "Unknown"}
+                                  {comment.employee && <span className="comment-emp-id">({comment.employee.employeeId})</span>}
+                                </span>
+                                <span className="comment-date">
+                                  {new Date(comment.createdAt).toLocaleString()}
+                                </span>
+                              </div>
+                              <p className="comment-text">{comment.comment}</p>
+                            </div>
                           </div>
-                          <p className="comment-text">{comment.comment}</p>
-                        </div>
-                      ))
-                    ) : (
-                      <p style={{ color: "#94a3b8", fontSize: 14 }}>
-                        No comments yet
-                      </p>
-                    )}
+                        ))
+                      ) : (
+                        <p className="no-comments">No comments yet</p>
+                      )}
+                    </div>
 
                     <div className="add-comment">
                       <input
                         type="text"
-                        placeholder="Add a comment..."
+                        placeholder="Write a comment..."
                         value={newComment}
                         onChange={(e) => setNewComment(e.target.value)}
                         onKeyPress={(e) => {
                           if (e.key === "Enter") handleAddComment();
                         }}
                       />
-                      <button onClick={handleAddComment}>Post</button>
+                      <button onClick={handleAddComment}>
+                        <i className="fas fa-paper-plane"></i>
+                      </button>
                     </div>
                   </div>
                 </div>

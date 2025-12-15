@@ -841,7 +841,7 @@ const Employees = () => {
                 </div>
 
                 <div className="form-group full-width">
-                  <label>Additional Departments (Multi-Department Assignment)</label>
+                  <label>Additional Departments</label>
                   <div className="checkbox-grid multi-dept-grid">
                     {departments
                       .filter(dept => dept._id !== formData.department)
@@ -865,7 +865,7 @@ const Employees = () => {
                 </div>
 
                 <div className="form-group full-width">
-                  <label>Team Lead Of (Departments)</label>
+                  <label>Team Lead Of</label>
                   <div className="checkbox-grid multi-dept-grid leading-grid">
                     {departments.map((dept) => (
                       <label key={dept._id} className="checkbox-label dept-checkbox lead-checkbox">

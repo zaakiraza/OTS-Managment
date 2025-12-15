@@ -430,6 +430,125 @@
   gap: 16px;
 }
 
+/* Asset Form Styles */
+.asset-form {
+  padding: 0;
+}
+
+.asset-form .form-section {
+  padding: 20px 24px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.asset-form .form-section:last-of-type {
+  border-bottom: none;
+}
+
+.asset-form .section-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #1F6A75;
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 10px;
+  border-bottom: 2px solid #e0f2f4;
+}
+
+.asset-form .section-title i {
+  font-size: 14px;
+  color: #1F6A75;
+}
+
+.asset-form .form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
+}
+
+.asset-form .form-group {
+  margin-bottom: 0;
+}
+
+.asset-form .form-group label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #0D0D0D;
+  margin-bottom: 6px;
+}
+
+.asset-form .form-group input,
+.asset-form .form-group select,
+.asset-form .form-group textarea {
+  padding: 10px 12px;
+  font-size: 13px;
+  border-radius: 8px;
+}
+
+.asset-form .form-group textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+/* Asset Info Card (for Assign Modal) */
+.asset-info-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  background: linear-gradient(135deg, #e0f2f4 0%, #c5e5e8 100%);
+  border-radius: 10px;
+  border: 1px solid #1F6A75;
+}
+
+.asset-info-icon {
+  width: 44px;
+  height: 44px;
+  background: linear-gradient(135deg, #1F6A75 0%, #093635 100%);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.asset-info-details {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.asset-info-id {
+  font-size: 11px;
+  font-weight: 600;
+  color: #1F6A75;
+  font-family: monospace;
+  background: white;
+  padding: 2px 8px;
+  border-radius: 4px;
+  display: inline-block;
+  width: fit-content;
+}
+
+.asset-info-name {
+  font-size: 15px;
+  font-weight: 700;
+  color: #0D0D0D;
+}
+
+@media (max-width: 600px) {
+  .asset-form .form-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .asset-form .form-section {
+    padding: 16px 18px;
+  }
+}
+
 .modal-actions {
   display: flex;
   gap: 14px;

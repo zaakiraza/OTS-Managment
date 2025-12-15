@@ -802,6 +802,88 @@
   font-family: monospace;
 }
 
+/* Compact Multi-Dept Grid */
+.multi-dept-grid {
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 6px;
+  padding: 10px;
+  max-height: 150px;
+}
+
+.multi-dept-grid .checkbox-label {
+  padding: 6px 8px;
+  gap: 6px;
+  font-size: 12px;
+  background: white;
+  border: 1px solid #e5e7eb;
+}
+
+.multi-dept-grid .checkbox-label:hover {
+  border-color: #1F6A75;
+}
+
+.multi-dept-grid .checkbox-label input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+}
+
+.multi-dept-grid .dept-name {
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 80px;
+}
+
+.multi-dept-grid .dept-code {
+  font-size: 9px;
+  color: #A2ABAA;
+}
+
+/* Weekly Offs Grid - Horizontal Row */
+.weekdays-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 14px;
+  border: 2px solid #CED4D3;
+  border-radius: 10px;
+  background: #f8fafa;
+}
+
+.weekdays-grid .checkbox-label {
+  flex: 0 0 auto;
+  min-width: 100px;
+  padding: 8px 12px;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.weekdays-grid .checkbox-label:hover {
+  border-color: #1F6A75;
+}
+
+.weekdays-grid .checkbox-label input[type="checkbox"]:checked + span,
+.weekdays-grid .checkbox-label:has(input:checked) {
+  color: #1F6A75;
+  font-weight: 600;
+}
+
+@media (max-width: 600px) {
+  .weekdays-grid {
+    gap: 6px;
+  }
+  
+  .weekdays-grid .checkbox-label {
+    min-width: 80px;
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+}
+
 /* Modal Footer */
 .modal-footer {
   display: flex;

@@ -471,133 +471,137 @@ function Assets() {
                     ×
                   </button>
                 </div>
-                <form onSubmit={handleSubmit}>
-                  <div className="form-row">
+                <form onSubmit={handleSubmit} className="asset-form">
+                  <div className="form-section">
+                    <h3 className="section-title"><i className="fas fa-info-circle"></i> Asset Information</h3>
+                    <div className="form-grid">
+                      <div className="form-group">
+                        <label>Asset Name *</label>
+                        <input
+                          type="text"
+                          value={formData.name}
+                          onChange={(e) =>
+                            setFormData({ ...formData, name: e.target.value })
+                          }
+                          placeholder="e.g., Dell Laptop, HP Monitor"
+                          required
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label>Category *</label>
+                        <select
+                          value={formData.category}
+                          onChange={(e) =>
+                            setFormData({ ...formData, category: e.target.value })
+                          }
+                          required
+                        >
+                          <option value="">Select Category</option>
+                          {categories.map((cat) => (
+                            <option key={cat} value={cat}>
+                              {cat}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="form-group">
+                        <label>Condition *</label>
+                        <select
+                          value={formData.condition}
+                          onChange={(e) =>
+                            setFormData({ ...formData, condition: e.target.value })
+                          }
+                          required
+                        >
+                          {conditions.map((cond) => (
+                            <option key={cond} value={cond}>
+                              {cond}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="form-group">
+                        <label>Purchase Price (PKR)</label>
+                        <input
+                          type="number"
+                          value={formData.purchasePrice}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              purchasePrice: e.target.value,
+                            })
+                          }
+                          placeholder="Enter price"
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label>Issue Date</label>
+                        <input
+                          type="date"
+                          value={formData.issueDate}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              issueDate: e.target.value,
+                            })
+                          }
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Only show assignment section when creating new asset */}
+                  {!selectedAsset && (
+                    <div className="form-section">
+                      <h3 className="section-title"><i className="fas fa-user-plus"></i> Assignment (Optional)</h3>
+                      <div className="form-grid">
+                        <div className="form-group">
+                          <label>Filter by Department</label>
+                          <select
+                            value={formData.department}
+                            onChange={(e) => handleDepartmentChange(e.target.value)}
+                          >
+                            <option value="">All Departments</option>
+                            {departments.map((dept) => (
+                              <option key={dept._id} value={dept._id}>
+                                {"—".repeat(dept.level || 0)} {dept.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="form-group">
+                          <label>Assign to Employee</label>
+                          <select
+                            value={formData.assignToEmployee}
+                            onChange={(e) =>
+                              setFormData({ ...formData, assignToEmployee: e.target.value })
+                            }
+                          >
+                            <option value="">Leave Unassigned</option>
+                            {filteredEmployees.map((emp) => (
+                              <option key={emp._id} value={emp._id}>
+                                {emp.name} ({emp.employeeId})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="form-section">
+                    <h3 className="section-title"><i className="fas fa-sticky-note"></i> Additional Info</h3>
                     <div className="form-group">
-                      <label>Name *</label>
-                      <input
-                        type="text"
-                        value={formData.name}
+                      <label>Notes</label>
+                      <textarea
+                        value={formData.notes}
                         onChange={(e) =>
-                          setFormData({ ...formData, name: e.target.value })
+                          setFormData({ ...formData, notes: e.target.value })
                         }
-                        required
+                        rows={3}
+                        placeholder="Any additional information about the asset..."
                       />
                     </div>
-                    <div className="form-group">
-                      <label>Category *</label>
-                      <select
-                        value={formData.category}
-                        onChange={(e) =>
-                          setFormData({ ...formData, category: e.target.value })
-                        }
-                        required
-                      >
-                        <option value="">Select Category</option>
-                        {categories.map((cat) => (
-                          <option key={cat} value={cat}>
-                            {cat}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-
-                  <div className="form-row">
-                    <div className="form-group">
-                      <label>Condition *</label>
-                      <select
-                        value={formData.condition}
-                        onChange={(e) =>
-                          setFormData({ ...formData, condition: e.target.value })
-                        }
-                        required
-                      >
-                        {conditions.map((cond) => (
-                          <option key={cond} value={cond}>
-                            {cond}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="form-group">
-                      <label>Issue Date</label>
-                      <input
-                        type="date"
-                        value={formData.issueDate}
-                        onChange={(e) =>
-                          setFormData({
-                            ...formData,
-                            issueDate: e.target.value,
-                          })
-                        }
-                      />
-                    </div>
-                  </div>
-
-                  <div className="form-group">
-                    <label>Purchase Price (PKR) - Optional</label>
-                    <input
-                      type="number"
-                      value={formData.purchasePrice}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          purchasePrice: e.target.value,
-                        })
-                      }
-                      placeholder="Enter purchase price"
-                    />
-                  </div>
-
-                  <div className="form-group">
-                    <label>Department (For Employee Filter)</label>
-                    <select
-                      value={formData.department}
-                      onChange={(e) => handleDepartmentChange(e.target.value)}
-                    >
-                      <option value="">-- All Departments --</option>
-                      {departments.map((dept) => (
-                        <option key={dept._id} value={dept._id}>
-                          {dept.name}
-                        </option>
-                      ))}
-                    </select>
-                    <small style={{ color: "#666", fontSize: "12px" }}>
-                      Select a department to filter employees below
-                    </small>
-                  </div>
-
-                  <div className="form-group">
-                    <label>Assign to Employee (Optional)</label>
-                    <select
-                      value={formData.assignToEmployee}
-                      onChange={(e) =>
-                        setFormData({ ...formData, assignToEmployee: e.target.value })
-                      }
-                    >
-                      <option value="">-- Leave Unassigned --</option>
-                      {filteredEmployees.map((emp) => (
-                        <option key={emp._id} value={emp._id}>
-                          {emp.name} - {emp.employeeId} ({emp.department?.name || "N/A"})
-                        </option>
-                      ))}
-                    </select>
-                    <small style={{ color: "#666", fontSize: "12px" }}>
-                      Select an employee to assign this asset immediately
-                    </small>
-                  </div>
-
-                  <div className="form-group">
-                    <label>Notes</label>
-                    <textarea
-                      value={formData.notes}
-                      onChange={(e) =>
-                        setFormData({ ...formData, notes: e.target.value })
-                      }
-                      rows={3}
-                      placeholder="Any additional information about the asset"
-                    />
                   </div>
 
                   <div className="modal-actions">
@@ -644,65 +648,74 @@ function Assets() {
                     ×
                   </button>
                 </div>
-                <form onSubmit={handleAssign}>
-                  <div className="form-group">
-                    <label>Asset</label>
-                    <input
-                      type="text"
-                      value={`${selectedAsset.assetId} - ${selectedAsset.name}`}
-                      disabled
-                      style={{ background: "#f5f5f5" }}
-                    />
+                <form onSubmit={handleAssign} className="asset-form">
+                  <div className="form-section">
+                    <div className="asset-info-card">
+                      <div className="asset-info-icon">
+                        <i className="fas fa-laptop"></i>
+                      </div>
+                      <div className="asset-info-details">
+                        <span className="asset-info-id">{selectedAsset.assetId}</span>
+                        <span className="asset-info-name">{selectedAsset.name}</span>
+                      </div>
+                    </div>
                   </div>
-                  <div className="form-group">
-                    <label>Assign to Employee *</label>
-                    <select
-                      value={assignData.employeeId}
-                      onChange={(e) =>
-                        setAssignData({
-                          ...assignData,
-                          employeeId: e.target.value,
-                        })
-                      }
-                      required
-                    >
-                      <option value="">Select Employee</option>
-                      {employees.map((emp) => (
-                        <option key={emp._id} value={emp._id}>
-                          {emp.employeeId} - {emp.name}
-                        </option>
-                      ))}
-                    </select>
+                  
+                  <div className="form-section">
+                    <h3 className="section-title"><i className="fas fa-user"></i> Assignment Details</h3>
+                    <div className="form-grid">
+                      <div className="form-group">
+                        <label>Assign to Employee *</label>
+                        <select
+                          value={assignData.employeeId}
+                          onChange={(e) =>
+                            setAssignData({
+                              ...assignData,
+                              employeeId: e.target.value,
+                            })
+                          }
+                          required
+                        >
+                          <option value="">Select Employee</option>
+                          {employees.map((emp) => (
+                            <option key={emp._id} value={emp._id}>
+                              {emp.name} ({emp.employeeId})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="form-group">
+                        <label>Condition</label>
+                        <select
+                          value={assignData.conditionAtAssignment}
+                          onChange={(e) =>
+                            setAssignData({
+                              ...assignData,
+                              conditionAtAssignment: e.target.value,
+                            })
+                          }
+                        >
+                          {conditions.map((cond) => (
+                            <option key={cond} value={cond}>
+                              {cond}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                    <div className="form-group" style={{ marginTop: '14px' }}>
+                      <label>Notes</label>
+                      <textarea
+                        value={assignData.notes}
+                        onChange={(e) =>
+                          setAssignData({ ...assignData, notes: e.target.value })
+                        }
+                        rows={2}
+                        placeholder="Optional notes..."
+                      />
+                    </div>
                   </div>
-                  <div className="form-group">
-                    <label>Condition at Assignment</label>
-                    <select
-                      value={assignData.conditionAtAssignment}
-                      onChange={(e) =>
-                        setAssignData({
-                          ...assignData,
-                          conditionAtAssignment: e.target.value,
-                        })
-                      }
-                    >
-                      {conditions.map((cond) => (
-                        <option key={cond} value={cond}>
-                          {cond}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="form-group">
-                    <label>Notes</label>
-                    <textarea
-                      value={assignData.notes}
-                      onChange={(e) =>
-                        setAssignData({ ...assignData, notes: e.target.value })
-                      }
-                      rows={3}
-                      placeholder="Any additional notes..."
-                    />
-                  </div>
+                  
                   <div className="modal-actions">
                     <button
                       type="button"
