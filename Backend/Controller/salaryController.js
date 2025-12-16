@@ -1,6 +1,7 @@
 import Salary from "../Model/Salary.js";
 import Employee from "../Model/Employee.js";
 import Attendance from "../Model/Attendance.js";
+import Role from "../Model/Role.js";
 import logger from "../Utils/logger.js";
 import { SALARY, ATTENDANCE } from "../Config/constants.js";
 
@@ -9,12 +10,20 @@ export const calculateSalary = async (req, res) => {
   try {
     const { employeeId, month, year, criteria } = req.body;
 
-    // Find employee
-    const employee = await Employee.findOne({ employeeId, isActive: true });
+    // Find employee with role populated
+    const employee = await Employee.findOne({ employeeId, isActive: true }).populate('role', 'name');
     if (!employee) {
       return res.status(404).json({
         success: false,
         message: "Employee not found",
+      });
+    }
+
+    // Skip salary calculation for superAdmin
+    if (employee.role?.name === 'superAdmin') {
+      return res.status(400).json({
+        success: false,
+        message: "Salary calculation is not applicable for superAdmin",
       });
     }
 
@@ -252,14 +261,23 @@ export const calculateAllSalaries = async (req, res) => {
   try {
     const { month, year, departmentId, criteria } = req.body;
 
+    // Get superAdmin role to exclude from salary calculation
+    const superAdminRole = await Role.findOne({ name: 'superAdmin' });
+
     let query = { isActive: true };
     if (departmentId) {
       query.department = departmentId;
+    }
+    // Exclude superAdmin from salary calculation
+    if (superAdminRole) {
+      query.role = { $ne: superAdminRole._id };
     }
 
     const employees = await Employee.find(query);
     const results = [];
     const errors = [];
+    
+    logger.info(`Calculating salaries for ${employees.length} employees (excluding superAdmin)`);
 
     for (const employee of employees) {
       try {

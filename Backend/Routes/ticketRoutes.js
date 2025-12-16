@@ -8,6 +8,8 @@ import {
   addComment,
   getTicketStats,
   getTicketsAgainstMe,
+  getEmployeesForTicket,
+  getDepartmentsForTicket,
 } from "../Controller/ticketController.js";
 import { verifyToken } from "../Middleware/auth.js";
 import { ticketAttachmentUpload, handleUploadError } from "../Middleware/fileUpload.js";
@@ -17,6 +19,10 @@ const router = express.Router();
 
 // All routes require authentication
 router.use(verifyToken);
+
+// All authenticated users can view employees and departments for filing tickets
+router.get("/employees", getEmployeesForTicket);
+router.get("/departments", getDepartmentsForTicket);
 
 // All authenticated users can create and view tickets (with file upload support)
 router.post("/", ticketAttachmentUpload, handleUploadError, ticketValidation.create, createTicket);

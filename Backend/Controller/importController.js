@@ -1,5 +1,6 @@
 import Attendance from "../Model/Attendance.js";
 import Employee from "../Model/Employee.js";
+import Settings from "../Model/Settings.js";
 import fs from "fs";
 import path from "path";
 import logger from "../Utils/logger.js";
@@ -111,6 +112,22 @@ export const processAttendanceFile = async (fileContent) => {
 // Import attendance from uploaded file
 export const importAttendance = async (req, res) => {
   try {
+    // Check if import attendance is enabled (skip check for superAdmin)
+    const isSuperAdmin = req.user?.role?.name === "superAdmin";
+    if (!isSuperAdmin) {
+      const importEnabled = await Settings.getValue("importAttendanceEnabled", true);
+      if (!importEnabled) {
+        // Delete uploaded file if exists
+        if (req.file && req.file.path) {
+          fs.unlinkSync(req.file.path);
+        }
+        return res.status(403).json({
+          success: false,
+          message: "Attendance import has been disabled by administrator",
+        });
+      }
+    }
+
     if (!req.file) {
       return res.status(400).json({
         success: false,
@@ -141,6 +158,18 @@ export const importAttendance = async (req, res) => {
 // Import from text content (for testing)
 export const importAttendanceText = async (req, res) => {
   try {
+    // Check if import attendance is enabled (skip check for superAdmin)
+    const isSuperAdmin = req.user?.role?.name === "superAdmin";
+    if (!isSuperAdmin) {
+      const importEnabled = await Settings.getValue("importAttendanceEnabled", true);
+      if (!importEnabled) {
+        return res.status(403).json({
+          success: false,
+          message: "Attendance import has been disabled by administrator",
+        });
+      }
+    }
+
     const { fileContent } = req.body;
     
     if (!fileContent) {

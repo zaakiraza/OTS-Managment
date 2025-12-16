@@ -19,14 +19,23 @@ function Assets() {
   });
   const [formData, setFormData] = useState({
     name: "",
+    serialNumber: "",
+    macAddress: "",
     category: "",
     condition: "Good",
+    status: "Available",
     issueDate: "",
     purchasePrice: "",
     notes: "",
     department: "",
     assignToEmployee: "",
+    image: null,
+    location: {
+      building: "",
+      floor: "",
+    },
   });
+  const [imagePreview, setImagePreview] = useState(null);
   const [assignData, setAssignData] = useState({
     employeeId: "",
     conditionAtAssignment: "Good",
@@ -121,12 +130,31 @@ function Assets() {
       setLoading(true);
       let assetId;
       
+      // Prepare asset data
+      const assetData = {
+        name: formData.name,
+        category: formData.category,
+        serialNumber: formData.serialNumber,
+        macAddress: formData.macAddress,
+        condition: formData.condition,
+        status: formData.status,
+        purchasePrice: formData.purchasePrice,
+        issueDate: formData.issueDate,
+        notes: formData.notes,
+        location: formData.location,
+      };
+
+      // Add image if present (as base64)
+      if (imagePreview) {
+        assetData.images = [imagePreview];
+      }
+      
       if (selectedAsset) {
-        await assetAPI.update(selectedAsset._id, formData);
+        await assetAPI.update(selectedAsset._id, assetData);
         assetId = selectedAsset._id;
         alert("Asset updated successfully!");
       } else {
-        const response = await assetAPI.create(formData);
+        const response = await assetAPI.create(assetData);
         assetId = response.data.data._id;
         alert("Asset created successfully!");
       }
@@ -183,14 +211,23 @@ function Assets() {
     setSelectedAsset(asset);
     setFormData({
       name: asset.name,
+      serialNumber: asset.serialNumber || "",
+      macAddress: asset.macAddress || "",
       category: asset.category,
       condition: asset.condition,
+      status: asset.status || "Available",
       issueDate: asset.issueDate ? asset.issueDate.split("T")[0] : "",
       purchasePrice: asset.purchasePrice || "",
       notes: asset.notes || "",
       department: "",
       assignToEmployee: "",
+      image: null,
+      location: {
+        building: asset.location?.building || "",
+        floor: asset.location?.floor || "",
+      },
     });
+    setImagePreview(asset.images && asset.images.length > 0 ? asset.images[0] : null);
     setShowModal(true);
   };
 
@@ -210,16 +247,69 @@ function Assets() {
   const resetForm = () => {
     setFormData({
       name: "",
+      serialNumber: "",
+      macAddress: "",
       category: "",
       condition: "Good",
+      status: "Available",
       issueDate: "",
       purchasePrice: "",
       notes: "",
       department: "",
       assignToEmployee: "",
+      image: null,
+      location: {
+        building: "",
+        floor: "",
+      },
     });
+    setImagePreview(null);
     setFilteredEmployees(employees);
     setSelectedAsset(null);
+  };
+
+  // Compress image before upload
+  const compressImage = (file, maxWidth = 800, quality = 0.7) => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+
+          // Scale down if larger than maxWidth
+          if (width > maxWidth) {
+            height = (height * maxWidth) / width;
+            width = maxWidth;
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+
+          // Convert to compressed JPEG
+          const compressedDataUrl = canvas.toDataURL('image/jpeg', quality);
+          resolve(compressedDataUrl);
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleImageChange = async (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setFormData({ ...formData, image: file });
+      
+      // Compress the image before preview/upload
+      const compressedImage = await compressImage(file);
+      setImagePreview(compressedImage);
+    }
   };
 
   const handleDepartmentChange = (departmentId) => {
@@ -369,11 +459,12 @@ function Assets() {
               <thead>
                 <tr>
                   <th>Asset ID</th>
+                  <th>Image</th>
                   <th>Name</th>
                   <th>Category</th>
+                  <th>Serial No.</th>
+                  <th>MAC Address</th>
                   <th>Condition</th>
-                  <th>Issue Date</th>
-                  <th>Purchase Price</th>
                   <th>Status</th>
                   <th>Assigned To</th>
                   <th>Actions</th>
@@ -382,13 +473,13 @@ function Assets() {
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan="9" style={{ textAlign: "center" }}>
+                    <td colSpan="10" style={{ textAlign: "center" }}>
                       Loading...
                     </td>
                   </tr>
                 ) : assets.length === 0 ? (
                   <tr>
-                    <td colSpan="9" style={{ textAlign: "center" }}>
+                    <td colSpan="10" style={{ textAlign: "center" }}>
                       No assets found
                     </td>
                   </tr>
@@ -396,19 +487,22 @@ function Assets() {
                   assets.map((asset) => (
                     <tr key={asset._id}>
                       <td className="asset-id">{asset.assetId}</td>
+                      <td>
+                        <div className="asset-thumbnail">
+                          {asset.images && asset.images.length > 0 ? (
+                            <img src={asset.images[0]} alt={asset.name} />
+                          ) : (
+                            <div className="no-image">
+                              <i className="fas fa-laptop"></i>
+                            </div>
+                          )}
+                        </div>
+                      </td>
                       <td>{asset.name}</td>
                       <td>{asset.category}</td>
+                      <td className="serial-number">{asset.serialNumber || "-"}</td>
+                      <td className="mac-address">{asset.macAddress || "-"}</td>
                       <td>{getConditionBadge(asset.condition)}</td>
-                      <td>
-                        {asset.issueDate
-                          ? new Date(asset.issueDate).toLocaleDateString()
-                          : "-"}
-                      </td>
-                      <td>
-                        {asset.purchasePrice
-                          ? `PKR ${asset.purchasePrice.toLocaleString()}`
-                          : "-"}
-                      </td>
                       <td>{getStatusBadge(asset.status)}</td>
                       <td>
                         {asset.assignedTo
@@ -476,7 +570,7 @@ function Assets() {
                     <h3 className="section-title"><i className="fas fa-info-circle"></i> Asset Information</h3>
                     <div className="form-grid">
                       <div className="form-group">
-                        <label>Asset Name *</label>
+                        <label><i className="fas fa-tag"></i> Asset Name *</label>
                         <input
                           type="text"
                           value={formData.name}
@@ -488,7 +582,7 @@ function Assets() {
                         />
                       </div>
                       <div className="form-group">
-                        <label>Category *</label>
+                        <label><i className="fas fa-th-large"></i> Category *</label>
                         <select
                           value={formData.category}
                           onChange={(e) =>
@@ -505,7 +599,29 @@ function Assets() {
                         </select>
                       </div>
                       <div className="form-group">
-                        <label>Condition *</label>
+                        <label><i className="fas fa-barcode"></i> Serial Number</label>
+                        <input
+                          type="text"
+                          value={formData.serialNumber}
+                          onChange={(e) =>
+                            setFormData({ ...formData, serialNumber: e.target.value })
+                          }
+                          placeholder="e.g., SN-123456789"
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label><i className="fas fa-network-wired"></i> MAC Address</label>
+                        <input
+                          type="text"
+                          value={formData.macAddress}
+                          onChange={(e) =>
+                            setFormData({ ...formData, macAddress: e.target.value })
+                          }
+                          placeholder="e.g., AA:BB:CC:DD:EE:FF"
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label><i className="fas fa-heartbeat"></i> Condition *</label>
                         <select
                           value={formData.condition}
                           onChange={(e) =>
@@ -521,7 +637,23 @@ function Assets() {
                         </select>
                       </div>
                       <div className="form-group">
-                        <label>Purchase Price (PKR)</label>
+                        <label><i className="fas fa-toggle-on"></i> Status *</label>
+                        <select
+                          value={formData.status}
+                          onChange={(e) =>
+                            setFormData({ ...formData, status: e.target.value })
+                          }
+                          required
+                        >
+                          {statuses.map((status) => (
+                            <option key={status} value={status}>
+                              {status}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="form-group">
+                        <label><i className="fas fa-money-bill-wave"></i> Purchase Price (PKR)</label>
                         <input
                           type="number"
                           value={formData.purchasePrice}
@@ -535,7 +667,7 @@ function Assets() {
                         />
                       </div>
                       <div className="form-group">
-                        <label>Issue Date</label>
+                        <label><i className="fas fa-calendar-alt"></i> Issue Date *</label>
                         <input
                           type="date"
                           value={formData.issueDate}
@@ -545,6 +677,85 @@ function Assets() {
                               issueDate: e.target.value,
                             })
                           }
+                          required
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Image Upload Section */}
+                  <div className="form-section">
+                    <h3 className="section-title"><i className="fas fa-image"></i> Asset Image</h3>
+                    <div className="image-upload-area">
+                      <input
+                        type="file"
+                        id="assetImage"
+                        accept="image/*"
+                        onChange={handleImageChange}
+                        className="image-input"
+                      />
+                      <label htmlFor="assetImage" className="image-upload-label">
+                        {imagePreview ? (
+                          <div className="image-preview-container">
+                            <img src={imagePreview} alt="Asset preview" className="image-preview" />
+                            <div className="image-overlay">
+                              <i className="fas fa-camera"></i>
+                              <span>Change Image</span>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="upload-placeholder">
+                            <i className="fas fa-cloud-upload-alt"></i>
+                            <span>Click to upload asset image</span>
+                            <small>PNG, JPG, GIF up to 5MB</small>
+                          </div>
+                        )}
+                      </label>
+                      {imagePreview && (
+                        <button
+                          type="button"
+                          className="btn-remove-image"
+                          onClick={() => {
+                            setFormData({ ...formData, image: null });
+                            setImagePreview(null);
+                          }}
+                        >
+                          <i className="fas fa-times"></i> Remove Image
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Location Section */}
+                  <div className="form-section">
+                    <h3 className="section-title"><i className="fas fa-map-marker-alt"></i> Location</h3>
+                    <div className="form-grid">
+                      <div className="form-group">
+                        <label><i className="fas fa-building"></i> Building</label>
+                        <input
+                          type="text"
+                          value={formData.location.building}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              location: { ...formData.location, building: e.target.value },
+                            })
+                          }
+                          placeholder="e.g., Block A, IT Tower"
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label><i className="fas fa-layer-group"></i> Floor</label>
+                        <input
+                          type="text"
+                          value={formData.location.floor}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              location: { ...formData.location, floor: e.target.value },
+                            })
+                          }
+                          placeholder="e.g., Ground Floor, 3rd Floor"
                         />
                       </div>
                     </div>

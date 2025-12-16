@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import SideBar from "../../Components/SideBar/SideBar";
 import { attendanceAPI, employeeAPI, departmentAPI, exportAPI } from "../../Config/Api";
+import settingsAPI from "../../Config/settingsApi";
 import "./Attendance.css";
 
 // Utility function to calculate working hours
@@ -70,6 +71,12 @@ function Attendance() {
   });
   const [stats, setStats] = useState(null);
   const [exporting, setExporting] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [settings, setSettings] = useState({
+    manualAttendanceEnabled: true,
+    importAttendanceEnabled: true,
+  });
+  const [savingSettings, setSavingSettings] = useState(false);
 
   const user = (() => {
     try {
@@ -78,14 +85,47 @@ function Attendance() {
       return JSON.parse(stored);
     } catch { return {}; }
   })();
+  const isSuperAdmin = user?.role?.name === "superAdmin";
   const canManualEntry =
-    user?.role?.name === "superAdmin" ||
-    user?.role?.name === "attendanceDepartment";
+    (isSuperAdmin || user?.role?.name === "attendanceDepartment") &&
+    (isSuperAdmin || settings.manualAttendanceEnabled);
 
   useEffect(() => {
     fetchTodayAttendance();
     fetchAttendanceStats();
+    fetchSettings();
   }, []);
+
+  const fetchSettings = async () => {
+    try {
+      const response = await settingsAPI.getAll();
+      if (response.data.success) {
+        setSettings({
+          manualAttendanceEnabled: response.data.data.manualAttendanceEnabled?.value ?? true,
+          importAttendanceEnabled: response.data.data.importAttendanceEnabled?.value ?? true,
+        });
+      }
+    } catch (error) {
+      console.error("Error fetching settings:", error);
+    }
+  };
+
+  const handleSaveSettings = async () => {
+    try {
+      setSavingSettings(true);
+      await settingsAPI.updateBulk([
+        { key: "manualAttendanceEnabled", value: settings.manualAttendanceEnabled },
+        { key: "importAttendanceEnabled", value: settings.importAttendanceEnabled },
+      ]);
+      alert("Settings saved successfully!");
+      setShowSettingsModal(false);
+    } catch (error) {
+      console.error("Error saving settings:", error);
+      alert("Failed to save settings");
+    } finally {
+      setSavingSettings(false);
+    }
+  };
 
   useEffect(() => {
     if (showManualModal) {
@@ -420,14 +460,25 @@ function Attendance() {
               <h1><i className="fas fa-clipboard-check"></i> Attendance Management</h1>
               <p>Track and manage employee attendance</p>
             </div>
-            {canManualEntry && (
-              <button
-                className="btn-primary"
-                onClick={() => setShowManualModal(true)}
-              >
-                + Manual Entry
-              </button>
-            )}
+            <div className="header-actions">
+              {isSuperAdmin && (
+                <button
+                  className="btn-settings"
+                  onClick={() => setShowSettingsModal(true)}
+                  title="Attendance Settings"
+                >
+                  <i className="fas fa-cog"></i> Settings
+                </button>
+              )}
+              {canManualEntry && (
+                <button
+                  className="btn-primary"
+                  onClick={() => setShowManualModal(true)}
+                >
+                  + Manual Entry
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Stats Cards */}
@@ -962,6 +1013,94 @@ function Attendance() {
                     </button>
                   </div>
                 </form>
+              </div>
+            </div>
+          )}
+
+          {/* Settings Modal */}
+          {showSettingsModal && (
+            <div className="modal-overlay" onClick={() => setShowSettingsModal(false)}>
+              <div className="modal-content modal-settings" onClick={(e) => e.stopPropagation()}>
+                <div className="modal-header">
+                  <h2><i className="fas fa-cog"></i> Attendance Settings</h2>
+                  <button className="close-btn" onClick={() => setShowSettingsModal(false)}>
+                    <i className="fas fa-times"></i>
+                  </button>
+                </div>
+                <div className="modal-body">
+                  <p className="settings-description">
+                    Control attendance features for the Attendance Department. SuperAdmin always has full access.
+                  </p>
+                  
+                  <div className="settings-list">
+                    <div className="setting-item">
+                      <div className="setting-info">
+                        <div className="setting-icon">
+                          <i className="fas fa-edit"></i>
+                        </div>
+                        <div className="setting-text">
+                          <h4>Manual Attendance Entry</h4>
+                          <p>Allow Attendance Department to manually add/edit attendance records</p>
+                        </div>
+                      </div>
+                      <label className="toggle-switch">
+                        <input
+                          type="checkbox"
+                          checked={settings.manualAttendanceEnabled}
+                          onChange={(e) =>
+                            setSettings({ ...settings, manualAttendanceEnabled: e.target.checked })
+                          }
+                        />
+                        <span className="toggle-slider"></span>
+                      </label>
+                    </div>
+
+                    <div className="setting-item">
+                      <div className="setting-info">
+                        <div className="setting-icon">
+                          <i className="fas fa-file-import"></i>
+                        </div>
+                        <div className="setting-text">
+                          <h4>Import Attendance</h4>
+                          <p>Allow Attendance Department to import attendance data from files</p>
+                        </div>
+                      </div>
+                      <label className="toggle-switch">
+                        <input
+                          type="checkbox"
+                          checked={settings.importAttendanceEnabled}
+                          onChange={(e) =>
+                            setSettings({ ...settings, importAttendanceEnabled: e.target.checked })
+                          }
+                        />
+                        <span className="toggle-slider"></span>
+                      </label>
+                    </div>
+                  </div>
+
+                  <div className="settings-info-box">
+                    <i className="fas fa-info-circle"></i>
+                    <span>SuperAdmin users are not affected by these settings and always have full access.</span>
+                  </div>
+                </div>
+                <div className="modal-actions">
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    onClick={() => setShowSettingsModal(false)}
+                  >
+                    <i className="fas fa-times"></i> Cancel
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-primary"
+                    onClick={handleSaveSettings}
+                    disabled={savingSettings}
+                  >
+                    <i className={savingSettings ? "fas fa-spinner fa-spin" : "fas fa-save"}></i>
+                    {savingSettings ? " Saving..." : " Save Settings"}
+                  </button>
+                </div>
               </div>
             </div>
           )}

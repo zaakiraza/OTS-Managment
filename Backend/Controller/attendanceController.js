@@ -1,5 +1,7 @@
 import Attendance from "../Model/Attendance.js";
 import Employee from "../Model/Employee.js";
+import Role from "../Model/Role.js";
+import Settings from "../Model/Settings.js";
 import logger from "../Utils/logger.js";
 import { TIME } from "../Config/constants.js";
 import { 
@@ -27,12 +29,22 @@ export const deviceCheckIn = async (req, res) => {
       biometricId: biometricId.toString().trim(),
       isActive: true 
     }).populate('department', 'name leverageTime')
-      .populate('workSchedule');
+      .populate('workSchedule')
+      .populate('role', 'name');
 
     if (!employee) {
       return res.status(404).json({
         success: false,
         message: `Employee with biometric ID ${biometricId} not found`,
+      });
+    }
+
+    // Skip attendance for superAdmin
+    if (employee.role?.name === 'superAdmin') {
+      return res.status(200).json({
+        success: true,
+        message: "Attendance not required for superAdmin",
+        skipped: true,
       });
     }
 
@@ -122,13 +134,23 @@ export const markAttendance = async (req, res) => {
   try {
     const { userId, type, deviceId } = req.body; // type: 'checkIn' or 'checkOut'
 
-    // Find employee by employeeId
-    const employee = await Employee.findOne({ employeeId: userId, isActive: true });
+    // Find employee by employeeId with role populated
+    const employee = await Employee.findOne({ employeeId: userId, isActive: true })
+      .populate('role', 'name');
     
     if (!employee) {
       return res.status(404).json({
         success: false,
         message: "Employee not found",
+      });
+    }
+
+    // Skip attendance for superAdmin
+    if (employee.role?.name === 'superAdmin') {
+      return res.status(200).json({
+        success: true,
+        message: "Attendance not required for superAdmin",
+        skipped: true,
       });
     }
 
@@ -319,6 +341,18 @@ export const getTodayAttendance = async (req, res) => {
 // Update attendance (manual correction)
 export const updateAttendance = async (req, res) => {
   try {
+    // Check if manual attendance is enabled (skip check for superAdmin)
+    const isSuperAdmin = req.user.role?.name === "superAdmin";
+    if (!isSuperAdmin) {
+      const manualEnabled = await Settings.getValue("manualAttendanceEnabled", true);
+      if (!manualEnabled) {
+        return res.status(403).json({
+          success: false,
+          message: "Manual attendance editing has been disabled by administrator",
+        });
+      }
+    }
+
     const { checkIn, checkOut, status, remarks, workingHours } = req.body;
 
     const attendance = await Attendance.findById(req.params.id);
@@ -403,6 +437,18 @@ export const deleteAttendance = async (req, res) => {
 // Create manual attendance entry
 export const createManualAttendance = async (req, res) => {
   try {
+    // Check if manual attendance is enabled (skip check for superAdmin)
+    const isSuperAdmin = req.user.role?.name === "superAdmin";
+    if (!isSuperAdmin) {
+      const manualEnabled = await Settings.getValue("manualAttendanceEnabled", true);
+      if (!manualEnabled) {
+        return res.status(403).json({
+          success: false,
+          message: "Manual attendance marking has been disabled by administrator",
+        });
+      }
+    }
+
     const { userId, date, checkIn, checkOut, remarks, workingHours, status } = req.body;
 
     // Check if employee exists

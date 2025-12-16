@@ -12,6 +12,14 @@ const assetSchema = new mongoose.Schema(
       required: [true, "Asset name is required"],
       trim: true,
     },
+    serialNumber: {
+      type: String,
+      trim: true,
+    },
+    macAddress: {
+      type: String,
+      trim: true,
+    },
     category: {
       type: String,
       required: [true, "Category is required"],
@@ -34,6 +42,7 @@ const assetSchema = new mongoose.Schema(
     },
     issueDate: {
       type: Date,
+      required: [true, "Issue date is required"],
     },
     purchasePrice: {
       type: Number,
@@ -64,6 +73,16 @@ const assetSchema = new mongoose.Schema(
     images: {
       type: [String],
       default: [],
+    },
+    location: {
+      building: {
+        type: String,
+        trim: true,
+      },
+      floor: {
+        type: String,
+        trim: true,
+      },
     },
     isActive: {
       type: Boolean,

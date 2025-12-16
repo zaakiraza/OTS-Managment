@@ -1,5 +1,6 @@
 import Attendance from '../Model/Attendance.js';
 import Employee from '../Model/Employee.js';
+import Role from '../Model/Role.js';
 import logger from './logger.js';
 import { TIME, SCHEDULED_TASKS } from '../Config/constants.js';
 
@@ -23,9 +24,17 @@ export const markAbsentEmployees = async (targetDate = null) => {
     
     logger.info(`Checking for date: ${checkDate.toISOString().split('T')[0]} (${dayName})`);
     
-    // Get all active employees with their work schedule
-    const activeEmployees = await Employee.find({ isActive: true }).select('_id employeeId name workSchedule');
-    logger.info(`Total active employees: ${activeEmployees.length}`);
+    // Get superAdmin role to exclude from attendance marking
+    const superAdminRole = await Role.findOne({ name: 'superAdmin' });
+    
+    // Get all active employees with their work schedule (exclude superAdmin)
+    const employeeQuery = { isActive: true };
+    if (superAdminRole) {
+      employeeQuery.role = { $ne: superAdminRole._id };
+    }
+    
+    const activeEmployees = await Employee.find(employeeQuery).select('_id employeeId name workSchedule');
+    logger.info(`Total active employees (excluding superAdmin): ${activeEmployees.length}`);
     
     let markedAbsent = 0;
     let alreadyMarked = 0;

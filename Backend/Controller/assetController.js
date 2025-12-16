@@ -67,8 +67,15 @@ export const getAssetById = async (req, res) => {
 // Create new asset
 export const createAsset = async (req, res) => {
   try {
+    // Clean up the location object - remove any extra fields
+    const locationData = req.body.location ? {
+      building: req.body.location.building || "",
+      floor: req.body.location.floor || "",
+    } : undefined;
+
     const assetData = {
       ...req.body,
+      location: locationData,
       createdBy: req.user._id,
     };
 
@@ -80,6 +87,7 @@ export const createAsset = async (req, res) => {
       data: asset,
     });
   } catch (error) {
+    console.error("Asset creation error:", error);
     res.status(500).json({
       success: false,
       message: error.message,

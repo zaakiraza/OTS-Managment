@@ -1,6 +1,7 @@
 import express from 'express';
 import Attendance from '../Model/Attendance.js';
 import Employee from '../Model/Employee.js';
+import Role from '../Model/Role.js';
 import logger from '../Utils/logger.js';
 import { DEVICE, TIME, SALARY } from '../Config/constants.js';
 
@@ -93,11 +94,18 @@ async function processAttendanceData(data) {
       processed++;
       
       try {
-        // Find employee by biometricId
-        const employee = await Employee.findOne({ biometricId: biometricId.trim() });
+        // Find employee by biometricId with role populated
+        const employee = await Employee.findOne({ biometricId: biometricId.trim() })
+          .populate('role', 'name');
         
         if (!employee) {
           logger.debug(`Employee not found for biometricId: ${biometricId}`);
+          continue;
+        }
+        
+        // Skip attendance for superAdmin
+        if (employee.role?.name === 'superAdmin') {
+          logger.debug(`Skipping attendance for superAdmin: ${employee.name}`);
           continue;
         }
         

@@ -1,5 +1,6 @@
 import Ticket from "../Model/Ticket.js";
 import Employee from "../Model/Employee.js";
+import Department from "../Model/Department.js";
 import { 
   notifyTicketCreatedAgainst, 
   notifyTicketResolved, 
@@ -82,13 +83,39 @@ export const createTicket = async (req, res) => {
       reportedBy: req.user._id,
     };
 
-    // Handle file attachments if uploaded
+    // Handle attachments array
+    ticketData.attachments = [];
+
+    // Handle file attachments if uploaded (multipart/form-data)
     if (req.files && req.files.length > 0) {
-      ticketData.attachments = req.files.map((file) => ({
+      const fileAttachments = req.files.map((file) => ({
         ...getFileInfo(file),
         uploadedBy: req.user._id,
       }));
+      ticketData.attachments.push(...fileAttachments);
     }
+
+    // Handle compressed images (base64 data URLs)
+    if (req.body.compressedImages) {
+      const compressedImages = typeof req.body.compressedImages === "string" 
+        ? JSON.parse(req.body.compressedImages) 
+        : req.body.compressedImages;
+      
+      if (Array.isArray(compressedImages)) {
+        const imageAttachments = compressedImages.map((img) => ({
+          filename: img.name || `image_${Date.now()}.jpg`,
+          originalName: img.name || `image_${Date.now()}.jpg`,
+          mimeType: "image/jpeg",
+          size: Math.round((img.dataUrl?.length || 0) * 0.75),
+          path: img.dataUrl, // Store base64 data URL as path
+          uploadedBy: req.user._id,
+        }));
+        ticketData.attachments.push(...imageAttachments);
+      }
+    }
+
+    // Clean up the compressedImages field from ticketData
+    delete ticketData.compressedImages;
 
     const ticket = await Ticket.create(ticketData);
 
@@ -143,6 +170,62 @@ export const updateTicket = async (req, res) => {
         message: "You can only edit tickets you created",
       });
     }
+
+    // Clean up empty ObjectId fields - convert empty strings to null
+    if (req.body.assignedTo === "") req.body.assignedTo = null;
+    if (req.body.reportedAgainst === "") req.body.reportedAgainst = null;
+    if (req.body.resolvedBy === "") req.body.resolvedBy = null;
+
+    // Handle attachments
+    let updatedAttachments = [];
+
+    // Keep existing attachments if specified
+    if (req.body.existingAttachments) {
+      const existingAttachments = typeof req.body.existingAttachments === "string"
+        ? JSON.parse(req.body.existingAttachments)
+        : req.body.existingAttachments;
+      
+      if (Array.isArray(existingAttachments)) {
+        updatedAttachments.push(...existingAttachments);
+      }
+    }
+
+    // Add new file attachments if uploaded (multipart/form-data)
+    if (req.files && req.files.length > 0) {
+      const fileAttachments = req.files.map((file) => ({
+        ...getFileInfo(file),
+        uploadedBy: req.user._id,
+      }));
+      updatedAttachments.push(...fileAttachments);
+    }
+
+    // Handle compressed images (base64 data URLs)
+    if (req.body.compressedImages) {
+      const compressedImages = typeof req.body.compressedImages === "string"
+        ? JSON.parse(req.body.compressedImages)
+        : req.body.compressedImages;
+      
+      if (Array.isArray(compressedImages)) {
+        const imageAttachments = compressedImages.map((img) => ({
+          filename: img.name || `image_${Date.now()}.jpg`,
+          originalName: img.name || `image_${Date.now()}.jpg`,
+          mimeType: "image/jpeg",
+          size: Math.round((img.dataUrl?.length || 0) * 0.75),
+          path: img.dataUrl, // Store base64 data URL as path
+          uploadedBy: req.user._id,
+        }));
+        updatedAttachments.push(...imageAttachments);
+      }
+    }
+
+    // Only update attachments if we have processed any
+    if (updatedAttachments.length > 0 || req.body.existingAttachments !== undefined || req.body.compressedImages !== undefined || (req.files && req.files.length > 0)) {
+      req.body.attachments = updatedAttachments;
+    }
+
+    // Clean up temp fields
+    delete req.body.existingAttachments;
+    delete req.body.compressedImages;
 
     // If status is being changed to Resolved or Closed, update resolved fields and make inactive
     if ((req.body.status === "Resolved" || req.body.status === "Closed") && ticket.status !== req.body.status) {
@@ -345,6 +428,82 @@ export const getTicketStats = async (req, res) => {
     res.status(200).json({
       success: true,
       data: formattedStats,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// Get employees for ticket filing (limited info, accessible by all authenticated users)
+export const getEmployeesForTicket = async (req, res) => {
+  try {
+    const { departmentId } = req.query;
+    const filter = { isActive: true };
+    
+    if (departmentId) {
+      filter.department = departmentId;
+    }
+
+    // Return only necessary fields for ticket filing
+    const employees = await Employee.find(filter)
+      .select("_id name employeeId department position")
+      .populate("department", "name code")
+      .sort({ name: 1 });
+
+    res.status(200).json({
+      success: true,
+      count: employees.length,
+      data: employees,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// Get departments for ticket filing (accessible by all authenticated users)
+export const getDepartmentsForTicket = async (req, res) => {
+  try {
+    const departments = await Department.find({ isActive: true })
+      .select("_id name code parentDepartment")
+      .populate("parentDepartment", "name code")
+      .sort({ name: 1 });
+
+    // Build flat list with hierarchy level
+    const buildFlatList = (departments) => {
+      const deptMap = new Map();
+      departments.forEach(dept => {
+        deptMap.set(dept._id.toString(), { ...dept.toObject(), level: 0 });
+      });
+
+      // Calculate levels
+      departments.forEach(dept => {
+        let level = 0;
+        let current = dept;
+        while (current.parentDepartment) {
+          level++;
+          const parentId = current.parentDepartment._id?.toString() || current.parentDepartment.toString();
+          current = deptMap.get(parentId);
+          if (!current) break;
+        }
+        deptMap.get(dept._id.toString()).level = level;
+      });
+
+      return Array.from(deptMap.values());
+    };
+
+    const flatData = buildFlatList(departments);
+
+    res.status(200).json({
+      success: true,
+      count: departments.length,
+      data: departments,
+      flatData: flatData,
     });
   } catch (error) {
     res.status(500).json({

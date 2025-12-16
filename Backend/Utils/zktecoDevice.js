@@ -2,6 +2,7 @@ import Zkteco from 'zkteco-js';
 import AttendanceLog from '../Model/AttendanceLog.js';
 import Employee from '../Model/Employee.js';
 import Attendance from '../Model/Attendance.js';
+import Role from '../Model/Role.js';
 import logger from './logger.js';
 import { DEVICE, TIME } from '../Config/constants.js';
 import { parseDeviceTimestamp, getDateAtMidnightUTC } from './timezone.js';
@@ -65,14 +66,21 @@ function mapZkLogToDoc(log) {
 }
 async function processAttendanceLog(doc) {
   try {
-    // Find employee by biometric ID (userId from device)
+    // Find employee by biometric ID (userId from device) with role populated
     const employee = await Employee.findOne({ 
       biometricId: doc.userId.toString().trim(),
       isActive: true 
-    }).populate('department', 'name leverageTime');
+    }).populate('department', 'name leverageTime')
+      .populate('role', 'name');
 
     if (!employee) {
       logger.debug(`Employee with biometric ID ${doc.userId} not found in system`);
+      return;
+    }
+
+    // Skip attendance for superAdmin
+    if (employee.role?.name === 'superAdmin') {
+      logger.debug(`Skipping attendance for superAdmin: ${employee.name}`);
       return;
     }
 

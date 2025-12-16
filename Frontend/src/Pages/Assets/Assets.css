@@ -491,6 +491,133 @@
   min-height: 80px;
 }
 
+/* Image Upload Styles */
+.image-upload-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.image-input {
+  display: none;
+}
+
+.image-upload-label {
+  cursor: pointer;
+  width: 100%;
+  max-width: 300px;
+}
+
+.upload-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 40px 20px;
+  border: 2px dashed #CED4D3;
+  border-radius: 12px;
+  background: #f8fafa;
+  transition: all 0.3s ease;
+}
+
+.upload-placeholder:hover {
+  border-color: #1F6A75;
+  background: #e0f2f4;
+}
+
+.upload-placeholder i {
+  font-size: 42px;
+  color: #1F6A75;
+}
+
+.upload-placeholder span {
+  font-size: 14px;
+  font-weight: 600;
+  color: #0D0D0D;
+}
+
+.upload-placeholder small {
+  font-size: 12px;
+  color: #A2ABAA;
+}
+
+.image-preview-container {
+  position: relative;
+  width: 100%;
+  max-width: 300px;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 2px solid #1F6A75;
+}
+
+.image-preview {
+  width: 100%;
+  height: 180px;
+  object-fit: cover;
+  display: block;
+}
+
+.image-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(9, 54, 53, 0.7);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.image-preview-container:hover .image-overlay {
+  opacity: 1;
+}
+
+.image-overlay i {
+  font-size: 28px;
+  color: white;
+}
+
+.image-overlay span {
+  font-size: 13px;
+  font-weight: 600;
+  color: white;
+}
+
+.btn-remove-image {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: #fee2e2;
+  color: #ef4444;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-remove-image:hover {
+  background: #fecaca;
+  border-color: #ef4444;
+}
+
+/* Form Group Label Icons */
+.asset-form .form-group label i {
+  margin-right: 6px;
+  color: #1F6A75;
+  width: 14px;
+  text-align: center;
+}
+
 /* Asset Info Card (for Assign Modal) */
 .asset-info-card {
   display: flex;
@@ -633,6 +760,41 @@
   font-weight: 600;
   padding: 16px 14px;
   border-radius: 0;
+}
+
+/* Asset Thumbnail in Table */
+.asset-thumbnail {
+  width: 48px;
+  height: 48px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 2px solid #e0f2f4;
+  flex-shrink: 0;
+}
+
+.asset-thumbnail img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.asset-thumbnail .no-image {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, #e0f2f4 0%, #c5e5e8 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #1F6A75;
+  font-size: 18px;
+}
+
+/* Serial Number & MAC Address styling */
+.data-table td.serial-number,
+.data-table td.mac-address {
+  font-family: monospace;
+  font-size: 12px;
+  color: #6b7280;
 }
 
 /* Condition Badge in Table */
