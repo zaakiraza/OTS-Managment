@@ -36,6 +36,9 @@ dotenv.config();
 
 const app = express();
 
+// Trust proxy to get real IP addresses (important for accurate audit logging)
+app.set('trust proxy', true);
+
 // Connect to Database
 connectDB();
 

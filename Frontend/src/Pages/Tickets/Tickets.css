@@ -576,8 +576,28 @@
   max-width: 600px;
   max-height: 90vh;
   overflow-y: auto;
+  overflow-x: hidden;
   box-shadow: 0 25px 60px rgba(9, 54, 53, 0.3);
   animation: modalSlideIn 0.3s ease;
+}
+
+/* Custom scrollbar for modal */
+.modal-content::-webkit-scrollbar {
+  width: 8px;
+}
+
+.modal-content::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 0 24px 24px 0;
+}
+
+.modal-content::-webkit-scrollbar-thumb {
+  background: linear-gradient(135deg, #1F6A75 0%, #093635 100%);
+  border-radius: 4px;
+}
+
+.modal-content::-webkit-scrollbar-thumb:hover {
+  background: #093635;
 }
 
 .modal-content.modal-large {
@@ -642,6 +662,7 @@
   margin-bottom: 24px;
   padding-bottom: 20px;
   border-bottom: 1px solid #e5e7eb;
+  overflow: hidden;
 }
 
 .form-section:last-child {
@@ -691,6 +712,12 @@
   border-radius: 10px;
   font-size: 14px;
   transition: all 0.2s;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.form-group input {
+  overflow: visible;
 }
 
 .form-group input:focus,

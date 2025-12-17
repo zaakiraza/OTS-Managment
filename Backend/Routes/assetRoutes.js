@@ -3,6 +3,7 @@ import {
   getAllAssets,
   getAssetById,
   createAsset,
+  bulkCreateAssets,
   updateAsset,
   deleteAsset,
   assignAsset,
@@ -23,6 +24,7 @@ router.get("/", getAllAssets);
 router.get("/stats", getAssetStats);
 router.get("/:id", getAssetById);
 router.post("/", createAsset);
+router.post("/bulk", bulkCreateAssets);  // Bulk import
 router.put("/:id", updateAsset);
 router.delete("/:id", deleteAsset);
 

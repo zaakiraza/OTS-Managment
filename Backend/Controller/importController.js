@@ -4,6 +4,7 @@ import Settings from "../Model/Settings.js";
 import fs from "fs";
 import path from "path";
 import logger from "../Utils/logger.js";
+import { logImportAction } from "../Utils/auditLogger.js";
 
 // Process attendance data from USB export file
 export const processAttendanceFile = async (fileContent) => {
@@ -141,6 +142,11 @@ export const importAttendance = async (req, res) => {
     // Delete uploaded file after processing
     fs.unlinkSync(req.file.path);
 
+    // Audit log
+    await logImportAction(req, "Attendance", `Imported attendance from file: ${results.processed} processed, ${results.skipped} skipped, ${results.errors} errors`, {
+      after: { processed: results.processed, skipped: results.skipped, errors: results.errors }
+    });
+
     res.status(200).json({
       success: true,
       message: "Attendance data imported successfully",
@@ -180,6 +186,11 @@ export const importAttendanceText = async (req, res) => {
     }
 
     const results = await processAttendanceFile(fileContent);
+
+    // Audit log
+    await logImportAction(req, "Attendance", `Imported attendance from text: ${results.processed} processed, ${results.skipped} skipped, ${results.errors} errors`, {
+      after: { processed: results.processed, skipped: results.skipped, errors: results.errors }
+    });
 
     res.status(200).json({
       success: true,

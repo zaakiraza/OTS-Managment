@@ -120,6 +120,7 @@ export const assetAPI = {
   getAll: (params) => api.get("/assets", { params }),
   getById: (id) => api.get(`/assets/${id}`),
   create: (data) => api.post("/assets", data),
+  bulkCreate: (data) => api.post("/assets/bulk", data),
   update: (id, data) => api.put(`/assets/${id}`, data),
   delete: (id) => api.delete(`/assets/${id}`),
   assign: (data) => api.post("/assets/assign", data),

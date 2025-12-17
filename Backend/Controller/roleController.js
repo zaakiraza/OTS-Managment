@@ -1,4 +1,5 @@
 import Role from "../Model/Role.js";
+import { logRoleAction } from "../Utils/auditLogger.js";
 
 // Create a new role
 export const createRole = async (req, res) => {
@@ -17,6 +18,11 @@ export const createRole = async (req, res) => {
       name,
       description,
       permissions,
+    });
+
+    // Audit log
+    await logRoleAction(req, "CREATE", role, {
+      after: { name: role.name, permissions: role.permissions }
     });
 
     res.status(201).json({
@@ -78,6 +84,9 @@ export const updateRole = async (req, res) => {
   try {
     const { description, permissions, isActive } = req.body;
 
+    // Get original role for audit
+    const originalRole = await Role.findById(req.params.id);
+
     const role = await Role.findByIdAndUpdate(
       req.params.id,
       { description, permissions, isActive },
@@ -90,6 +99,12 @@ export const updateRole = async (req, res) => {
         message: "Role not found",
       });
     }
+
+    // Audit log
+    await logRoleAction(req, "UPDATE", role, {
+      before: { name: originalRole?.name, permissions: originalRole?.permissions },
+      after: { name: role.name, permissions: role.permissions }
+    });
 
     res.status(200).json({
       success: true,
@@ -107,6 +122,9 @@ export const updateRole = async (req, res) => {
 // Delete role (soft delete)
 export const deleteRole = async (req, res) => {
   try {
+    // Get original role for audit
+    const originalRole = await Role.findById(req.params.id);
+
     const role = await Role.findByIdAndUpdate(
       req.params.id,
       { isActive: false },
@@ -119,6 +137,12 @@ export const deleteRole = async (req, res) => {
         message: "Role not found",
       });
     }
+
+    // Audit log
+    await logRoleAction(req, "DELETE", role, {
+      before: { name: originalRole?.name, isActive: true },
+      after: { isActive: false }
+    });
 
     res.status(200).json({
       success: true,

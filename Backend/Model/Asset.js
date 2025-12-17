@@ -110,7 +110,20 @@ assetSchema.pre("save", async function () {
     const count = await mongoose.model("Asset").countDocuments();
     this.assetId = `AST${String(count + 1).padStart(5, "0")}`;
   }
+  
+  // Convert empty serialNumber to null
+  if (this.serialNumber === "" || this.serialNumber === undefined) {
+    this.serialNumber = null;
+  }
+  
+  // Convert empty macAddress to null
+  if (this.macAddress === "" || this.macAddress === undefined) {
+    this.macAddress = null;
+  }
 });
+
+// Note: serialNumber and macAddress are optional fields without unique constraints
+// If uniqueness is required, it should be checked at application level
 
 const Asset = mongoose.model("Asset", assetSchema);
 

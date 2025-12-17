@@ -1,6 +1,7 @@
 import Asset from "../Model/Asset.js";
 import AssetAssignment from "../Model/AssetAssignment.js";
 import Employee from "../Model/Employee.js";
+import { logAssetAction, logImportAction } from "../Utils/auditLogger.js";
 
 // Get all assets
 export const getAllAssets = async (req, res) => {
@@ -20,7 +21,14 @@ export const getAllAssets = async (req, res) => {
     }
 
     const assets = await Asset.find(filter)
-      .populate("assignedTo", "employeeId name email department")
+      .populate({
+        path: "assignedTo",
+        select: "employeeId name email department",
+        populate: {
+          path: "department",
+          select: "name"
+        }
+      })
       .populate("createdBy", "name")
       .sort({ createdAt: -1 });
 
@@ -81,6 +89,11 @@ export const createAsset = async (req, res) => {
 
     const asset = await Asset.create(assetData);
 
+    // Audit log
+    await logAssetAction(req, "CREATE", asset, {
+      after: { name: asset.name, category: asset.category, status: asset.status }
+    });
+
     res.status(201).json({
       success: true,
       message: "Asset created successfully",
@@ -88,6 +101,78 @@ export const createAsset = async (req, res) => {
     });
   } catch (error) {
     console.error("Asset creation error:", error);
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// Bulk create assets (import from Excel/CSV)
+export const bulkCreateAssets = async (req, res) => {
+  try {
+    const assetsData = req.body;
+    
+    if (!Array.isArray(assetsData) || assetsData.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "No assets data provided",
+      });
+    }
+
+    const results = {
+      created: 0,
+      errors: [],
+    };
+
+    // Process each asset
+    for (let i = 0; i < assetsData.length; i++) {
+      const assetData = assetsData[i];
+      
+      try {
+        // Clean up location data
+        const locationData = assetData.location ? {
+          building: assetData.location.building || "",
+          floor: assetData.location.floor || "",
+        } : undefined;
+
+        // Create asset
+        const asset = await Asset.create({
+          name: assetData.name,
+          category: assetData.category,
+          serialNumber: assetData.serialNumber || null,
+          macAddress: assetData.macAddress || null,
+          condition: assetData.condition || "Good",
+          status: assetData.status || "Available",
+          purchasePrice: assetData.purchasePrice || null,
+          issueDate: assetData.issueDate || new Date(),
+          location: locationData,
+          notes: assetData.notes || "",
+          createdBy: req.user._id,
+        });
+
+        results.created++;
+      } catch (error) {
+        results.errors.push({
+          row: i + 1,
+          name: assetData.name,
+          error: error.message,
+        });
+      }
+    }
+
+    // Audit log for bulk import
+    await logImportAction(req, "Asset", `Bulk imported ${results.created} assets`, {
+      after: { created: results.created, errors: results.errors.length }
+    });
+
+    res.status(201).json({
+      success: true,
+      message: `Successfully imported ${results.created} assets`,
+      data: results,
+    });
+  } catch (error) {
+    console.error("Bulk asset creation error:", error);
     res.status(500).json({
       success: false,
       message: error.message,
@@ -115,6 +200,12 @@ export const updateAsset = async (req, res) => {
       },
       { new: true, runValidators: true }
     );
+
+    // Audit log
+    await logAssetAction(req, "UPDATE", updatedAsset, {
+      before: { name: asset.name, status: asset.status, condition: asset.condition },
+      after: { name: updatedAsset.name, status: updatedAsset.status, condition: updatedAsset.condition }
+    });
 
     res.status(200).json({
       success: true,
@@ -144,6 +235,12 @@ export const deleteAsset = async (req, res) => {
     await Asset.findByIdAndUpdate(req.params.id, {
       isActive: false,
       modifiedBy: req.user._id,
+    });
+
+    // Audit log
+    await logAssetAction(req, "DELETE", asset, {
+      before: { name: asset.name, isActive: true },
+      after: { isActive: false }
     });
 
     res.status(200).json({
@@ -209,6 +306,11 @@ export const assignAsset = async (req, res) => {
       .populate("employee", "employeeId name email")
       .populate("assignedBy", "name");
 
+    // Audit log
+    await logAssetAction(req, "ASSIGN", asset, {
+      after: { assignedTo: employee.name, employeeId: employee.employeeId }
+    });
+
     res.status(200).json({
       success: true,
       message: "Asset assigned successfully",
@@ -263,6 +365,12 @@ export const returnAsset = async (req, res) => {
       .populate("asset")
       .populate("employee", "employeeId name email")
       .populate("returnedBy", "name");
+
+    // Audit log
+    await logAssetAction(req, "UNASSIGN", asset, {
+      before: { assignedTo: populatedAssignment.employee?.name },
+      after: { status: asset.status, condition: conditionAtReturn }
+    });
 
     res.status(200).json({
       success: true,

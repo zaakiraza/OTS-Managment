@@ -3,6 +3,7 @@ import Department from "../Model/Department.js";
 import Role from "../Model/Role.js";
 import bcrypt from "bcrypt";
 import { notifyPasswordChanged } from "../Utils/emailNotifications.js";
+import { logEmployeeAction } from "../Utils/auditLogger.js";
 
 // Create employee
 export const createEmployee = async (req, res) => {
@@ -125,6 +126,11 @@ export const createEmployee = async (req, res) => {
       .populate("additionalDepartments", "name code")
       .populate("leadingDepartments", "name code")
       .populate("role", "name description");
+
+    // Audit log
+    await logEmployeeAction(req, "CREATE", populatedEmployee, {
+      after: { name: populatedEmployee.name, employeeId: populatedEmployee.employeeId, department: populatedEmployee.department?.name }
+    });
 
     res.status(201).json({
       success: true,
@@ -381,6 +387,16 @@ export const updateEmployee = async (req, res) => {
       });
     }
 
+    // Audit log
+    const changes = {
+      before: { name: targetEmployee.name, department: targetEmployee.department?.name },
+      after: { name: employee.name, department: employee.department?.name }
+    };
+    if (passwordChanged) {
+      changes.passwordChanged = true;
+    }
+    await logEmployeeAction(req, "UPDATE", employee, changes);
+
     res.status(200).json({
       success: true,
       message: "Employee updated successfully",
@@ -420,6 +436,12 @@ export const deleteEmployee = async (req, res) => {
       { isActive: false, modifiedBy: req.user._id },
       { new: true }
     );
+
+    // Audit log
+    await logEmployeeAction(req, "DELETE", targetEmployee, {
+      before: { name: targetEmployee.name, employeeId: targetEmployee.employeeId, isActive: true },
+      after: { isActive: false }
+    });
 
     res.status(200).json({
       success: true,

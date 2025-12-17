@@ -4,6 +4,7 @@ import Role from "../Model/Role.js";
 import Settings from "../Model/Settings.js";
 import logger from "../Utils/logger.js";
 import { TIME } from "../Config/constants.js";
+import { logAttendanceAction } from "../Utils/auditLogger.js";
 import { 
   getDateAtMidnightUTC, 
   parseLocalTimeToUTC, 
@@ -397,6 +398,12 @@ export const updateAttendance = async (req, res) => {
     const populatedAttendance = await Attendance.findById(attendance._id)
       .populate("employee", "name employeeId email phone department");
 
+    // Audit log
+    await logAttendanceAction(req, "UPDATE", populatedAttendance, {
+      before: { checkIn: attendance.checkIn, checkOut: attendance.checkOut, status: attendance.status },
+      after: { checkIn: populatedAttendance.checkIn, checkOut: populatedAttendance.checkOut, status: populatedAttendance.status }
+    }, `Attendance updated for ${populatedAttendance.employee?.name} (${populatedAttendance.userId})`);
+
     res.status(200).json({
       success: true,
       message: "Attendance updated successfully",
@@ -413,14 +420,22 @@ export const updateAttendance = async (req, res) => {
 // Delete attendance record
 export const deleteAttendance = async (req, res) => {
   try {
-    const attendance = await Attendance.findByIdAndDelete(req.params.id);
-
-    if (!attendance) {
+    // First get the attendance for audit log
+    const attendanceToDelete = await Attendance.findById(req.params.id).populate("employee", "name employeeId");
+    
+    if (!attendanceToDelete) {
       return res.status(404).json({
         success: false,
         message: "Attendance record not found",
       });
     }
+
+    await Attendance.findByIdAndDelete(req.params.id);
+
+    // Audit log
+    await logAttendanceAction(req, "DELETE", attendanceToDelete, {
+      before: { userId: attendanceToDelete.userId, date: attendanceToDelete.date, checkIn: attendanceToDelete.checkIn }
+    }, `Attendance deleted for ${attendanceToDelete.employee?.name} (${attendanceToDelete.userId})`);
 
     res.status(200).json({
       success: true,
@@ -537,6 +552,11 @@ export const createManualAttendance = async (req, res) => {
 
     const populatedAttendance = await Attendance.findById(attendance._id)
       .populate("employee", "name employeeId");
+
+    // Audit log
+    await logAttendanceAction(req, "CREATE", populatedAttendance, {
+      after: { userId, date: attendanceDate, checkIn: checkInDate, checkOut: checkOutDate, isManualEntry: true }
+    }, `Manual attendance created for ${employee.name} (${userId})`);
 
     res.status(201).json({
       success: true,

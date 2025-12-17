@@ -4,6 +4,7 @@ import Attendance from "../Model/Attendance.js";
 import Role from "../Model/Role.js";
 import logger from "../Utils/logger.js";
 import { SALARY, ATTENDANCE } from "../Config/constants.js";
+import { logSalaryAction } from "../Utils/auditLogger.js";
 
 // Calculate salary for a specific month
 export const calculateSalary = async (req, res) => {
@@ -574,6 +575,12 @@ export const approveSalary = async (req, res) => {
       });
     }
 
+    // Audit log
+    await logSalaryAction(req, "STATUS_CHANGE", salary, {
+      before: { status: "pending" },
+      after: { status: "approved" }
+    }, `Salary approved for ${salary.employee?.name} - ${salary.month}/${salary.year}`);
+
     res.status(200).json({
       success: true,
       message: "Salary approved successfully",
@@ -605,6 +612,12 @@ export const markSalaryPaid = async (req, res) => {
         message: "Salary record not found",
       });
     }
+
+    // Audit log
+    await logSalaryAction(req, "STATUS_CHANGE", salary, {
+      before: { status: "approved" },
+      after: { status: "paid", paidOn: salary.paidOn }
+    }, `Salary paid for ${salary.employee?.name} - ${salary.month}/${salary.year}`);
 
     res.status(200).json({
       success: true,
@@ -668,6 +681,12 @@ export const updateSalary = async (req, res) => {
       "employee",
       "employeeId name email"
     );
+
+    // Audit log
+    await logSalaryAction(req, "UPDATE", updatedSalary, {
+      before: { netSalary: salary.netSalary },
+      after: { netSalary: updatedSalary.netSalary, deductions, additions }
+    }, `Salary updated for ${updatedSalary.employee?.name} - ${updatedSalary.month}/${updatedSalary.year}`);
 
     res.status(200).json({
       success: true,

@@ -4,6 +4,7 @@ import {
   Route,
   Navigate,
 } from "react-router-dom";
+import { ToastContainer } from "./Components/Common/Toast/Toast";
 import Login from "./Pages/Login/Login";
 import Dashboard from "./Pages/Dashboard/Dashboard";
 import Users from "./Pages/Users/Users";
@@ -64,8 +65,9 @@ function App() {
   };
 
   return (
-    <Router>
-      <Routes>
+    <ToastContainer>
+      <Router>
+        <Routes>
         <Route path="/login" element={<Login />} />
         
         {/* SuperAdmin Only Routes */}
@@ -228,8 +230,9 @@ function App() {
 
         <Route path="/" element={<Navigate to="/login" />} />
         <Route path="*" element={<Navigate to="/login" />} />
-      </Routes>
-    </Router>
+        </Routes>
+      </Router>
+    </ToastContainer>
   );
 }
 

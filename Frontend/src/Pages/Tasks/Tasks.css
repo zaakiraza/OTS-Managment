@@ -1037,6 +1037,106 @@
   transform: scale(1.05);
 }
 
+/* Permission Notice */
+.permission-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 14px 16px;
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+  border-radius: 10px;
+  margin-bottom: 20px;
+  color: #92400e;
+  font-size: 13px;
+  line-height: 1.5;
+  border: 1px solid #fcd34d;
+}
+
+.permission-notice i {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+/* You Badge */
+.you-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 2px 8px;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+  font-size: 10px;
+  font-weight: 700;
+  border-radius: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+/* Overdue Badge */
+.overdue-badge {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 8px;
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  color: white;
+  font-size: 10px;
+  font-weight: 700;
+  border-radius: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+/* Status Actions (for older modal style compatibility) */
+.status-actions {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.status-actions .btn-status {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 16px;
+  background: #f0f4f3;
+  border: 2px solid #e5e7eb;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 13px;
+  font-weight: 600;
+  color: #6b7280;
+}
+
+.status-actions .btn-status:hover:not(:disabled) {
+  border-color: #1F6A75;
+  color: #1F6A75;
+}
+
+.status-actions .btn-status:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.status-actions .btn-status.active {
+  background: linear-gradient(135deg, #e0f2f4 0%, #c5e5e8 100%);
+  border-color: #1F6A75;
+  color: #1F6A75;
+}
+
+.status-actions .btn-status.in-progress.active {
+  background: linear-gradient(135deg, #fff4e6 0%, #ffe0c2 100%);
+  border-color: #F49040;
+  color: #e07a2a;
+}
+
+.status-actions .btn-status.completed.active {
+  background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+  border-color: #10b981;
+  color: #059669;
+}
+
 @media (max-width: 600px) {
   .task-meta-grid {
     grid-template-columns: 1fr;

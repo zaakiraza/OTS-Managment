@@ -4,6 +4,7 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { SECURITY } from "../Config/constants.js";
 import { notifyPasswordChanged } from "../Utils/emailNotifications.js";
+import { logAuthAction } from "../Utils/auditLogger.js";
 
 // Login employee (unified authentication)
 export const login = async (req, res) => {
@@ -29,6 +30,8 @@ export const login = async (req, res) => {
       .populate("leadingDepartments", "name code");
 
     if (!employee) {
+      // Audit log for failed login (unknown user)
+      await logAuthAction(req, "LOGIN", { email }, false, "Invalid credentials - user not found");
       return res.status(401).json({
         success: false,
         message: "Invalid credentials",
@@ -45,6 +48,8 @@ export const login = async (req, res) => {
     // Compare password
     const isPasswordValid = await employee.comparePassword(password);
     if (!isPasswordValid) {
+      // Audit log for failed login (wrong password)
+      await logAuthAction(req, "LOGIN", employee, false, "Invalid password");
       return res.status(401).json({
         success: false,
         message: "Invalid password",
@@ -92,6 +97,9 @@ export const login = async (req, res) => {
       role: employee.role,
       isTeamLead: employee.isTeamLead,
     };
+
+    // Audit log for successful login
+    await logAuthAction(req, "LOGIN", employee, true);
 
     res.status(200).json({
       success: true,
@@ -175,6 +183,9 @@ export const changePassword = async (req, res) => {
     // Hash and update new password
     employee.password = newPassword; // Will be hashed by pre-save hook
     await employee.save();
+
+    // Audit log for password change
+    await logAuthAction(req, "PASSWORD_CHANGE", employee, true);
 
     // Send email notification (don't wait for it)
     notifyPasswordChanged(employee).catch(err => {

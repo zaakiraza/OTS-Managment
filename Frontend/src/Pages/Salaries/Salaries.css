@@ -379,7 +379,6 @@
   padding: 20px 28px;
   border-bottom: none;
   background: linear-gradient(135deg, #1F6A75 0%, #093635 100%);
-  border-radius: 20px 20px 0 0;
 }
 
 .modal-header h2 {
@@ -418,8 +417,6 @@
 
 .modal-body {
   padding: 28px;
-  max-height: 70vh;
-  overflow-y: auto;
 }
 
 /* Form Section Title */
@@ -594,7 +591,7 @@
   border-top: 1px solid rgba(31, 106, 117, 0.1);
   background: linear-gradient(135deg, #f8fafa 0%, #f0f4f3 100%);
   border-radius: 0 0 20px 20px;
-  margin: 0 -28px -28px -28px;
+  margin: 0 10px;
 }
 
 .btn-secondary {

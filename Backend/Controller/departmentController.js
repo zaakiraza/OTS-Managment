@@ -1,5 +1,6 @@
 import Department from "../Model/Department.js";
 import Employee from "../Model/Employee.js";
+import { logDepartmentAction } from "../Utils/auditLogger.js";
 
 // Create department
 export const createDepartment = async (req, res) => {
@@ -53,6 +54,11 @@ export const createDepartment = async (req, res) => {
       .populate("head", "name email")
       .populate("teamLead", "name employeeId email position")
       .populate("parentDepartment", "name code");
+
+    // Audit log
+    await logDepartmentAction(req, "CREATE", populatedDept, {
+      after: { name: populatedDept.name, code: populatedDept.code }
+    });
 
     res.status(201).json({
       success: true,
@@ -258,6 +264,12 @@ export const updateDepartment = async (req, res) => {
       .populate("teamLead", "name employeeId email position")
       .populate("parentDepartment", "name code");
 
+    // Audit log
+    await logDepartmentAction(req, "UPDATE", department, {
+      before: { name: currentDept.name, code: currentDept.code },
+      after: { name: department.name, code: department.code }
+    });
+
     res.status(200).json({
       success: true,
       message: "Department updated successfully",
@@ -317,6 +329,12 @@ export const deleteDepartment = async (req, res) => {
         message: "Department not found",
       });
     }
+
+    // Audit log
+    await logDepartmentAction(req, "DELETE", department, {
+      before: { name: department.name, code: department.code, isActive: true },
+      after: { isActive: false }
+    });
 
     res.status(200).json({
       success: true,

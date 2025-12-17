@@ -37,11 +37,11 @@
 }
 
 .toggle-btn {
-  background: rgba(244, 144, 64, 0.2);
+  background: rgb(238 137 57);
   border: none;
-  color: #F49040;
-  width: 32px;
-  height: 32px;
+  color: #eef2f1;
+  /* width: 67px; */
+  /* height: 32px; */
   border-radius: 8px;
   cursor: pointer;
   display: flex;
@@ -49,6 +49,9 @@
   justify-content: center;
   transition: all 0.3s;
   font-weight: bold;
+  position: relative;
+  left: 3px;
+  padding: 10px;
 }
 
 .toggle-btn:hover {
