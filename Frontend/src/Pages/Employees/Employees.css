@@ -270,17 +270,21 @@
   text-transform: capitalize;
 }
 
-.role-badge.superAdmin, .role-superAdmin {
+.role-badge.superAdmin,
+.role-superAdmin {
   background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
   color: #dc2626;
 }
 
-.role-badge.teamLead, .role-teamLead, .role-ITAssetManager {
+.role-badge.teamLead,
+.role-teamLead,
+.role-ITAssetManager {
   background: linear-gradient(135deg, #fff4e6 0%, #ffe0c2 100%);
   color: #e07a2a;
 }
 
-.role-badge.employee, .role-employee {
+.role-badge.employee,
+.role-employee {
   background: #f0f4f3;
   color: #6b7280;
 }
@@ -291,7 +295,8 @@
   gap: 6px;
 }
 
-.btn-edit-small, .btn-delete-small {
+.btn-edit-small,
+.btn-delete-small {
   padding: 6px 12px;
   border: none;
   border-radius: 6px;
@@ -422,7 +427,7 @@
   margin-bottom: 10px;
 }
 
-.dept-tree-node.level-0 > .dept-tree-header {
+.dept-tree-node.level-0>.dept-tree-header {
   border-left: 4px solid #1F6A75;
 }
 
@@ -469,7 +474,7 @@
 }
 
 .dept-tree-count {
-  background: rgba(255,255,255,0.8);
+  background: rgba(255, 255, 255, 0.8);
   color: #6b7280;
   padding: 4px 12px;
   border-radius: 20px;
@@ -643,6 +648,7 @@
     opacity: 0;
     transform: translateY(-30px) scale(0.95);
   }
+
   to {
     opacity: 1;
     transform: translateY(0) scale(1);
@@ -754,6 +760,7 @@
   border-top: none;
   margin-top: 0;
   padding-top: 0;
+  padding-left: 29px;
 }
 
 /* Checkbox Grid */
@@ -866,7 +873,7 @@
   border-color: #1F6A75;
 }
 
-.weekdays-grid .checkbox-label input[type="checkbox"]:checked + span,
+.weekdays-grid .checkbox-label input[type="checkbox"]:checked+span,
 .weekdays-grid .checkbox-label:has(input:checked) {
   color: #1F6A75;
   font-weight: 600;
@@ -876,7 +883,7 @@
   .weekdays-grid {
     gap: 6px;
   }
-  
+
   .weekdays-grid .checkbox-label {
     min-width: 80px;
     padding: 6px 10px;
@@ -912,7 +919,8 @@
   background: #A2ABAA;
 }
 
-.no-data, .loading {
+.no-data,
+.loading {
   text-align: center;
   padding: 60px 20px;
   color: #A2ABAA;
@@ -937,85 +945,85 @@
     padding: 12px;
     padding-bottom: 80px;
   }
-  
+
   .page-header {
     flex-direction: column;
     align-items: stretch;
     gap: 12px;
   }
-  
+
   .header-actions {
     width: 100%;
     flex-direction: column;
     gap: 10px;
   }
-  
+
   .view-toggle {
     width: 100%;
     justify-content: center;
   }
-  
+
   .view-toggle .toggle-btn {
     flex: 1;
     justify-content: center;
   }
-  
+
   .search-box {
     width: 100%;
   }
-  
+
   .search-box input {
     width: 100%;
   }
-  
+
   .dept-filter {
     width: 100%;
     min-width: unset;
   }
-  
+
   .export-buttons {
     width: 100%;
     flex-direction: row;
   }
-  
+
   .export-buttons .btn-export {
     flex: 1;
   }
-  
+
   .btn-add {
     width: 100%;
     justify-content: center;
   }
-  
+
   .form-grid {
     grid-template-columns: 1fr;
     padding: 20px;
   }
-  
+
   .dept-tree-info {
     flex-direction: column;
     align-items: flex-start;
     gap: 8px;
   }
-  
+
   .tree-employee-card {
     flex-direction: column;
     align-items: flex-start;
     text-align: left;
   }
-  
+
   .tree-emp-actions {
     margin-top: 10px;
     width: 100%;
     justify-content: flex-end;
   }
-  
+
   .pagination-controls {
     flex-direction: column;
     gap: 12px;
     align-items: stretch;
   }
-  
+
   .pagination-controls select {
     width: 100%;
   }

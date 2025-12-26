@@ -1024,8 +1024,8 @@ const Employees = () => {
                 </div>
               </div>
 
-              <div className="form-group">
-                <label>Weekly Offs *</label>
+              <div className="form-group" style={{padding: '0 29px'}}>
+                <label >Weekly Offs *</label>
                 <div className="weekdays-grid">
                   {["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"].map((day) => (
                     <label key={day} className="checkbox-label">
