@@ -238,6 +238,18 @@ function SideBar() {
             </NavLink>
           </>
         )}
+
+        {/* Common Menu Items (All Users) */}
+        <div className="nav-divider"></div>
+        <NavLink to="/feedback" className="nav-item">
+          <span className="nav-icon"><i className="fas fa-comment-dots"></i></span>
+          {!isCollapsed && <span className="nav-text">Feedback</span>}
+        </NavLink>
+
+        <NavLink to="/todos" className="nav-item">
+          <span className="nav-icon"><i className="fas fa-list-check"></i></span>
+          {!isCollapsed && <span className="nav-text">My Todos</span>}
+        </NavLink>
       </nav>
 
       <div className="sidebar-footer">

@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import SideBar from "../../Components/SideBar/SideBar";
 import { attendanceAPI } from "../../Config/Api";
 import "../Attendance/Attendance.css";
+import "./MyAttendance.css";
 
 function MyAttendance() {
   const [attendance, setAttendance] = useState([]);
@@ -221,19 +222,20 @@ function MyAttendance() {
                   <th>Check In</th>
                   <th>Check Out</th>
                   <th>Work Hours</th>
+                  <th>Extra Hours</th>
                   <th>Remarks</th>
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan="7" style={{ textAlign: "center" }}>
+                    <td colSpan="8" style={{ textAlign: "center" }}>
                       Loading...
                     </td>
                   </tr>
                 ) : attendance.length === 0 ? (
                   <tr>
-                    <td colSpan="7" style={{ textAlign: "center" }}>
+                    <td colSpan="8" style={{ textAlign: "center" }}>
                       No attendance records found for selected period
                     </td>
                   </tr>
@@ -260,6 +262,15 @@ function MyAttendance() {
                       <td>{formatTime(record.checkIn)}</td>
                       <td>{formatTime(record.checkOut)}</td>
                       <td>{calculateWorkHours(record.checkIn, record.checkOut)}</td>
+                      <td>
+                        {record.extraWorkingHours && record.extraWorkingHours > 0 ? (
+                          <span style={{ color: "#10b981", fontWeight: "bold" }}>
+                            +{record.extraWorkingHours.toFixed(2)}h
+                          </span>
+                        ) : (
+                          "-"
+                        )}
+                      </td>
                       <td>{record.remarks || "-"}</td>
                     </tr>
                   ))
@@ -270,8 +281,8 @@ function MyAttendance() {
 
           {/* Summary Card */}
           {attendance.length > 0 && (
-            <div style={{ marginTop: '20px', padding: '20px', background: '#f8fafc', borderRadius: '8px' }}>
-              <h3 style={{ marginBottom: '10px' }}>Summary</h3>
+            <div className="summary-card">
+              <h3>Summary</h3>
               <p>
                 <strong>Attendance Rate:</strong>{" "}
                 {stats.totalDays > 0
@@ -284,6 +295,13 @@ function MyAttendance() {
               </p>
               <p>
                 <strong>Non-Working Days:</strong> {stats.absent + stats.onLeave}
+              </p>
+              <p>
+                <strong>Total Extra Hours:</strong>{" "}
+                {attendance
+                  .reduce((sum, record) => sum + (record.extraWorkingHours || 0), 0)
+                  .toFixed(2)}{" "}
+                hours
               </p>
             </div>
           )}

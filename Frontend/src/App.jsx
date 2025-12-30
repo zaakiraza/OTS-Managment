@@ -24,6 +24,8 @@ import MyAttendance from "./Pages/MyAttendance/MyAttendance";
 import Resources from "./Pages/Resources/Resources";
 import AuditLogs from "./Pages/AuditLogs/AuditLogs";
 import Profile from "./Pages/Profile/Profile";
+import Feedback from "./Pages/Feedback/Feedback";
+import Todos from "./Pages/Todos/Todos";
 
 function App() {
   const isAuthenticated = () => {
@@ -227,6 +229,26 @@ function App() {
         />
 
         <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+
+        {/* Feedback - All Authenticated Users */}
+        <Route
+          path="/feedback"
+          element={
+            <ProtectedRoute allowedRoles={["superAdmin", "attendanceDepartment", "ITAssetManager", "teamLead", "employee"]}>
+              <Feedback />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Todos - All Authenticated Users (Private) */}
+        <Route
+          path="/todos"
+          element={
+            <ProtectedRoute allowedRoles={["superAdmin", "attendanceDepartment", "ITAssetManager", "teamLead", "employee"]}>
+              <Todos />
+            </ProtectedRoute>
+          }
+        />
 
         <Route path="/" element={<Navigate to="/login" />} />
         <Route path="*" element={<Navigate to="/login" />} />

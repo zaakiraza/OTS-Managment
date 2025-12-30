@@ -101,6 +101,10 @@ export const calculateSalary = async (req, res) => {
       }
     });
 
+    // Subtract leave days from total working days
+    // Leave days should not be counted in the denominator for salary calculation
+    totalWorkingDays = Math.max(0, totalWorkingDays - leaveDays);
+
     // Calculate missing days (working days without any attendance record)
     let missingDays = 0;
     const today = new Date();
@@ -319,6 +323,7 @@ export const calculateAllSalaries = async (req, res) => {
         let halfDays = 0;
         let lateDays = 0;
         let earlyArrivals = 0;
+        let leaveDays = 0;
 
         // Create a set of dates that have attendance records
         const datesWithRecords = new Set();
@@ -333,6 +338,7 @@ export const calculateAllSalaries = async (req, res) => {
           }
           else if (record.status === "absent") recordedAbsentDays++;
           else if (record.status === "half-day") halfDays++;
+          else if (record.status === "leave") leaveDays++;
           else if (record.status === "late" || record.status === "late-early-arrival") {
             lateDays++;
             presentDays++; // Late is still considered present
@@ -343,6 +349,10 @@ export const calculateAllSalaries = async (req, res) => {
             presentDays++;
           }
         });
+
+        // Subtract leave days from total working days
+        // Leave days should not be counted in the denominator for salary calculation
+        totalWorkingDays = Math.max(0, totalWorkingDays - leaveDays);
 
         // Calculate missing days (working days without any attendance record)
         let missingDays = 0;

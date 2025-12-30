@@ -188,9 +188,11 @@ function Attendance() {
 
   const fetchDepartments = async () => {
     try {
-      const response = await departmentAPI.getAll();
+      // Request flat departments to get all departments in a single array
+      const response = await departmentAPI.getAll({ flat: true });
       if (response.data.success) {
-        setDepartments(response.data.data);
+        // Backend returns flat array when flat=true
+        setDepartments(response.data.data || []);
       }
     } catch (err) {
       console.error("Error fetching departments:", err);
@@ -213,9 +215,28 @@ function Attendance() {
   };
 
   const handleFilterChange = (e) => {
+    const value = e.target.value;
+    
+    // Validate date: prevent selecting future dates
+    if (e.target.name === "date" && value) {
+      const selectedDate = new Date(value);
+      const today = new Date();
+      today.setHours(23, 59, 59, 999); // End of today
+      
+      if (selectedDate > today) {
+        // If future date selected, set to today
+        const todayStr = new Date().toISOString().split("T")[0];
+        setFilter({
+          ...filter,
+          [e.target.name]: todayStr,
+        });
+        return;
+      }
+    }
+    
     setFilter({
       ...filter,
-      [e.target.name]: e.target.value,
+      [e.target.name]: value,
     });
   };
 
@@ -224,9 +245,17 @@ function Attendance() {
     
     try {
       const date = new Date(time);
-      // Use local time methods to automatically add PKT offset
-      const hours = String(date.getHours()).padStart(2, '0');
-      const minutes = String(date.getMinutes()).padStart(2, '0');
+      // Get UTC hours and minutes, then add 5 hours for PKT
+      let pktHours = date.getUTCHours() + 5;
+      const pktMinutes = date.getUTCMinutes();
+      
+      // Handle day overflow (if hours >= 24)
+      if (pktHours >= 24) {
+        pktHours = pktHours - 24;
+      }
+      
+      const hours = String(pktHours).padStart(2, '0');
+      const minutes = String(pktMinutes).padStart(2, '0');
       return `${hours}:${minutes}`;
     } catch (error) {
       return "-";
@@ -271,23 +300,40 @@ function Attendance() {
   const handleEdit = (record) => {
     setSelectedRecord(record);
     
-    // Extract time in HH:MM format from Date objects
+    // Extract time in HH:MM format from UTC Date objects
+    // Convert UTC to PKT (UTC+5) for display
     let checkInTime = "";
     let checkOutTime = "";
     
     if (record.checkIn) {
       const date = new Date(record.checkIn);
-      // Use local time to get PKT time
-      const hours = String(date.getHours()).padStart(2, '0');
-      const minutes = String(date.getMinutes()).padStart(2, '0');
+      // Get UTC hours and minutes, then add 5 hours for PKT
+      let pktHours = date.getUTCHours() + 5;
+      const pktMinutes = date.getUTCMinutes();
+      
+      // Handle day overflow (if hours >= 24)
+      if (pktHours >= 24) {
+        pktHours = pktHours - 24;
+      }
+      
+      const hours = String(pktHours).padStart(2, '0');
+      const minutes = String(pktMinutes).padStart(2, '0');
       checkInTime = `${hours}:${minutes}`;
     }
     
     if (record.checkOut) {
       const date = new Date(record.checkOut);
-      // Use local time to get PKT time
-      const hours = String(date.getHours()).padStart(2, '0');
-      const minutes = String(date.getMinutes()).padStart(2, '0');
+      // Get UTC hours and minutes, then add 5 hours for PKT
+      let pktHours = date.getUTCHours() + 5;
+      const pktMinutes = date.getUTCMinutes();
+      
+      // Handle day overflow (if hours >= 24)
+      if (pktHours >= 24) {
+        pktHours = pktHours - 24;
+      }
+      
+      const hours = String(pktHours).padStart(2, '0');
+      const minutes = String(pktMinutes).padStart(2, '0');
       checkOutTime = `${hours}:${minutes}`;
     }
     
@@ -307,24 +353,28 @@ function Attendance() {
     try {
       setLoading(true);
 
-      const dateStr = new Date(selectedRecord.date).toISOString().split("T")[0];
       const submitData = {
         remarks: editFormData.remarks,
       };
 
-      if (editFormData.checkIn) {
-        // Create full ISO datetime string (YYYY-MM-DDTHH:MM:SS)
-        const timeStr = editFormData.checkIn.length === 5 ? `${editFormData.checkIn}:00` : editFormData.checkIn;
-        submitData.checkIn = `${dateStr}T${timeStr}`;
+      // If status is leave, don't send check-in/check-out times
+      if (editFormData.status !== "leave") {
+        // Send time strings (HH:MM:SS) - backend will combine with date and convert to UTC
+        if (editFormData.checkIn) {
+          // Ensure format is HH:MM:SS
+          const timeStr = editFormData.checkIn.length === 5 ? `${editFormData.checkIn}:00` : editFormData.checkIn;
+          submitData.checkIn = timeStr;
+        }
+        if (editFormData.checkOut) {
+          // Ensure format is HH:MM:SS
+          const timeStr = editFormData.checkOut.length === 5 ? `${editFormData.checkOut}:00` : editFormData.checkOut;
+          submitData.checkOut = timeStr;
+        }
+        if (editFormData.workingHours) {
+          submitData.workingHours = parseFloat(editFormData.workingHours);
+        }
       }
-      if (editFormData.checkOut) {
-        // Create full ISO datetime string (YYYY-MM-DDTHH:MM:SS)
-        const timeStr = editFormData.checkOut.length === 5 ? `${editFormData.checkOut}:00` : editFormData.checkOut;
-        submitData.checkOut = `${dateStr}T${timeStr}`;
-      }
-      if (editFormData.workingHours) {
-        submitData.workingHours = parseFloat(editFormData.workingHours);
-      }
+      
       if (editFormData.status) {
         submitData.status = editFormData.status;
       }
@@ -360,16 +410,22 @@ function Attendance() {
         remarks: manualFormData.remarks,
       };
 
-      // Send full ISO datetime strings (YYYY-MM-DDTHH:MM:SS)
-      if (manualFormData.checkIn) {
-        submitData.checkIn = `${manualFormData.date}T${manualFormData.checkIn}:00`;
+      // If status is leave, don't send check-in/check-out times
+      if (manualFormData.status !== "leave") {
+        // Send time strings (HH:MM:SS) - backend will combine with date and convert to UTC
+        if (manualFormData.checkIn) {
+          const timeStr = manualFormData.checkIn.length === 5 ? `${manualFormData.checkIn}:00` : manualFormData.checkIn;
+          submitData.checkIn = timeStr;
+        }
+        if (manualFormData.checkOut) {
+          const timeStr = manualFormData.checkOut.length === 5 ? `${manualFormData.checkOut}:00` : manualFormData.checkOut;
+          submitData.checkOut = timeStr;
+        }
+        if (manualFormData.workingHours) {
+          submitData.workingHours = parseFloat(manualFormData.workingHours);
+        }
       }
-      if (manualFormData.checkOut) {
-        submitData.checkOut = `${manualFormData.date}T${manualFormData.checkOut}:00`;
-      }
-      if (manualFormData.workingHours) {
-        submitData.workingHours = parseFloat(manualFormData.workingHours);
-      }
+      
       if (manualFormData.status) {
         submitData.status = manualFormData.status;
       }
@@ -527,6 +583,7 @@ function Attendance() {
                 type="date"
                 name="date"
                 value={filter.date}
+                max={new Date().toISOString().split("T")[0]}
                 onChange={handleFilterChange}
               />
             </div>
@@ -589,6 +646,7 @@ function Attendance() {
                   <th>Check In</th>
                   <th>Check Out</th>
                   <th>Working Hours</th>
+                  <th>Extra Hours</th>
                   <th>Status</th>
                   <th>Device</th>
                   <th>Actions</th>
@@ -597,13 +655,13 @@ function Attendance() {
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan="9" style={{ textAlign: "center" }}>
+                    <td colSpan="10" style={{ textAlign: "center" }}>
                       Loading...
                     </td>
                   </tr>
                 ) : displayRecords.length === 0 ? (
                   <tr>
-                    <td colSpan="9" style={{ textAlign: "center" }}>
+                    <td colSpan="10" style={{ textAlign: "center" }}>
                       No attendance records found
                     </td>
                   </tr>
@@ -623,6 +681,15 @@ function Attendance() {
                         {record.workingHours > 0
                           ? formatWorkingHours(record.workingHours)
                           : "-"}
+                      </td>
+                      <td>
+                        {record.extraWorkingHours && record.extraWorkingHours > 0 ? (
+                          <span style={{ color: "#10b981", fontWeight: "bold" }}>
+                            +{record.extraWorkingHours.toFixed(2)}h
+                          </span>
+                        ) : (
+                          "-"
+                        )}
                       </td>
                       <td>
                         <span
@@ -749,7 +816,11 @@ function Attendance() {
                       <input
                         type="time"
                         value={manualFormData.checkIn}
+                        disabled={manualFormData.status === "leave"}
                         onChange={(e) => {
+                          // Don't allow changes if status is leave
+                          if (manualFormData.status === "leave") return;
+                          
                           const newCheckIn = e.target.value;
                           const workingHours = calculateWorkingHours(
                             newCheckIn,
@@ -762,13 +833,22 @@ function Attendance() {
                           });
                         }}
                       />
+                      {manualFormData.status === "leave" && (
+                        <small className="helper-text warning">
+                          <i className="fas fa-info-circle"></i> Check-in time not applicable for leave status
+                        </small>
+                      )}
                     </div>
                     <div className="form-group">
                       <label><i className="fas fa-sign-out-alt"></i> Check-out Time</label>
                       <input
                         type="time"
                         value={manualFormData.checkOut}
+                        disabled={manualFormData.status === "leave"}
                         onChange={(e) => {
+                          // Don't allow changes if status is leave
+                          if (manualFormData.status === "leave") return;
+                          
                           const newCheckOut = e.target.value;
                           const workingHours = calculateWorkingHours(
                             manualFormData.checkIn,
@@ -781,6 +861,11 @@ function Attendance() {
                           });
                         }}
                       />
+                      {manualFormData.status === "leave" && (
+                        <small className="helper-text warning">
+                          <i className="fas fa-info-circle"></i> Check-out time not applicable for leave status
+                        </small>
+                      )}
                     </div>
                   </div>
                   
@@ -792,12 +877,24 @@ function Attendance() {
                     <label><i className="fas fa-flag"></i> Status</label>
                     <select
                       value={manualFormData.status}
-                      onChange={(e) =>
-                        setManualFormData({
-                          ...manualFormData,
-                          status: e.target.value,
-                        })
-                      }
+                      onChange={(e) => {
+                        const newStatus = e.target.value;
+                        // If status is set to leave, clear check-in and check-out times
+                        if (newStatus === "leave") {
+                          setManualFormData({
+                            ...manualFormData,
+                            status: newStatus,
+                            checkIn: "",
+                            checkOut: "",
+                            workingHours: "",
+                          });
+                        } else {
+                          setManualFormData({
+                            ...manualFormData,
+                            status: newStatus,
+                          });
+                        }
+                      }}
                     >
                       <option value="">Auto-calculate based on times</option>
                       <option value="present">Present</option>
@@ -908,7 +1005,11 @@ function Attendance() {
                       <input
                         type="time"
                         value={editFormData.checkIn}
+                        disabled={editFormData.status === "leave"}
                         onChange={(e) => {
+                          // Don't allow changes if status is leave
+                          if (editFormData.status === "leave") return;
+                          
                           const newCheckIn = e.target.value;
                           const workingHours = calculateWorkingHours(
                             newCheckIn,
@@ -921,13 +1022,22 @@ function Attendance() {
                           });
                         }}
                       />
+                      {editFormData.status === "leave" && (
+                        <small className="helper-text warning">
+                          <i className="fas fa-info-circle"></i> Check-in time not applicable for leave status
+                        </small>
+                      )}
                     </div>
                     <div className="form-group">
                       <label><i className="fas fa-sign-out-alt"></i> Check-out Time</label>
                       <input
                         type="time"
                         value={editFormData.checkOut}
+                        disabled={editFormData.status === "leave"}
                         onChange={(e) => {
+                          // Don't allow changes if status is leave
+                          if (editFormData.status === "leave") return;
+                          
                           const newCheckOut = e.target.value;
                           const workingHours = calculateWorkingHours(
                             editFormData.checkIn,
@@ -940,6 +1050,11 @@ function Attendance() {
                           });
                         }}
                       />
+                      {editFormData.status === "leave" && (
+                        <small className="helper-text warning">
+                          <i className="fas fa-info-circle"></i> Check-out time not applicable for leave status
+                        </small>
+                      )}
                     </div>
                   </div>
                   <div className="form-group">
@@ -953,6 +1068,23 @@ function Attendance() {
                     />
                     <small className="helper-text info"><i className="fas fa-calculator"></i> Auto-calculated from check-in/out times</small>
                   </div>
+                  {selectedRecord && selectedRecord.extraWorkingHours > 0 && (
+                    <div className="form-group">
+                      <label><i className="fas fa-clock"></i> Extra Working Hours</label>
+                      <input
+                        type="text"
+                        value={`+${selectedRecord.extraWorkingHours.toFixed(2)} hours`}
+                        readOnly
+                        style={{ 
+                          background: 'linear-gradient(to right, #d1fae5, #f0fdf4)', 
+                          cursor: 'not-allowed',
+                          color: '#10b981',
+                          fontWeight: 'bold'
+                        }}
+                      />
+                      <small className="helper-text info"><i className="fas fa-info-circle"></i> Hours worked beyond scheduled time</small>
+                    </div>
+                  )}
                   
                   <div className="form-section-title">
                     <i className="fas fa-cog"></i> Additional Options
@@ -962,12 +1094,24 @@ function Attendance() {
                     <label><i className="fas fa-flag"></i> Status</label>
                     <select
                       value={editFormData.status}
-                      onChange={(e) =>
-                        setEditFormData({
-                          ...editFormData,
-                          status: e.target.value,
-                        })
-                      }
+                      onChange={(e) => {
+                        const newStatus = e.target.value;
+                        // If status is set to leave, clear check-in and check-out times
+                        if (newStatus === "leave") {
+                          setEditFormData({
+                            ...editFormData,
+                            status: newStatus,
+                            checkIn: "",
+                            checkOut: "",
+                            workingHours: "",
+                          });
+                        } else {
+                          setEditFormData({
+                            ...editFormData,
+                            status: newStatus,
+                          });
+                        }
+                      }}
                     >
                       <option value="">Auto-calculate based on times</option>
                       <option value="present">Present</option>

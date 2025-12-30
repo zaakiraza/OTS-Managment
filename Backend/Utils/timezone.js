@@ -84,18 +84,19 @@ export const parseLocalTimeToUTC = (date, timeStr) => {
     return null;
   }
   
-  // Create local datetime and convert to UTC
-  const localDateTime = new Date(
-    baseDate.getUTCFullYear(),
-    baseDate.getUTCMonth(),
-    baseDate.getUTCDate(),
-    hours,
-    minutes,
-    seconds,
-    0
-  );
+  // Create UTC date at midnight of the base date
+  const year = baseDate.getUTCFullYear();
+  const month = baseDate.getUTCMonth();
+  const day = baseDate.getUTCDate();
   
-  return localToUTC(localDateTime);
+  // Create a Date representing the local time (PKT) at midnight UTC of the base date
+  // Then add the time components and subtract PKT offset to get UTC
+  // This ensures we're treating the input time as PKT, not server local time
+  const utcDate = new Date(Date.UTC(year, month, day, hours, minutes, seconds));
+  
+  // Subtract PKT offset (5 hours) to convert from PKT to UTC
+  // If user enters 10:00 AM PKT, we want 05:00 AM UTC
+  return new Date(utcDate.getTime() - TIMEZONE.PKT_OFFSET_MS);
 };
 
 /**

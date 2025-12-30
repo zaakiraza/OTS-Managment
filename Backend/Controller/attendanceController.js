@@ -370,8 +370,17 @@ export const updateAttendance = async (req, res) => {
       // If checkIn is a time string (HH:MM:SS or HH:MM), combine with date
       if (typeof checkIn === 'string' && /^\d{1,2}:\d{2}(:\d{2})?$/.test(checkIn)) {
         attendance.checkIn = parseLocalTimeToUTC(attendance.date, checkIn);
+      } else if (typeof checkIn === 'string' && checkIn.includes('T')) {
+        // It's a full ISO datetime string (YYYY-MM-DDTHH:MM:SS)
+        // Extract time part and treat as local time (PKT)
+        const timeMatch = checkIn.match(/T(\d{1,2}:\d{2}(:\d{2})?)/);
+        if (timeMatch) {
+          attendance.checkIn = parseLocalTimeToUTC(attendance.date, timeMatch[1]);
+        } else {
+          attendance.checkIn = new Date(checkIn);
+        }
       } else {
-        // It's already a full datetime string or Date object
+        // It's already a Date object or other format
         attendance.checkIn = new Date(checkIn);
       }
     }
@@ -380,8 +389,17 @@ export const updateAttendance = async (req, res) => {
       // If checkOut is a time string (HH:MM:SS or HH:MM), combine with date
       if (typeof checkOut === 'string' && /^\d{1,2}:\d{2}(:\d{2})?$/.test(checkOut)) {
         attendance.checkOut = parseLocalTimeToUTC(attendance.date, checkOut);
+      } else if (typeof checkOut === 'string' && checkOut.includes('T')) {
+        // It's a full ISO datetime string (YYYY-MM-DDTHH:MM:SS)
+        // Extract time part and treat as local time (PKT)
+        const timeMatch = checkOut.match(/T(\d{1,2}:\d{2}(:\d{2})?)/);
+        if (timeMatch) {
+          attendance.checkOut = parseLocalTimeToUTC(attendance.date, timeMatch[1]);
+        } else {
+          attendance.checkOut = new Date(checkOut);
+        }
       } else {
-        // It's already a full datetime string or Date object
+        // It's already a Date object or other format
         attendance.checkOut = new Date(checkOut);
       }
     }

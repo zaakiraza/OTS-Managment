@@ -129,8 +129,8 @@ function Login() {
             >
               <div className="credential-badge">Super Admin</div>
               <div className="credential-info">
-                {/* <p className="credential-email">USR0001</p>
-                <p className="credential-password">12345678</p> */}
+                <p className="credential-email">USR0001</p>
+                <p className="credential-password">12345678</p>
               </div>
             </div>
 
@@ -145,8 +145,8 @@ function Login() {
             >
               <div className="credential-badge">Attendance Dept</div>
               <div className="credential-info">
-                {/* <p className="credential-email">SCH0001</p>
-                <p className="credential-password">12345678</p> */}
+                <p className="credential-email">SCH0001</p>
+                <p className="credential-password">12345678</p>
               </div>
             </div>
 
@@ -161,8 +161,8 @@ function Login() {
             >
               <div className="credential-badge">IT Manager</div>
               <div className="credential-info">
-                {/* <p className="credential-email">IT0001</p>
-                <p className="credential-password">12345678</p> */}
+                <p className="credential-email">IT0001</p>
+                <p className="credential-password">12345678</p>
               </div>
             </div>
 
@@ -177,8 +177,8 @@ function Login() {
             >
               <div className="credential-badge">Team Lead1</div>
               <div className="credential-info">
-                {/* <p className="credential-email">WRK0001</p>
-                <p className="credential-password">12345678</p> */}
+                <p className="credential-email">WRK0001</p>
+                <p className="credential-password">12345678</p>
               </div>
             </div>
 
@@ -193,8 +193,8 @@ function Login() {
             >
               <div className="credential-badge">Team lead 2</div>
               <div className="credential-info">
-                {/* <p className="credential-email">WEB0002</p>
-                <p className="credential-password">12345678</p> */}
+                <p className="credential-email">WEB0002</p>
+                <p className="credential-password">12345678</p>
               </div>
             </div>
 
@@ -209,8 +209,8 @@ function Login() {
             >
               <div className="credential-badge">Employee 1</div>
               <div className="credential-info">
-                {/* <p className="credential-email">EDT0001</p>
-                <p className="credential-password">12345678</p> */}
+                <p className="credential-email">EDT0001</p>
+                <p className="credential-password">12345678</p>
               </div>
             </div>
 
@@ -225,8 +225,8 @@ function Login() {
             >
               <div className="credential-badge">Employee 2</div>
               <div className="credential-info">
-                {/* <p className="credential-email">WEB0001</p>
-                <p className="credential-password">12345678</p> */}
+                <p className="credential-email">WEB0001</p>
+                <p className="credential-password">12345678</p>
               </div>
             </div>
           </div>

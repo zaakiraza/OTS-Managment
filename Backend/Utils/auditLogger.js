@@ -276,6 +276,24 @@ export const logExportAction = async (req, resourceType, description) => {
 };
 
 /**
+ * Log system actions (settings, feedback, todos, etc.)
+ */
+export const logSystemAction = async (req, action, resource, changes = null, description = null) => {
+  const resourceType = resource?.constructor?.modelName || "System";
+  const resourceId = resource?._id || null;
+  
+  await createAuditLog({
+    performedBy: req.user,
+    action,
+    resourceType,
+    resourceId,
+    description: description || `${action} ${resourceType.toLowerCase()}`,
+    changes,
+    metadata: extractRequestMetadata(req),
+  });
+};
+
+/**
  * Get audit logs with filtering and pagination
  */
 export const getAuditLogs = async (filters = {}, page = 1, limit = 50) => {
@@ -329,6 +347,7 @@ export default {
   logAuthAction,
   logImportAction,
   logExportAction,
+  logSystemAction,
   getAuditLogs,
   extractRequestMetadata,
 };

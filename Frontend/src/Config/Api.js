@@ -151,4 +151,24 @@ export const auditLogAPI = {
   getResourceTypes: () => api.get("/audit-logs/resource-types"),
 };
 
+// Feedback API
+export const feedbackAPI = {
+  submit: (data) => api.post("/feedback", data),
+  getMy: () => api.get("/feedback/my"),
+  getAll: (params) => api.get("/feedback", { params }),
+  getById: (id) => api.get(`/feedback/${id}`),
+  update: (id, data) => api.put(`/feedback/${id}`, data),
+  delete: (id) => api.delete(`/feedback/${id}`),
+};
+
+// Todo API
+export const todoAPI = {
+  getAll: (params) => api.get("/todos", { params }),
+  getById: (id) => api.get(`/todos/${id}`),
+  create: (data) => api.post("/todos", data),
+  update: (id, data) => api.put(`/todos/${id}`, data),
+  delete: (id) => api.delete(`/todos/${id}`),
+  toggleStatus: (id) => api.patch(`/todos/${id}/toggle`),
+};
+
 export default api;

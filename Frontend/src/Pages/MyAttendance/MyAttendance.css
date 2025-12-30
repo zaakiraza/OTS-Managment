@@ -1,0 +1,109 @@
+/* My Attendance Page Specific Styles */
+
+/* Add more horizontal padding to the main content area */
+.dashboard-layout .main-content .attendance-page {
+  padding-left: 32px;
+  padding-right: 32px;
+  padding-top: 24px;
+  padding-bottom: 100px;
+}
+
+/* Ensure filters section has proper spacing */
+.filters-section {
+  display: flex;
+  gap: 20px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+
+.filters-section .filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 150px;
+}
+
+.filters-section .filter-group label {
+  font-size: 13px;
+  color: var(--text-light, #A2ABAA);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.filters-section .filter-group select {
+  padding: 10px 14px;
+  border: 2px solid var(--border-light, #CED4D3);
+  border-radius: 10px;
+  font-size: 14px;
+  background: white;
+  color: var(--text-dark, #0D0D0D);
+  transition: all 0.3s;
+  cursor: pointer;
+}
+
+.filters-section .filter-group select:hover {
+  border-color: var(--primary-color, #1F6A75);
+}
+
+.filters-section .filter-group select:focus {
+  outline: none;
+  border-color: var(--primary-color, #1F6A75);
+  box-shadow: 0 0 0 3px rgba(31, 106, 117, 0.1);
+}
+
+/* Improve stats grid spacing */
+.stats-grid {
+  margin-bottom: 32px;
+}
+
+/* Table container with better spacing */
+.table-container {
+  margin-top: 24px;
+}
+
+/* Summary card styling */
+.summary-card {
+  margin-top: 24px;
+  padding: 24px;
+  background: #f8fafc;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.summary-card h3 {
+  margin-bottom: 16px;
+  color: var(--text-dark, #0D0D0D);
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.summary-card p {
+  margin-bottom: 12px;
+  color: var(--text-medium, #4B5563);
+  font-size: 14px;
+}
+
+.summary-card strong {
+  color: var(--text-dark, #0D0D0D);
+  font-weight: 600;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .dashboard-layout .main-content .attendance-page {
+    padding-left: 16px;
+    padding-right: 16px;
+    padding-top: 16px;
+  }
+}
+
+@media (max-width: 600px) {
+  .dashboard-layout .main-content .attendance-page {
+    padding-left: 12px;
+    padding-right: 12px;
+    padding-top: 12px;
+  }
+}
+
