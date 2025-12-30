@@ -111,7 +111,7 @@ function Login() {
           <p>Organization Management System</p>
         </div>
 
-        <div className="test-credentials">
+        {/* <div className="test-credentials">
           <div className="credentials-header">
             <h3><i className="fas fa-key"></i> Test Credentials</h3>
             <p>Click any credential to auto-fill</p>
@@ -230,7 +230,7 @@ function Login() {
               </div>
             </div>
           </div>
-        </div>
+        </div> */}
       </div>
     </div>
   );
