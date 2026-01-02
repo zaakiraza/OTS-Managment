@@ -1,9 +1,11 @@
 import { useState, useEffect } from "react";
 import SideBar from "../../Components/SideBar/SideBar";
 import ticketAPI from "../../Config/ticketApi";
+import { useToast } from "../../Components/Common/Toast/Toast";
 import "./Tickets.css";
 
 function Tickets() {
+  const toast = useToast();
   const [tickets, setTickets] = useState([]);
   const [ticketsAgainstMe, setTicketsAgainstMe] = useState([]);
   const [employees, setEmployees] = useState([]);
@@ -191,7 +193,7 @@ function Tickets() {
         } else {
           await ticketAPI.update(selectedTicket._id, dataToSend);
         }
-        alert("Ticket updated successfully!");
+        toast.success("Ticket updated successfully!");
       } else {
         // Create ticket
         if (attachments.length > 0) {
@@ -212,7 +214,7 @@ function Tickets() {
         } else {
           await ticketAPI.create(dataToSend);
         }
-        alert("Ticket created successfully!");
+        toast.success("Ticket created successfully!");
       }
       resetForm();
       fetchTickets();
@@ -220,7 +222,7 @@ function Tickets() {
       fetchTicketsAgainstMe();
     } catch (error) {
       console.error("Error submitting ticket:", error);
-      alert(error.response?.data?.message || "Failed to submit ticket");
+      toast.error(error.response?.data?.message || "Failed to submit ticket");
     } finally {
       setLoading(false);
     }
@@ -284,13 +286,13 @@ function Tickets() {
     const totalFiles = files.length + attachments.length + compressedImages.length;
     
     if (totalFiles > 5) {
-      alert("Maximum 5 files allowed");
+      toast.warning("Maximum 5 files allowed");
       return;
     }
 
     for (const file of files) {
       if (file.size > 50 * 1024 * 1024) {
-        alert(`File "${file.name}" is too large. Maximum size is 50MB.`);
+        toast.warning(`File "${file.name}" is too large. Maximum size is 50MB.`);
         continue;
       }
 
@@ -303,7 +305,7 @@ function Tickets() {
       } else {
         // Non-image files, check size limit
         if (file.size > 10 * 1024 * 1024) {
-          alert(`File "${file.name}" is too large. Maximum size for non-image files is 10MB.`);
+          toast.warning(`File "${file.name}" is too large. Maximum size for non-image files is 10MB.`);
           continue;
         }
         setAttachments((prev) => [...prev, file]);
@@ -332,7 +334,7 @@ function Tickets() {
       }
     } catch (error) {
       console.error("Error fetching ticket details:", error);
-      alert("Failed to load ticket details");
+      toast.error("Failed to load ticket details");
     }
   };
 
@@ -358,12 +360,12 @@ function Tickets() {
     if (!confirm("Are you sure you want to delete this ticket?")) return;
     try {
       await ticketAPI.delete(id);
-      alert("Ticket deleted successfully!");
+      toast.success("Ticket deleted successfully!");
       fetchTickets();
       fetchStats();
     } catch (error) {
       console.error("Error deleting ticket:", error);
-      alert(error.response?.data?.message || "Failed to delete ticket");
+      toast.error(error.response?.data?.message || "Failed to delete ticket");
     }
   };
 
@@ -378,7 +380,7 @@ function Tickets() {
       }
     } catch (error) {
       console.error("Error adding comment:", error);
-      alert("Failed to add comment");
+      toast.error("Failed to add comment");
     }
   };
 

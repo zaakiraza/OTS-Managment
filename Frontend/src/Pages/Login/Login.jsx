@@ -1,10 +1,12 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { authAPI } from "../../Config/Api";
+import { useToast } from "../../Components/Common/Toast/Toast";
 import "./Login.css";
 
 function Login() {
   const navigate = useNavigate();
+  const toast = useToast();
   const [formData, setFormData] = useState({
     email: "",
     password: "",
@@ -35,6 +37,8 @@ function Login() {
         localStorage.setItem("token", response.data.token);
         localStorage.setItem("user", JSON.stringify(response.data.data));
 
+        toast.success("Login successful!");
+
         // Navigate based on role
         const userRole = response.data.data?.role?.name;
         console.log("User role:", userRole); // Debug log
@@ -57,7 +61,7 @@ function Login() {
         err.response?.data?.message || "Login failed. Please try again.";
       console.error("Error message:", errorMessage);
       setError(errorMessage);
-      alert("Login Error: " + errorMessage); // Temporary alert to see error
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }

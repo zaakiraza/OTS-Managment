@@ -20,25 +20,50 @@ export const generateAttendanceReport = async (req, res) => {
 
     let dateFilter = {};
 
-    // Handle week filter
+    // Handle week filter (format: YYYY-MM-W1, YYYY-MM-W2, etc. - month-based weeks)
     if (week) {
-      const [yearStr, weekStr] = week.split("-W");
-      const year = parseInt(yearStr);
-      const weekNum = parseInt(weekStr);
-      
-      // Calculate start and end of week (Monday to Sunday)
-      const firstDayOfYear = new Date(year, 0, 1);
-      const daysToMonday = (firstDayOfYear.getDay() + 6) % 7; // Days until first Monday
-      const firstMonday = new Date(year, 0, 1 + (7 - daysToMonday) % 7);
-      
-      const startOfWeek = new Date(firstMonday);
-      startOfWeek.setDate(firstMonday.getDate() + (weekNum - 1) * 7);
-      
-      const endOfWeek = new Date(startOfWeek);
-      endOfWeek.setDate(startOfWeek.getDate() + 6);
-      endOfWeek.setHours(23, 59, 59, 999);
-      
-      dateFilter.date = { $gte: startOfWeek, $lte: endOfWeek };
+      // Check if it's the new month-based format (YYYY-MM-WN) or old ISO format (YYYY-Www)
+      if (week.includes("-W") && week.match(/^\d{4}-\d{2}-W\d+$/)) {
+        // New format: YYYY-MM-WN (month-based weeks)
+        const parts = week.split("-W");
+        const monthPart = parts[0]; // YYYY-MM
+        const weekNum = parseInt(parts[1]);
+        
+        const [year, month] = monthPart.split("-").map(Number);
+        const daysInMonth = new Date(year, month, 0).getDate();
+        
+        // Calculate week start and end days within the month
+        // Week 1 = days 1-7, Week 2 = days 8-14, etc.
+        const weekStartDay = (weekNum - 1) * 7 + 1;
+        const weekEndDay = Math.min(weekNum * 7, daysInMonth);
+        
+        const startOfWeek = new Date(year, month - 1, weekStartDay);
+        startOfWeek.setHours(0, 0, 0, 0);
+        
+        const endOfWeek = new Date(year, month - 1, weekEndDay);
+        endOfWeek.setHours(23, 59, 59, 999);
+        
+        dateFilter.date = { $gte: startOfWeek, $lte: endOfWeek };
+      } else {
+        // Old ISO format: YYYY-Www (backward compatibility)
+        const [yearStr, weekStr] = week.split("-W");
+        const year = parseInt(yearStr);
+        const weekNum = parseInt(weekStr);
+        
+        // Calculate start and end of week (Monday to Sunday)
+        const firstDayOfYear = new Date(year, 0, 1);
+        const daysToMonday = (firstDayOfYear.getDay() + 6) % 7; // Days until first Monday
+        const firstMonday = new Date(year, 0, 1 + (7 - daysToMonday) % 7);
+        
+        const startOfWeek = new Date(firstMonday);
+        startOfWeek.setDate(firstMonday.getDate() + (weekNum - 1) * 7);
+        
+        const endOfWeek = new Date(startOfWeek);
+        endOfWeek.setDate(startOfWeek.getDate() + 6);
+        endOfWeek.setHours(23, 59, 59, 999);
+        
+        dateFilter.date = { $gte: startOfWeek, $lte: endOfWeek };
+      }
     }
     // Handle month filter
     else if (month) {
@@ -132,8 +157,8 @@ export const generateAttendanceReport = async (req, res) => {
         if (record.status === 'present') empData.present++;
         else if (record.status === 'absent') empData.absent++;
         else if (record.status === 'late') empData.late++;
-        else if (record.status === 'early-arrival') empData.earlyArrival++;
-        else if (record.status === 'late-early-arrival') empData.lateEarlyArrival++;
+        else if (record.status === 'early-departure') empData.earlyArrival++;
+        else if (record.status === 'late-early-departure') empData.lateEarlyArrival++;
         else if (record.status === 'half-day') empData.halfDay++;
         else if (record.status === 'leave') empData.leaves++;
         else if (record.status === 'pending') empData.pending++;
@@ -425,7 +450,7 @@ export const getEmployeeWiseReport = async (req, res) => {
         if (record.status === "absent") stats.absentDays++;
         if (record.status === "half-day") stats.halfDays++;
         if (record.status === "late") stats.lateDays++;
-        if (record.status === "early-arrival") stats.earlyArrivalDays++;
+        if (record.status === "early-departure") stats.earlyArrivalDays++;
       }
 
       if (record.workingHours) {
@@ -539,7 +564,7 @@ export const getMonthlyAttendanceSummary = async (req, res) => {
             $sum: { $cond: [{ $eq: ["$status", "late"] }, 1, 0] },
           },
           totalEarlyArrival: {
-            $sum: { $cond: [{ $eq: ["$status", "early-arrival"] }, 1, 0] },
+            $sum: { $cond: [{ $eq: ["$status", "early-departure"] }, 1, 0] },
           },
           totalWorkingHours: { $sum: "$workingHours" },
           totalRecords: { $sum: 1 },
@@ -568,7 +593,7 @@ export const getMonthlyAttendanceSummary = async (req, res) => {
             $sum: { $cond: [{ $eq: ["$status", "late"] }, 1, 0] },
           },
           totalEarlyArrival: {
-            $sum: { $cond: [{ $eq: ["$status", "early-arrival"] }, 1, 0] },
+            $sum: { $cond: [{ $eq: ["$status", "early-departure"] }, 1, 0] },
           },
           totalWorkingHours: { $sum: "$workingHours" },
           averageWorkingHours: { $avg: "$workingHours" },

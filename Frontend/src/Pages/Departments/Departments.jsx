@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
 import { departmentAPI, employeeAPI } from "../../Config/Api";
 import SideBar from "../../Components/SideBar/SideBar";
+import { useToast } from "../../Components/Common/Toast/Toast";
 import "./Departments.css";
 
 const Departments = () => {
+  const toast = useToast();
   const [departments, setDepartments] = useState([]); // Hierarchical data
   const [flatDepartments, setFlatDepartments] = useState([]); // Flat list for dropdowns
   const [employees, setEmployees] = useState([]);
@@ -109,10 +111,11 @@ const Departments = () => {
           },
         });
         fetchDepartments();
+        toast.success(editMode ? "Department updated successfully!" : "Department created successfully!");
       }
     } catch (error) {
       console.error("Error creating department:", error);
-      alert(error.response?.data?.message || "Failed to create department");
+      toast.error(error.response?.data?.message || (editMode ? "Failed to update department" : "Failed to create department"));
     } finally {
       setLoading(false);
     }
@@ -122,10 +125,11 @@ const Departments = () => {
     if (!confirm("Are you sure you want to delete this department?")) return;
     try {
       await departmentAPI.delete(id);
+      toast.success("Department deleted successfully!");
       fetchDepartments();
     } catch (error) {
       console.error("Error deleting department:", error);
-      alert(error.response?.data?.message || "Failed to delete department");
+      toast.error(error.response?.data?.message || "Failed to delete department");
     }
   };
 
@@ -188,7 +192,7 @@ const Departments = () => {
         </div>
         {parentName && (
           <div className="parent-info">
-            📂 Under: <strong>{parentName}</strong>
+            <i className="fas fa-folder-tree"></i> Under: <strong>{parentName}</strong>
           </div>
         )}
         <p className="dept-description">{dept.description || "No description"}</p>
@@ -203,7 +207,7 @@ const Departments = () => {
         </div>
         {hasChildren && (
           <div className="children-count">
-            <i className="fas fa-folder"></i> {dept.children.length} Sub-department{dept.children.length > 1 ? 's' : ''}
+            <i className="fas fa-layer-group"></i> {dept.children.length} Sub-department{dept.children.length > 1 ? 's' : ''}
           </div>
         )}
         <div className="dept-footer">
@@ -234,10 +238,10 @@ const Departments = () => {
                 className="tree-expand-btn"
                 onClick={() => toggleExpand(dept._id)}
               >
-                {isExpanded ? '−' : '+'}
+                <i className={`fas ${isExpanded ? 'fa-chevron-down' : 'fa-chevron-right'}`}></i>
               </button>
             )}
-            {!hasChildren && <span className="tree-leaf-icon">•</span>}
+            {!hasChildren && <span className="tree-leaf-icon"><i className="fas fa-circle" style={{fontSize: '6px'}}></i></span>}
             <div className={`tree-node-box ${level === 0 ? 'root-node' : 'child-node'}`}>
               <span className="tree-node-name">{dept.name}</span>
               <span className="tree-node-code">{dept.code}</span>
@@ -289,14 +293,14 @@ const Departments = () => {
                   onClick={() => setViewMode('grid')}
                   title="Grid View"
                 >
-                  <span className="view-icon">▦</span> Grid
+                  <i className="fas fa-th"></i> Grid
                 </button>
                 <button 
                   className={`view-btn ${viewMode === 'tree' ? 'active' : ''}`}
                   onClick={() => setViewMode('tree')}
                   title="Tree View"
                 >
-                  <span className="view-icon">🌳</span> Tree
+                  <i className="fas fa-sitemap"></i> Tree
                 </button>
               </div>
               <button className="btn-primary" onClick={() => setShowModal(true)}>
@@ -317,10 +321,10 @@ const Departments = () => {
             <div className="tree-view-container">
               <div className="tree-controls">
                 <button className="tree-control-btn" onClick={expandAll}>
-                  ⊞ Expand All
+                  <i className="fas fa-expand-arrows-alt"></i> Expand All
                 </button>
                 <button className="tree-control-btn" onClick={collapseAll}>
-                  ⊟ Collapse All
+                  <i className="fas fa-compress-arrows-alt"></i> Collapse All
                 </button>
               </div>
               <div className="organization-tree">

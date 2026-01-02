@@ -1,12 +1,14 @@
 import { useState, useEffect } from "react";
 import SideBar from "../../Components/SideBar/SideBar";
 import { userAPI, roleAPI } from "../../Config/Api";
+import { useToast } from "../../Components/Common/Toast/Toast";
 import "./Users.css";
 
 // Admin roles that can be assigned through this page
 const ADMIN_ROLES = ["superAdmin", "attendanceDepartment", "ITAssetManager"];
 
 function Users() {
+  const toast = useToast();
   const [users, setUsers] = useState([]);
   const [roles, setRoles] = useState([]);
   const [adminRoles, setAdminRoles] = useState([]);
@@ -25,8 +27,6 @@ function Users() {
     email: "",
     password: "",
   });
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
 
   useEffect(() => {
     fetchUsers();
@@ -63,13 +63,11 @@ function Users() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError("");
-    setSuccess("");
     setLoading(true);
 
     try {
       await userAPI.createUser(formData);
-      setSuccess("User created successfully!");
+      toast.success("User created successfully!");
       setFormData({
         name: "",
         email: "",
@@ -80,10 +78,9 @@ function Users() {
       fetchUsers();
       setTimeout(() => {
         setShowModal(false);
-        setSuccess("");
-      }, 2000);
+      }, 1000);
     } catch (err) {
-      setError(err.response?.data?.message || "Failed to create user");
+      toast.error(err.response?.data?.message || "Failed to create user");
     } finally {
       setLoading(false);
     }
@@ -93,12 +90,10 @@ function Users() {
     if (window.confirm("Are you sure you want to delete this user?")) {
       try {
         await userAPI.deleteUser(id);
-        setSuccess("User deleted successfully!");
+        toast.success("User deleted successfully!");
         fetchUsers();
-        setTimeout(() => setSuccess(""), 3000);
       } catch (err) {
-        setError(err.response?.data?.message || "Failed to delete user");
-        setTimeout(() => setError(""), 3000);
+        toast.error(err.response?.data?.message || "Failed to delete user");
       }
     }
   };
@@ -114,8 +109,6 @@ function Users() {
 
   const handleEditSubmit = async (e) => {
     e.preventDefault();
-    setError("");
-    setSuccess("");
     setLoading(true);
 
     try {
@@ -125,16 +118,15 @@ function Users() {
       }
 
       await userAPI.updateUser(selectedUser._id, updateData);
-      setSuccess("User updated successfully!");
+      toast.success("User updated successfully!");
       setEditData({ email: "", password: "" });
       setSelectedUser(null);
       fetchUsers();
       setTimeout(() => {
         setShowEditModal(false);
-        setSuccess("");
-      }, 2000);
+      }, 1000);
     } catch (err) {
-      setError(err.response?.data?.message || "Failed to update user");
+      toast.error(err.response?.data?.message || "Failed to update user");
     } finally {
       setLoading(false);
     }
@@ -154,9 +146,6 @@ function Users() {
               <i className="fas fa-plus"></i> Add Admin User
             </button>
           </div>
-
-          {success && <div className="alert alert-success">{success}</div>}
-          {error && <div className="alert alert-error">{error}</div>}
 
           <div className="table-container">
             <table className="data-table">
@@ -236,9 +225,6 @@ function Users() {
             </div>
 
             <form onSubmit={handleSubmit} className="modal-body">
-              {error && <div className="alert alert-error"><i className="fas fa-exclamation-circle"></i> {error}</div>}
-              {success && <div className="alert alert-success"><i className="fas fa-check-circle"></i> {success}</div>}
-
               <div className="form-section-title">
                 <i className="fas fa-user-tag"></i> Role Selection
               </div>
@@ -352,9 +338,6 @@ function Users() {
             </div>
 
             <form onSubmit={handleEditSubmit} className="modal-body">
-              {error && <div className="alert alert-error"><i className="fas fa-exclamation-circle"></i> {error}</div>}
-              {success && <div className="alert alert-success"><i className="fas fa-check-circle"></i> {success}</div>}
-              
               <div className="form-section-title">
                 <i className="fas fa-id-card"></i> User Information
               </div>

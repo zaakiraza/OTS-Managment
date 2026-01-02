@@ -247,7 +247,7 @@
   color: var(--text-light, #6b7280);
 }
 
-.status-badge.early-arrival {
+.status-badge.early-departure {
   background: #e0f2f4;
   color: #1F6A75;
 }

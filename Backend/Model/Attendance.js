@@ -26,7 +26,7 @@ const attendanceSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ["present", "absent", "half-day", "late", "early-arrival", "late-early-arrival", "pending", "leave"],
+      enum: ["present", "absent", "half-day", "late", "early-departure", "late-early-departure", "pending", "leave"],
       default: "pending",
     },
     workingHours: {
@@ -178,16 +178,23 @@ attendanceSchema.pre("save", async function () {
       // Left early: check-out is BEFORE scheduled time - leverage (negative difference < -leverage)
       const leftEarly = checkOutDiffMinutes < -checkOutLeverage;
       
-      // Determine status based on arrival/departure times
-      if (arrivedLate && leftEarly) {
+      // Check if working hours indicate half-day (less than half of daily hours)
+      // Half-day threshold: working hours < (daily hours * 0.5)
+      const isHalfDay = this.workingHours > 0 && this.workingHours < halfDayThreshold;
+      
+      // Determine status based on arrival/departure times and working hours
+      if (isHalfDay) {
+        // Working hours less than half of daily hours = half-day
+        this.status = "half-day";
+      } else if (arrivedLate && leftEarly) {
         // Both late arrival (beyond leverage) and early departure
-        this.status = "late-early-arrival";
+        this.status = "late-early-departure";
       } else if (arrivedLate) {
         // Arrived late beyond leverage time
         this.status = "late";
       } else if (leftEarly) {
         // Left early beyond leverage time
-        this.status = "early-arrival";
+        this.status = "early-departure";
       } else {
         // Within acceptable times (arrived on time or early, left on time or late)
         this.status = "present";

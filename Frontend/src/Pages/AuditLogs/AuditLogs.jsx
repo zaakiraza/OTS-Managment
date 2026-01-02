@@ -1,9 +1,11 @@
 import { useState, useEffect } from "react";
 import SideBar from "../../Components/SideBar/SideBar";
 import { auditLogAPI, exportAPI } from "../../Config/Api";
+import { useToast } from "../../Components/Common/Toast/Toast";
 import "./AuditLogs.css";
 
 function AuditLogs() {
+  const toast = useToast();
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -84,7 +86,7 @@ function AuditLogs() {
       window.URL.revokeObjectURL(url);
     } catch (error) {
       console.error("Export failed:", error);
-      alert("Failed to export audit logs");
+      toast.error("Failed to export audit logs");
     } finally {
       setExporting(false);
     }

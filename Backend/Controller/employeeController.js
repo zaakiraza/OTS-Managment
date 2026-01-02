@@ -48,6 +48,44 @@ export const createEmployee = async (req, res) => {
       });
     }
 
+    // For attendanceDepartment role, restrict to user's own department
+    const requestingUserRole = req.user?.role?.name || req.user?.role;
+    if (requestingUserRole === "attendanceDepartment") {
+      const currentEmployee = await Employee.findById(req.user._id)
+        .populate("department", "_id");
+      
+      if (!currentEmployee || !currentEmployee.department) {
+        return res.status(403).json({
+          success: false,
+          message: "Access denied. You must be assigned to a department to create employees.",
+        });
+      }
+
+      const userDeptId = currentEmployee.department._id || currentEmployee.department;
+      const requestedDeptId = department.toString ? department.toString() : department;
+      
+      // Check if primary department matches user's department
+      if (userDeptId.toString() !== requestedDeptId) {
+        return res.status(403).json({
+          success: false,
+          message: "Access denied. You can only create employees in your own department.",
+        });
+      }
+
+      // Also validate additional departments - they must be user's department or empty
+      if (additionalDepartments && additionalDepartments.length > 0) {
+        const invalidDepts = additionalDepartments.filter(
+          dept => dept && dept.toString() !== userDeptId.toString()
+        );
+        if (invalidDepts.length > 0) {
+          return res.status(403).json({
+            success: false,
+            message: "Access denied. You can only assign employees to your own department.",
+          });
+        }
+      }
+    }
+
     // Verify role exists (role is now required)
     if (!role) {
       return res.status(400).json({
@@ -184,6 +222,34 @@ export const getAllEmployees = async (req, res) => {
       filter.role = { $ne: superAdminRole._id };
     }
 
+    // For attendanceDepartment role, only show employees from their own department
+    if (requestingUserRole === "attendanceDepartment") {
+      const currentEmployee = await Employee.findById(req.user._id)
+        .populate("department", "_id");
+      
+      if (currentEmployee && currentEmployee.department) {
+        const userDeptId = currentEmployee.department._id || currentEmployee.department;
+        
+        // Only show employees from the user's department
+        const deptFilter = {
+          $or: [
+            { department: userDeptId },
+            { additionalDepartments: userDeptId }
+          ]
+        };
+        
+        if (filter.$or) {
+          filter.$and = [{ $or: filter.$or }, deptFilter];
+          delete filter.$or;
+        } else {
+          filter.$or = deptFilter.$or;
+        }
+      } else {
+        // If user has no department, show nothing
+        filter._id = null; // This will return no results
+      }
+    }
+
     // For teamLead role, only show employees from departments they lead
     if (requestingUserRole === "teamLead") {
       const currentEmployee = await Employee.findById(req.user._id)
@@ -300,6 +366,32 @@ export const getEmployeeById = async (req, res) => {
       });
     }
 
+    // For attendanceDepartment role, only allow viewing employees from their own department
+    if (requestingUserRole === "attendanceDepartment") {
+      const currentEmployee = await Employee.findById(req.user._id)
+        .populate("department", "_id");
+      
+      if (!currentEmployee || !currentEmployee.department) {
+        return res.status(403).json({
+          success: false,
+          message: "Access denied. You must be assigned to a department.",
+        });
+      }
+
+      const userDeptId = currentEmployee.department._id || currentEmployee.department;
+      const empDeptId = employee.department?._id || employee.department;
+      const isInAdditionalDepts = employee.additionalDepartments?.some(
+        dept => (dept._id || dept).toString() === userDeptId.toString()
+      );
+
+      if (empDeptId?.toString() !== userDeptId.toString() && !isInAdditionalDepts) {
+        return res.status(403).json({
+          success: false,
+          message: "Access denied. You can only view employees from your own department.",
+        });
+      }
+    }
+
     res.status(200).json({
       success: true,
       data: employee,
@@ -316,7 +408,11 @@ export const getEmployeeById = async (req, res) => {
 export const updateEmployee = async (req, res) => {
   try {
     // Check if trying to update a superAdmin employee
-    const targetEmployee = await Employee.findById(req.params.id).populate("role", "name");
+    const targetEmployee = await Employee.findById(req.params.id)
+      .populate("role", "name")
+      .populate("department", "_id")
+      .populate("additionalDepartments", "_id");
+    
     if (!targetEmployee) {
       return res.status(404).json({
         success: false,
@@ -331,6 +427,53 @@ export const updateEmployee = async (req, res) => {
         success: false,
         message: "Access denied. Cannot modify superAdmin.",
       });
+    }
+
+    // For attendanceDepartment role, only allow updating employees from their own department
+    if (requestingUserRole === "attendanceDepartment") {
+      const currentEmployee = await Employee.findById(req.user._id)
+        .populate("department", "_id");
+      
+      if (!currentEmployee || !currentEmployee.department) {
+        return res.status(403).json({
+          success: false,
+          message: "Access denied. You must be assigned to a department.",
+        });
+      }
+
+      const userDeptId = currentEmployee.department._id || currentEmployee.department;
+      const empDeptId = targetEmployee.department?._id || targetEmployee.department;
+      const isInAdditionalDepts = targetEmployee.additionalDepartments?.some(
+        dept => (dept._id || dept).toString() === userDeptId.toString()
+      );
+
+      if (empDeptId?.toString() !== userDeptId.toString() && !isInAdditionalDepts) {
+        return res.status(403).json({
+          success: false,
+          message: "Access denied. You can only edit employees from your own department.",
+        });
+      }
+
+      // Also prevent changing department to a different one
+      if (req.body.department && req.body.department.toString() !== userDeptId.toString()) {
+        return res.status(403).json({
+          success: false,
+          message: "Access denied. You cannot change employee's department to a different department.",
+        });
+      }
+
+      // Prevent adding additional departments that are not user's department
+      if (req.body.additionalDepartments) {
+        const invalidDepts = req.body.additionalDepartments.filter(
+          dept => dept && dept.toString() !== userDeptId.toString()
+        );
+        if (invalidDepts.length > 0) {
+          return res.status(403).json({
+            success: false,
+            message: "Access denied. You can only assign employees to your own department.",
+          });
+        }
+      }
     }
 
     const updateData = { ...req.body, modifiedBy: req.user._id };
@@ -414,7 +557,11 @@ export const updateEmployee = async (req, res) => {
 export const deleteEmployee = async (req, res) => {
   try {
     // Check if trying to delete a superAdmin employee
-    const targetEmployee = await Employee.findById(req.params.id).populate("role", "name");
+    const targetEmployee = await Employee.findById(req.params.id)
+      .populate("role", "name")
+      .populate("department", "_id")
+      .populate("additionalDepartments", "_id");
+    
     if (!targetEmployee) {
       return res.status(404).json({
         success: false,
@@ -429,6 +576,32 @@ export const deleteEmployee = async (req, res) => {
         success: false,
         message: "Access denied. Cannot delete superAdmin.",
       });
+    }
+
+    // For attendanceDepartment role, only allow deleting employees from their own department
+    if (requestingUserRole === "attendanceDepartment") {
+      const currentEmployee = await Employee.findById(req.user._id)
+        .populate("department", "_id");
+      
+      if (!currentEmployee || !currentEmployee.department) {
+        return res.status(403).json({
+          success: false,
+          message: "Access denied. You must be assigned to a department.",
+        });
+      }
+
+      const userDeptId = currentEmployee.department._id || currentEmployee.department;
+      const empDeptId = targetEmployee.department?._id || targetEmployee.department;
+      const isInAdditionalDepts = targetEmployee.additionalDepartments?.some(
+        dept => (dept._id || dept).toString() === userDeptId.toString()
+      );
+
+      if (empDeptId?.toString() !== userDeptId.toString() && !isInAdditionalDepts) {
+        return res.status(403).json({
+          success: false,
+          message: "Access denied. You can only delete employees from your own department.",
+        });
+      }
     }
 
     const employee = await Employee.findByIdAndUpdate(

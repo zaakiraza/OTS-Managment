@@ -1,9 +1,11 @@
 import { useState, useEffect } from "react";
 import SideBar from "../../Components/SideBar/SideBar";
 import taskAPI from "../../Config/taskApi";
+import { useToast } from "../../Components/Common/Toast/Toast";
 import "../Tasks/Tasks.css";
 
 function MyTasks() {
+  const toast = useToast();
   const [tasks, setTasks] = useState([]);
   const [selectedTask, setSelectedTask] = useState(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
@@ -37,19 +39,19 @@ function MyTasks() {
       }
     } catch (error) {
       console.error("Error fetching task details:", error);
-      alert("Failed to load task details");
+      toast.error("Failed to load task details");
     }
   };
 
   const handleStatusChange = async (status) => {
     try {
       await taskAPI.updateStatus(selectedTask._id, status);
-      alert("Task status updated successfully!");
+      toast.success("Task status updated successfully!");
       setSelectedTask({ ...selectedTask, status });
       fetchMyTasks();
     } catch (error) {
       console.error("Error updating status:", error);
-      alert(error.response?.data?.message || "Failed to update status");
+      toast.error(error.response?.data?.message || "Failed to update status");
     }
   };
 
@@ -109,7 +111,7 @@ function MyTasks() {
       }
     } catch (error) {
       console.error("Error adding comment:", error);
-      alert("Failed to add comment");
+      toast.error("Failed to add comment");
     }
   };
 

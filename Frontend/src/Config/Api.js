@@ -97,6 +97,8 @@ export const employeeAPI = {
 
 // Salary API
 export const salaryAPI = {
+  preview: (data) => api.post("/salaries/preview", data),
+  previewAll: (data) => api.post("/salaries/preview-all", data),
   calculate: (data) => api.post("/salaries/calculate", data),
   calculateAll: (data) => api.post("/salaries/calculate-all", data),
   getAll: (params) => api.get("/salaries", { params }),

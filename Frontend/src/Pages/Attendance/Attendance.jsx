@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import SideBar from "../../Components/SideBar/SideBar";
 import { attendanceAPI, employeeAPI, departmentAPI, exportAPI } from "../../Config/Api";
 import settingsAPI from "../../Config/settingsApi";
+import { useToast } from "../../Components/Common/Toast/Toast";
 import "./Attendance.css";
 
 // Utility function to calculate working hours
@@ -39,6 +40,7 @@ const formatWorkingHours = (decimalHours) => {
 };
 
 function Attendance() {
+  const toast = useToast();
   const [attendanceRecords, setAttendanceRecords] = useState([]);
   const [todayRecords, setTodayRecords] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -117,11 +119,11 @@ function Attendance() {
         { key: "manualAttendanceEnabled", value: settings.manualAttendanceEnabled },
         { key: "importAttendanceEnabled", value: settings.importAttendanceEnabled },
       ]);
-      alert("Settings saved successfully!");
+      toast.success("Settings saved successfully!");
       setShowSettingsModal(false);
     } catch (error) {
       console.error("Error saving settings:", error);
-      alert("Failed to save settings");
+      toast.error("Failed to save settings");
     } finally {
       setSavingSettings(false);
     }
@@ -277,8 +279,8 @@ function Attendance() {
       absent: "status-absent",
       "half-day": "status-half-day",
       late: "status-late",
-      "early-arrival": "status-early",
-      "late-early-arrival": "status-late-early",
+      "early-departure": "status-early",
+      "late-early-departure": "status-late-early",
       pending: "status-pending",
     };
     return statusColors[status] || "status-pending";
@@ -290,8 +292,8 @@ function Attendance() {
       absent: "Absent",
       "half-day": "Half Day",
       late: "Late",
-      "early-arrival": "Early Arrival",
-      "late-early-arrival": "Late + Early Arrival",
+      "early-departure": "Early Departure",
+      "late-early-departure": "Late + Early Departure",
       pending: "Pending",
     };
     return statusLabels[status] || status;
@@ -380,7 +382,7 @@ function Attendance() {
       }
 
       await attendanceAPI.updateAttendance(selectedRecord._id, submitData);
-      alert("Attendance updated successfully!");
+      toast.success("Attendance updated successfully!");
       setShowEditModal(false);
       setSelectedRecord(null);
       setEditFormData({
@@ -393,7 +395,7 @@ function Attendance() {
       fetchTodayAttendance();
     } catch (error) {
       console.error("Error updating attendance:", error);
-      alert(error.response?.data?.message || "Failed to update attendance");
+      toast.error(error.response?.data?.message || "Failed to update attendance");
     } finally {
       setLoading(false);
     }
@@ -431,7 +433,7 @@ function Attendance() {
       }
 
       await attendanceAPI.createManualAttendance(submitData);
-      alert("Manual attendance created successfully!");
+      toast.success("Manual attendance created successfully!");
       
       // Update filter to show the date where the record was created
       setFilter({
@@ -454,7 +456,7 @@ function Attendance() {
       // fetchAttendance will be called automatically by useEffect when filter.date changes
     } catch (error) {
       console.error("Error creating manual attendance:", error);
-      alert(
+      toast.error(
         error.response?.data?.message || "Failed to create manual attendance"
       );
     } finally {
@@ -497,7 +499,7 @@ function Attendance() {
       window.URL.revokeObjectURL(url);
     } catch (error) {
       console.error("Export error:", error);
-      alert(error.response?.data?.message || "Failed to export attendance");
+      toast.error(error.response?.data?.message || "Failed to export attendance");
     } finally {
       setExporting(false);
     }
@@ -901,8 +903,8 @@ function Attendance() {
                       <option value="absent">Absent</option>
                       <option value="half-day">Half Day</option>
                       <option value="late">Late</option>
-                      <option value="early-arrival">Early Arrival</option>
-                      <option value="late-early-arrival">Late & Early Arrival</option>
+                      <option value="early-departure">Early Departure</option>
+                      <option value="late-early-departure">Late & Early Departure</option>
                       <option value="leave">Leave</option>
                       <option value="pending">Pending</option>
                     </select>
@@ -1118,8 +1120,8 @@ function Attendance() {
                       <option value="absent">Absent</option>
                       <option value="half-day">Half Day</option>
                       <option value="late">Late</option>
-                      <option value="early-arrival">Early Arrival</option>
-                      <option value="late-early-arrival">Late & Early Arrival</option>
+                      <option value="early-departure">Early Departure</option>
+                      <option value="late-early-departure">Late & Early Departure</option>
                       <option value="leave">Leave</option>
                       <option value="pending">Pending</option>
                     </select>

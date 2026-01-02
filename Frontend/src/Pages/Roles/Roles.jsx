@@ -1,9 +1,11 @@
 import { useState, useEffect } from "react";
 import SideBar from "../../Components/SideBar/SideBar";
 import { roleAPI } from "../../Config/Api";
+import { useToast } from "../../Components/Common/Toast/Toast";
 import "./Roles.css";
 
 function Roles() {
+  const toast = useToast();
   const [roles, setRoles] = useState([]);
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
@@ -14,8 +16,6 @@ function Roles() {
     description: "",
     permissions: "",
   });
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
 
   useEffect(() => {
     fetchRoles();
@@ -39,8 +39,6 @@ function Roles() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError("");
-    setSuccess("");
     setLoading(true);
 
     try {
@@ -57,10 +55,10 @@ function Roles() {
 
       if (editMode) {
         await roleAPI.updateRole(editId, roleData);
-        setSuccess("Role updated successfully!");
+        toast.success("Role updated successfully!");
       } else {
         await roleAPI.createRole(roleData);
-        setSuccess("Role created successfully!");
+        toast.success("Role created successfully!");
       }
 
       setFormData({
@@ -73,10 +71,9 @@ function Roles() {
       fetchRoles();
       setTimeout(() => {
         setShowModal(false);
-        setSuccess("");
-      }, 2000);
+      }, 1000);
     } catch (err) {
-      setError(err.response?.data?.message || `Failed to ${editMode ? 'update' : 'create'} role`);
+      toast.error(err.response?.data?.message || `Failed to ${editMode ? 'update' : 'create'} role`);
     } finally {
       setLoading(false);
     }
@@ -86,12 +83,10 @@ function Roles() {
     if (window.confirm("Are you sure you want to delete this role?")) {
       try {
         await roleAPI.deleteRole(id);
-        setSuccess("Role deleted successfully!");
+        toast.success("Role deleted successfully!");
         fetchRoles();
-        setTimeout(() => setSuccess(""), 3000);
       } catch (err) {
-        setError(err.response?.data?.message || "Failed to delete role");
-        setTimeout(() => setError(""), 3000);
+        toast.error(err.response?.data?.message || "Failed to delete role");
       }
     }
   };
@@ -116,7 +111,6 @@ function Roles() {
       description: "",
       permissions: "",
     });
-    setError("");
   };
 
   return (
@@ -133,9 +127,6 @@ function Roles() {
               <i className="fas fa-plus"></i> Add New Role
             </button>
           </div>
-
-          {success && <div className="alert alert-success">{success}</div>}
-          {error && <div className="alert alert-error">{error}</div>}
 
           <div className="roles-grid">
             {roles.length === 0 ? (
@@ -207,9 +198,6 @@ function Roles() {
             </div>
 
             <form onSubmit={handleSubmit} className="modal-body">
-              {error && <div className="alert alert-error"><i className="fas fa-exclamation-circle"></i> {error}</div>}
-              {success && <div className="alert alert-success"><i className="fas fa-check-circle"></i> {success}</div>}
-
               <div className="form-section-title">
                 <i className="fas fa-info-circle"></i> Role Details
               </div>

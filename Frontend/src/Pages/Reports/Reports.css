@@ -364,11 +364,11 @@
   background: #6b7280;
 }
 
-.status-badge.status-early-arrival, .status.status-early-arrival {
+.status-badge.status-early-departure, .status.status-early-departure {
   background: #06b6d4;
 }
 
-.status-badge.status-late-early-arrival, .status.status-late-early-arrival {
+.status-badge.status-late-early-departure, .status.status-late-early-departure {
   background: #a855f7;
 }
 

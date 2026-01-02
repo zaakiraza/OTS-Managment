@@ -1,9 +1,11 @@
 import { useState, useEffect } from "react";
 import SideBar from "../../Components/SideBar/SideBar";
 import { reportAPI, departmentAPI, employeeAPI, exportAPI } from "../../Config/Api";
+import { useToast } from "../../Components/Common/Toast/Toast";
 import "./Reports.css";
 
 function Reports() {
+  const toast = useToast();
   const [reportType, setReportType] = useState("attendance");
   const [loading, setLoading] = useState(false);
   const [reportData, setReportData] = useState(null);
@@ -15,11 +17,43 @@ function Reports() {
     startDate: "",
     endDate: "",
     month: "",
-    week: "", // Week selection
+    week: "", // Week selection (format: "week1", "week2", etc. or "YYYY-MM-W1", "YYYY-MM-W2")
     departmentId: "",
     employeeId: "",
     status: "",
   });
+
+  // Calculate weeks for the selected month
+  const getWeeksForMonth = (monthStr) => {
+    if (!monthStr) return [];
+    
+    const [year, month] = monthStr.split("-").map(Number);
+    const firstDay = new Date(year, month - 1, 1);
+    const lastDay = new Date(year, month, 0); // Last day of the month
+    const daysInMonth = lastDay.getDate();
+    
+    const weeks = [];
+    let weekNum = 1;
+    let currentDay = 1;
+    
+    while (currentDay <= daysInMonth) {
+      const weekStart = currentDay;
+      const weekEnd = Math.min(currentDay + 6, daysInMonth);
+      
+      weeks.push({
+        value: `${monthStr}-W${weekNum}`,
+        label: `Week ${weekNum} (${weekStart} - ${weekEnd})`,
+        weekNum,
+        startDay: weekStart,
+        endDay: weekEnd,
+      });
+      
+      currentDay = weekEnd + 1;
+      weekNum++;
+    }
+    
+    return weeks;
+  };
 
   // Format time to show local PKT time
   const formatTime = (time) => {
@@ -69,7 +103,13 @@ function Reports() {
 
   const handleFilterChange = (e) => {
     const { name, value } = e.target;
-    setFilters({ ...filters, [name]: value });
+    
+    // If month changes, clear week selection
+    if (name === "month") {
+      setFilters({ ...filters, [name]: value, week: "" });
+    } else {
+      setFilters({ ...filters, [name]: value });
+    }
 
     // Clear dependent filters
     if (name === "departmentId" && !value) {
@@ -102,7 +142,7 @@ function Reports() {
           break;
         case "employee-wise":
           if (!filters.employeeId) {
-            alert("Please select an employee for employee-wise report");
+            toast.warning("Please select an employee for employee-wise report");
             setLoading(false);
             return;
           }
@@ -110,7 +150,7 @@ function Reports() {
           break;
         case "monthly-summary":
           if (!filters.month) {
-            alert("Please select a month for monthly summary");
+            toast.warning("Please select a month for monthly summary");
             setLoading(false);
             return;
           }
@@ -121,9 +161,10 @@ function Reports() {
       }
 
       setReportData(response.data);
+      toast.success("Report generated successfully!");
     } catch (error) {
       console.error("Error generating report:", error);
-      alert(error.response?.data?.message || "Failed to generate report");
+      toast.error(error.response?.data?.message || "Failed to generate report");
     } finally {
       setLoading(false);
     }
@@ -159,15 +200,16 @@ function Reports() {
       link.remove();
       window.URL.revokeObjectURL(url);
       
-      alert(`Report exported to ${format.toUpperCase()} successfully!`);
+      toast.success(`Report exported to ${format.toUpperCase()} successfully!`);
     } catch (error) {
       console.error("Error exporting report:", error);
       // Fallback to local CSV export if API fails
       if (format === 'csv' && reportData?.data) {
         const csvData = convertToCSV(reportData.data);
         downloadCSV(csvData, `attendance_report_${new Date().toISOString().split('T')[0]}.csv`);
+        toast.success("Report exported to CSV successfully!");
       } else {
-        alert("Failed to export report. Please generate a report first.");
+        toast.error("Failed to export report. Please generate a report first.");
       }
     } finally {
       setLoading(false);
@@ -286,8 +328,8 @@ function Reports() {
                     <td><span className="status status-present">{emp.present}</span></td>
                     <td><span className="status status-absent">{emp.absent}</span></td>
                     <td>{emp.leaves}</td>
-                    <td><span className="status status-early-arrival">{emp.earlyArrival}</span></td>
-                    <td><span className="status status-late-early-arrival">{emp.lateEarlyArrival}</span></td>
+                    <td><span className="status status-early-departure">{emp.earlyArrival}</span></td>
+                    <td><span className="status status-late-early-departure">{emp.lateEarlyArrival}</span></td>
                   </tr>
                 ))}
               </tbody>
@@ -547,15 +589,23 @@ function Reports() {
 
                 <div className="filter-group">
                   <label>Week</label>
-                  <input
-                    type="week"
+                  <select
                     name="week"
                     value={filters.week}
                     onChange={handleFilterChange}
-                    placeholder="Select week"
-                  />
+                    disabled={!filters.month}
+                  >
+                    <option value="">Select Week</option>
+                    {filters.month && getWeeksForMonth(filters.month).map((week) => (
+                      <option key={week.value} value={week.value}>
+                        {week.label}
+                      </option>
+                    ))}
+                  </select>
                   <small style={{ color: "#666", fontSize: "0.85em" }}>
-                    Select specific week for weekly report
+                    {filters.month 
+                      ? "Select a week within the selected month" 
+                      : "Please select a month first"}
                   </small>
                 </div>
 
@@ -629,7 +679,7 @@ function Reports() {
                     <option value="absent">Absent</option>
                     <option value="half-day">Half Day</option>
                     <option value="late">Late</option>
-                    <option value="early-arrival">Early Arrival</option>
+                    <option value="early-departure">Early Departure</option>
                   </select>
                 </div>
               </div>

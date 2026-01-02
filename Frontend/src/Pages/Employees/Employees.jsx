@@ -1,13 +1,17 @@
 import { useEffect, useState } from "react";
 import { employeeAPI, departmentAPI, roleAPI, exportAPI } from "../../Config/Api";
 import SideBar from "../../Components/SideBar/SideBar";
+import { getStoredUser } from "../../Utils/storage";
+import { useToast } from "../../Components/Common/Toast/Toast";
 import "./Employees.css";
 
 const Employees = () => {
+  const toast = useToast();
   const [employees, setEmployees] = useState([]);
   const [departments, setDepartments] = useState([]);
   const [hierarchicalDepts, setHierarchicalDepts] = useState([]);
   const [roles, setRoles] = useState([]);
+  const [currentUser, setCurrentUser] = useState(null);
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [editMode, setEditMode] = useState(false);
@@ -52,10 +56,29 @@ const Employees = () => {
   });
 
   useEffect(() => {
+    // Get current user from storage
+    const user = getStoredUser();
+    setCurrentUser(user);
+    
     fetchEmployees();
     fetchDepartments();
     fetchRoles();
   }, []);
+
+  // Get filtered departments based on user role
+  const getFilteredDepartments = () => {
+    if (!currentUser || currentUser.role?.name !== "attendanceDepartment") {
+      return departments;
+    }
+    
+    // For attendanceDepartment users, only show their own department
+    if (currentUser.department) {
+      const userDeptId = currentUser.department._id || currentUser.department;
+      return departments.filter(dept => dept._id === userDeptId);
+    }
+    
+    return [];
+  };
 
   const fetchEmployees = async (deptId = "", page = 1, search = "") => {
     try {
@@ -140,7 +163,11 @@ const Employees = () => {
           <div className="dept-tree-header" onClick={() => toggleDeptExpand(dept._id)}>
             <div className="dept-tree-info">
               <span className="expand-icon">
-                {(hasChildren || hasEmployees) ? (isExpanded ? <i className="fas fa-caret-down"></i> : <i className="fas fa-caret-right"></i>) : <i className="fas fa-circle" style={{fontSize: '6px'}}></i>}
+                {(hasChildren || hasEmployees) ? (
+                  isExpanded ? <i className="fas fa-chevron-down"></i> : <i className="fas fa-chevron-right"></i>
+                ) : (
+                  <i className="fas fa-circle" style={{fontSize: '6px', opacity: 0.3}}></i>
+                )}
               </span>
               <span className="dept-tree-name">{dept.name}</span>
               <span className="dept-tree-code">{dept.code}</span>
@@ -230,9 +257,10 @@ const Employees = () => {
       link.download = `employees_${new Date().toISOString().split("T")[0]}.xlsx`;
       link.click();
       window.URL.revokeObjectURL(url);
+      toast.success("Employees exported to Excel successfully!");
     } catch (error) {
       console.error("Export failed:", error);
-      alert("Failed to export employees");
+      toast.error("Failed to export employees");
     } finally {
       setExporting(false);
     }
@@ -252,9 +280,10 @@ const Employees = () => {
       link.download = `employees_${new Date().toISOString().split("T")[0]}.csv`;
       link.click();
       window.URL.revokeObjectURL(url);
+      toast.success("Employees exported to CSV successfully!");
     } catch (error) {
       console.error("Export failed:", error);
-      alert("Failed to export employees");
+      toast.error("Failed to export employees");
     } finally {
       setExporting(false);
     }
@@ -290,6 +319,7 @@ const Employees = () => {
       }
       
       if (response.data.success) {
+        toast.success(editMode ? "Employee updated successfully!" : "Employee created successfully!");
         setShowModal(false);
         setEditMode(false);
         setEditId(null);
@@ -320,7 +350,7 @@ const Employees = () => {
       }
     } catch (error) {
       console.error("Error creating employee:", error);
-      alert(error.response?.data?.message || "Failed to create employee");
+      toast.error(error.response?.data?.message || (editMode ? "Failed to update employee" : "Failed to create employee"));
     } finally {
       setLoading(false);
     }
@@ -330,10 +360,11 @@ const Employees = () => {
     if (!confirm("Are you sure you want to delete this employee?")) return;
     try {
       await employeeAPI.delete(id);
+      toast.success("Employee deleted successfully!");
       fetchEmployees(selectedDept);
     } catch (error) {
       console.error("Error deleting employee:", error);
-      alert(error.response?.data?.message || "Failed to delete employee");
+      toast.error(error.response?.data?.message || "Failed to delete employee");
     }
   };
 
@@ -374,13 +405,20 @@ const Employees = () => {
     setShowModal(false);
     setEditMode(false);
     setEditId(null);
+    
+    // Auto-set department for attendanceDepartment users when creating new employee
+    let defaultDepartment = "";
+    if (currentUser?.role?.name === "attendanceDepartment" && currentUser?.department && !editMode) {
+      defaultDepartment = currentUser.department._id || currentUser.department;
+    }
+    
     setFormData({
       name: "",
       email: "",
       phone: "",
       cnic: "",
       biometricId: "",
-      department: "",
+      department: defaultDepartment,
       additionalDepartments: [],
       leadingDepartments: [],
       position: "",
@@ -523,16 +561,16 @@ const Employees = () => {
               onClick={() => setViewMode('tree')}
               title="Tree View"
             >
-              🌳 Tree
+              <i className="fas fa-sitemap"></i> Tree
             </button>
           </div>
           {viewMode === 'tree' && (
             <div className="tree-controls">
               <button className="btn-secondary" onClick={expandAllDepts}>
-                <i className="fas fa-expand"></i> Expand All
+                <i className="fas fa-expand-arrows-alt"></i> Expand All
               </button>
               <button className="btn-secondary" onClick={collapseAllDepts}>
-                ➖ Collapse All
+                <i className="fas fa-compress-arrows-alt"></i> Collapse All
               </button>
             </div>
           )}
@@ -554,7 +592,7 @@ const Employees = () => {
                 }}
               >
                 <option value="">All Departments</option>
-                {departments.map((dept) => (
+                {getFilteredDepartments().map((dept) => (
                   <option key={dept._id} value={dept._id}>
                     {"—".repeat(dept.level || 0)} {dept.name}
                   </option>
@@ -580,7 +618,14 @@ const Employees = () => {
               </div>
             </>
           )}
-          <button className="btn-primary" onClick={() => setShowModal(true)}>
+          <button className="btn-primary" onClick={() => {
+            // Auto-set department for attendanceDepartment users
+            if (currentUser?.role?.name === "attendanceDepartment" && currentUser?.department) {
+              const userDeptId = currentUser.department._id || currentUser.department;
+              setFormData(prev => ({ ...prev, department: userDeptId }));
+            }
+            setShowModal(true);
+          }}>
             + Add Employee
           </button>
         </div>
@@ -801,7 +846,7 @@ const Employees = () => {
                   />
                 </div>
                 <div className="form-group">
-                  <label>Biometric ID (Optional)</label>
+                  <label>Biometric ID (Optional but required for attendance tracking)</label>
                   <input
                     type="text"
                     value={formData.biometricId}
@@ -826,9 +871,10 @@ const Employees = () => {
                       })
                     }
                     required
+                    disabled={currentUser?.role?.name === "attendanceDepartment" && getFilteredDepartments().length === 1}
                   >
                     <option value="">Select Primary Department</option>
-                    {departments.map((dept) => (
+                    {getFilteredDepartments().map((dept) => (
                       <option key={dept._id} value={dept._id}>
                         {"—".repeat(dept.level || 0)} {dept.name} ({dept.code})
                         {dept.parentDepartment ? ` ← ${dept.parentDepartment.name || ''}` : ''}
@@ -836,14 +882,16 @@ const Employees = () => {
                     ))}
                   </select>
                   <small style={{color: '#64748b', fontSize: '12px', marginTop: '4px'}}>
-                    Used for attendance tracking and salary calculation
+                    {currentUser?.role?.name === "attendanceDepartment" 
+                      ? "You can only assign employees to your own department"
+                      : "Used for attendance tracking and salary calculation"}
                   </small>
                 </div>
 
                 <div className="form-group full-width">
                   <label>Additional Departments</label>
                   <div className="checkbox-grid multi-dept-grid">
-                    {departments
+                    {getFilteredDepartments()
                       .filter(dept => dept._id !== formData.department)
                       .map((dept) => (
                         <label key={dept._id} className="checkbox-label dept-checkbox">
@@ -851,6 +899,7 @@ const Employees = () => {
                             type="checkbox"
                             checked={formData.additionalDepartments.includes(dept._id)}
                             onChange={() => handleMultiDeptToggle(dept._id, 'additionalDepartments')}
+                            disabled={currentUser?.role?.name === "attendanceDepartment"}
                           />
                           <span className="dept-name">
                             {"—".repeat(dept.level || 0)} {dept.name}
@@ -860,19 +909,22 @@ const Employees = () => {
                       ))}
                   </div>
                   <small style={{color: '#64748b', fontSize: '12px', marginTop: '4px'}}>
-                    Select departments where this employee also works (in addition to primary)
+                    {currentUser?.role?.name === "attendanceDepartment"
+                      ? "You can only assign employees to your own department"
+                      : "Select departments where this employee also works (in addition to primary)"}
                   </small>
                 </div>
 
                 <div className="form-group full-width">
                   <label>Team Lead Of</label>
                   <div className="checkbox-grid multi-dept-grid leading-grid">
-                    {departments.map((dept) => (
+                    {getFilteredDepartments().map((dept) => (
                       <label key={dept._id} className="checkbox-label dept-checkbox lead-checkbox">
                         <input
                           type="checkbox"
                           checked={formData.leadingDepartments.includes(dept._id)}
                           onChange={() => handleMultiDeptToggle(dept._id, 'leadingDepartments')}
+                          disabled={currentUser?.role?.name === "attendanceDepartment"}
                         />
                         <span className="dept-name">
                           {"—".repeat(dept.level || 0)} {dept.name}
@@ -882,7 +934,9 @@ const Employees = () => {
                     ))}
                   </div>
                   <small style={{color: '#64748b', fontSize: '12px', marginTop: '4px'}}>
-                    Select departments where this employee is a Team Lead
+                    {currentUser?.role?.name === "attendanceDepartment"
+                      ? "You can only assign team lead roles within your own department"
+                      : "Select departments where this employee is a Team Lead"}
                   </small>
                 </div>
 

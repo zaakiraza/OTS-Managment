@@ -2,6 +2,8 @@ import express from "express";
 import {
   calculateSalary,
   calculateAllSalaries,
+  previewSalary,
+  previewAllSalaries,
   getAllSalaries,
   getSalaryById,
   approveSalary,
@@ -14,6 +16,12 @@ const router = express.Router();
 
 // All routes require authentication
 router.use(verifyToken);
+
+// Preview salary calculation for single employee (attendanceDepartment or superAdmin)
+router.post("/preview", hasRole("superAdmin", "attendanceDepartment"), previewSalary);
+
+// Preview salary calculation for all employees (attendanceDepartment or superAdmin)
+router.post("/preview-all", hasRole("superAdmin", "attendanceDepartment"), previewAllSalaries);
 
 // Calculate salary for single employee (attendanceDepartment or superAdmin)
 router.post("/calculate", hasRole("superAdmin", "attendanceDepartment"), calculateSalary);

@@ -2,9 +2,11 @@ import { useState, useEffect } from "react";
 import SideBar from "../../Components/SideBar/SideBar";
 import taskAPI from "../../Config/taskApi";
 import { employeeAPI, departmentAPI } from "../../Config/Api";
+import { useToast } from "../../Components/Common/Toast/Toast";
 import "./Tasks.css";
 
 function Tasks() {
+  const toast = useToast();
   const [tasks, setTasks] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [departments, setDepartments] = useState([]);
@@ -183,17 +185,17 @@ function Tasks() {
       setLoading(true);
       if (selectedTask) {
         await taskAPI.update(selectedTask._id, formData);
-        alert("Task updated successfully!");
+        toast.success("Task updated successfully!");
       } else {
         await taskAPI.create(formData);
-        alert("Task created successfully!");
+        toast.success("Task created successfully!");
       }
       resetForm();
       fetchTasks();
       fetchStats();
     } catch (error) {
       console.error("Error submitting task:", error);
-      alert(error.response?.data?.message || "Failed to submit task");
+      toast.error(error.response?.data?.message || "Failed to submit task");
     } finally {
       setLoading(false);
     }
@@ -208,7 +210,7 @@ function Tasks() {
       }
     } catch (error) {
       console.error("Error fetching task details:", error);
-      alert("Failed to load task details");
+      toast.error("Failed to load task details");
     }
   };
 
@@ -240,12 +242,12 @@ function Tasks() {
     if (!confirm("Are you sure you want to delete this task?")) return;
     try {
       await taskAPI.delete(id);
-      alert("Task deleted successfully!");
+      toast.success("Task deleted successfully!");
       fetchTasks();
       fetchStats();
     } catch (error) {
       console.error("Error deleting task:", error);
-      alert(error.response?.data?.message || "Failed to delete task");
+      toast.error(error.response?.data?.message || "Failed to delete task");
     }
   };
 
@@ -260,7 +262,7 @@ function Tasks() {
       }
     } catch (error) {
       console.error("Error adding comment:", error);
-      alert("Failed to add comment");
+      toast.error("Failed to add comment");
     }
   };
 
@@ -272,11 +274,11 @@ function Tasks() {
         setSelectedTask(response.data.data);
         fetchTasks();
         fetchStats();
-        alert(`Task status updated to "${newStatus.replace("-", " ")}"`);
+        toast.success(`Task status updated to "${newStatus.replace("-", " ")}"`);
       }
     } catch (error) {
       console.error("Error updating status:", error);
-      alert(error.response?.data?.message || "Failed to update status");
+      toast.error(error.response?.data?.message || "Failed to update status");
     }
   };
 

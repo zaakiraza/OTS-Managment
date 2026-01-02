@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
 import { salaryAPI, employeeAPI, departmentAPI, attendanceAPI, exportAPI } from "../../Config/Api";
 import SideBar from "../../Components/SideBar/SideBar";
+import { useToast } from "../../Components/Common/Toast/Toast";
 import "./Salaries.css";
 
 const Salaries = () => {
+  const toast = useToast();
   const [salaries, setSalaries] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [departments, setDepartments] = useState([]);
@@ -25,13 +27,20 @@ const Salaries = () => {
     attendanceMarkingMethod: 'checkinCheckout',
     hourlyDeductionRate: 0,
     lateThreshold: 3,
-    earlyArrivalBonus: 0,
-    absentDeduction: 0,
+    halfDayThreshold: 0,
+    earlyDepartureThreshold: 0,
+    lateEarlyDepartureThreshold: 0,
+    includeExtraWorkingHours: false,
+    includeWeeklyOffDaysWorked: false,
     perfectAttendanceBonusEnabled: false,
     perfectAttendanceThreshold: 100,
     perfectAttendanceBonusAmount: 0,
   });
   const [exporting, setExporting] = useState(false);
+  const [previewData, setPreviewData] = useState(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewAllData, setPreviewAllData] = useState(null);
+  const [showPreview, setShowPreview] = useState(false);
 
   const user = (() => {
     try {
@@ -134,13 +143,13 @@ const Salaries = () => {
 
           statsByEmployee[empId].total++;
           
-          if (record.status === 'present' || record.status === 'early-arrival') {
+          if (record.status === 'present' || record.status === 'early-departure') {
             statsByEmployee[empId].present++;
           } else if (record.status === 'absent') {
             statsByEmployee[empId].absent++;
           } else if (record.status === 'half-day') {
             statsByEmployee[empId].halfDay++;
-          } else if (record.status === 'late' || record.status === 'late-early-arrival') {
+          } else if (record.status === 'late' || record.status === 'late-early-departure') {
             statsByEmployee[empId].late++;
             statsByEmployee[empId].present++; // Late is still present
           }
@@ -236,14 +245,14 @@ const Salaries = () => {
         criteria: criteriaData,
       });
       if (response.data.success) {
-        alert("Salary calculated successfully!");
+        toast.success("Salary calculated successfully!");
         setShowCriteriaModal(false);
         fetchSalaries();
         fetchAttendanceForMonth();
       }
     } catch (error) {
       console.error("Error calculating salary:", error);
-      alert(error.response?.data?.message || "Failed to calculate salary");
+      toast.error(error.response?.data?.message || "Failed to calculate salary");
     } finally {
       setLoading(false);
     }
@@ -264,20 +273,19 @@ const Salaries = () => {
         let message = `Calculated! ${calculated} salaries saved successfully.`;
         
         if (errors > 0 && errorDetails && errorDetails.length > 0) {
-          message += `\n\n⚠️ ${errors} employees could not be calculated:\n\n`;
-          errorDetails.forEach((err, idx) => {
-            message += `${idx + 1}. ${err.employeeId}: ${err.message}\n`;
-          });
+          const errorList = errorDetails.map((err, idx) => `${idx + 1}. ${err.employeeId}: ${err.message}`).join(', ');
+          toast.warning(`${message} ${errors} employees could not be calculated: ${errorList}`);
+        } else {
+          toast.success(message);
         }
         
-        alert(message);
         setShowCriteriaModal(false);
         fetchSalaries();
         fetchAttendanceForMonth();
       }
     } catch (error) {
       console.error("Error calculating salaries:", error);
-      alert(error.response?.data?.message || "Failed to calculate salaries");
+      toast.error(error.response?.data?.message || "Failed to calculate salaries");
     } finally {
       setLoading(false);
     }
@@ -293,6 +301,48 @@ const Salaries = () => {
       });
     }
     setShowCriteriaModal(true);
+    setPreviewData(null);
+    setPreviewAllData(null);
+    setShowPreview(false);
+  };
+
+  const fetchPreview = async () => {
+    if (calculationType === 'single' && !formData.employeeId) {
+      toast.warning("Please select an employee first");
+      return;
+    }
+
+    try {
+      setPreviewLoading(true);
+      if (calculationType === 'single') {
+        const response = await salaryAPI.preview({
+          employeeId: formData.employeeId,
+          month: selectedMonth,
+          year: selectedYear,
+          criteria: criteriaData,
+        });
+        if (response.data.success) {
+          setPreviewData(response.data.data);
+          setShowPreview(true);
+        }
+      } else {
+        const response = await salaryAPI.previewAll({
+          month: selectedMonth,
+          year: selectedYear,
+          departmentId: selectedDepartment || undefined,
+          criteria: criteriaData,
+        });
+        if (response.data.success) {
+          setPreviewAllData(response.data.data);
+          setShowPreview(true);
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching preview:", error);
+      toast.error(error.response?.data?.message || "Failed to load preview");
+    } finally {
+      setPreviewLoading(false);
+    }
   };
 
   const handleCriteriaSubmit = (e) => {
@@ -352,7 +402,7 @@ const Salaries = () => {
       window.URL.revokeObjectURL(url);
     } catch (error) {
       console.error("Export error:", error);
-      alert(error.response?.data?.message || "Failed to export salaries");
+      toast.error(error.response?.data?.message || "Failed to export salaries");
     } finally {
       setExporting(false);
     }
@@ -721,49 +771,129 @@ const Salaries = () => {
                     </small>
                   </div>
 
-                  <div className="form-section-title">
-                    <i className="fas fa-sunrise"></i> Early Arrival Bonus
-                  </div>
                   <div className="form-group">
-                    <label><i className="fas fa-gift"></i> How many early arrivals = 1 bonus day?</label>
+                    <label><i className="fas fa-clock-half"></i> How many half-days = 1 absent?</label>
                     <input
                       type="number"
                       min="0"
                       max="30"
-                      value={criteriaData.earlyArrivalBonus}
+                      value={criteriaData.halfDayThreshold}
                       onChange={(e) =>
                         setCriteriaData({
                           ...criteriaData,
-                          earlyArrivalBonus: parseInt(e.target.value) || 0,
+                          halfDayThreshold: parseInt(e.target.value) || 0,
                         })
                       }
                     />
                     <small className="helper-text info">
-                      <i className="fas fa-lightbulb"></i> Example: 5 early arrivals = 1 bonus day (0 = disabled)
+                      <i className="fas fa-lightbulb"></i> Example: 2 half-days = 1 absent day deduction (0 = disabled)
                     </small>
                   </div>
+
+                  <div className="form-group">
+                    <label><i className="fas fa-door-open"></i> How many early-departures = 1 absent?</label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="30"
+                      value={criteriaData.earlyDepartureThreshold}
+                      onChange={(e) =>
+                        setCriteriaData({
+                          ...criteriaData,
+                          earlyDepartureThreshold: parseInt(e.target.value) || 0,
+                        })
+                      }
+                    />
+                    <small className="helper-text info">
+                      <i className="fas fa-lightbulb"></i> Example: 4 early-departures = 1 absent day deduction (0 = disabled)
+                    </small>
+                  </div>
+
+                  <div className="form-group">
+                    <label><i className="fas fa-exclamation-circle"></i> How many late-early-departures = 1 absent?</label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="30"
+                      value={criteriaData.lateEarlyDepartureThreshold}
+                      onChange={(e) =>
+                        setCriteriaData({
+                          ...criteriaData,
+                          lateEarlyDepartureThreshold: parseInt(e.target.value) || 0,
+                        })
+                      }
+                    />
+                    <small className="helper-text info">
+                      <i className="fas fa-lightbulb"></i> Example: 2 late-early-departures = 1 absent day deduction (0 = disabled)
+                    </small>
+                  </div>
+
 
                   <div className="form-section-title">
                     <i className="fas fa-user-times"></i> Absent Deduction
                   </div>
                   <div className="form-group">
-                    <label><i className="fas fa-rupee-sign"></i> Deduction per absent day (PKR)</label>
-                    <input
-                      type="number"
-                      min="0"
-                      step="10"
-                      value={criteriaData.absentDeduction}
-                      onChange={(e) =>
-                        setCriteriaData({
-                          ...criteriaData,
-                          absentDeduction: parseFloat(e.target.value) || 0,
-                        })
-                      }
-                      placeholder="e.g., 500"
-                      required
-                    />
+                    <div style={{ 
+                      padding: '12px', 
+                      backgroundColor: '#e7f3ff', 
+                      borderRadius: '5px',
+                      border: '1px solid #b3d9ff'
+                    }}>
+                      <i className="fas fa-info-circle" style={{ color: '#2196f3', marginRight: '8px' }}></i>
+                      <strong>Auto-calculated:</strong> Deduction per absent day will be automatically calculated as:
+                      <div style={{ marginTop: '8px', fontFamily: 'monospace', fontSize: '13px' }}>
+                        <strong>Base Salary ÷ Total Working Days</strong> (rounded down)
+                      </div>
+                      <div style={{ marginTop: '5px', fontSize: '12px', color: '#666' }}>
+                        Example: PKR 50,000 ÷ 23 days = PKR 2,173 per absent day
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="form-section-title">
+                    <i className="fas fa-clock"></i> Extra Work Compensation
+                  </div>
+                  <div className="form-group">
+                    <label className="checkbox-option">
+                      <input
+                        type="checkbox"
+                        checked={criteriaData.includeExtraWorkingHours}
+                        onChange={(e) =>
+                          setCriteriaData({
+                            ...criteriaData,
+                            includeExtraWorkingHours: e.target.checked,
+                          })
+                        }
+                      />
+                      <span className="checkbox-custom"></span>
+                      <span className="checkbox-label">
+                        <i className="fas fa-hourglass-half"></i> Include extra working hours in salary calculation
+                      </span>
+                    </label>
                     <small className="helper-text info">
-                      <i className="fas fa-info-circle"></i> Amount to deduct for each absent day
+                      <i className="fas fa-lightbulb"></i> If enabled, extra hours worked beyond scheduled daily hours will be paid at per-hour rate
+                    </small>
+                  </div>
+
+                  <div className="form-group">
+                    <label className="checkbox-option">
+                      <input
+                        type="checkbox"
+                        checked={criteriaData.includeWeeklyOffDaysWorked}
+                        onChange={(e) =>
+                          setCriteriaData({
+                            ...criteriaData,
+                            includeWeeklyOffDaysWorked: e.target.checked,
+                          })
+                        }
+                      />
+                      <span className="checkbox-custom"></span>
+                      <span className="checkbox-label">
+                        <i className="fas fa-calendar-check"></i> Include weekly off days worked in salary calculation
+                      </span>
+                    </label>
+                    <small className="helper-text info">
+                      <i className="fas fa-lightbulb"></i> If enabled, days worked on weekly offs will be paid at per-day rate
                     </small>
                   </div>
                 </>
@@ -843,12 +973,265 @@ const Salaries = () => {
                 >
                   <i className="fas fa-times"></i> Cancel
                 </button>
+                <button
+                  type="button"
+                  className="btn-preview"
+                  onClick={fetchPreview}
+                  disabled={previewLoading || (calculationType === 'single' && !formData.employeeId)}
+                  style={{ marginRight: '10px', backgroundColor: '#17a2b8', color: 'white' }}
+                >
+                  <i className={previewLoading ? "fas fa-spinner fa-spin" : "fas fa-eye"}></i>
+                  {previewLoading ? " Loading..." : " Preview Calculation"}
+                </button>
                 <button type="submit" className="btn-primary" disabled={loading}>
                   <i className={loading ? "fas fa-spinner fa-spin" : "fas fa-calculator"}></i>
                   {loading ? " Calculating..." : calculationType === 'single' ? " Calculate Salary" : " Calculate All Salaries"}
                 </button>
               </div>
             </form>
+
+            {/* Preview Section */}
+            {showPreview && (
+              <div className="preview-section" style={{ 
+                marginTop: '20px', 
+                padding: '20px', 
+                backgroundColor: '#f8f9fa', 
+                borderRadius: '8px',
+                border: '1px solid #dee2e6'
+              }}>
+                <h3 style={{ marginTop: 0, marginBottom: '15px', color: '#495057' }}>
+                  <i className="fas fa-calculator"></i> Calculation Preview
+                </h3>
+                
+                {calculationType === 'single' && previewData && (
+                  <div className="preview-single">
+                    <div style={{ marginBottom: '15px' }}>
+                      <strong>Employee:</strong> {previewData.employee.name} ({previewData.employee.employeeId})<br/>
+                      <strong>Department:</strong> {previewData.employee.department}
+                    </div>
+                    
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '15px' }}>
+                      <div style={{ backgroundColor: 'white', padding: '15px', borderRadius: '5px' }}>
+                        <h4 style={{ marginTop: 0, fontSize: '14px', color: '#6c757d' }}>Base Information</h4>
+                        <div style={{ fontSize: '13px' }}>
+                          <div><strong>Base Salary:</strong> PKR {previewData.baseSalary.toLocaleString()}</div>
+                          <div><strong>Working Days:</strong> {previewData.calculations.totalWorkingDays}</div>
+                          <div><strong>Per Day Salary:</strong> PKR {previewData.calculations.perDaySalary.toFixed(2)}</div>
+                        </div>
+                      </div>
+                      
+                      <div style={{ backgroundColor: 'white', padding: '15px', borderRadius: '5px' }}>
+                        <h4 style={{ marginTop: 0, fontSize: '14px', color: '#6c757d' }}>Attendance Summary</h4>
+                        <div style={{ fontSize: '13px' }}>
+                          <div style={{ color: '#28a745' }}><strong>Present:</strong> {previewData.calculations.presentDays} days</div>
+                          <div style={{ color: '#dc3545' }}><strong>Absent:</strong> {previewData.calculations.absentDays} days
+                            {previewData.calculations.recordedAbsentDays > 0 && (
+                              <span style={{ fontSize: '11px', color: '#6c757d' }}>
+                                {' '}({previewData.calculations.recordedAbsentDays} recorded, {previewData.calculations.missingDays} missing)
+                              </span>
+                            )}
+                          </div>
+                          <div style={{ color: '#ffc107' }}><strong>Late:</strong> {previewData.calculations.lateDays} days</div>
+                          <div><strong>Half Days:</strong> {previewData.calculations.halfDays} days</div>
+                          {previewData.calculations.leaveDays > 0 && (
+                            <div><strong>Leaves:</strong> {previewData.calculations.leaveDays} days</div>
+                          )}
+                          {previewData.calculations.earlyArrivals > 0 && (
+                            <div style={{ color: '#17a2b8' }}><strong>Early Departure:</strong> {previewData.calculations.earlyArrivals}</div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style={{ backgroundColor: 'white', padding: '15px', borderRadius: '5px', marginBottom: '15px' }}>
+                      <h4 style={{ marginTop: 0, fontSize: '14px', color: '#6c757d' }}>Deduction Breakdown</h4>
+                      <div style={{ fontSize: '13px' }}>
+                        {previewData.deductions.absentDeduction > 0 && (
+                          <div style={{ color: '#dc3545' }}>
+                            <strong>Absent Deduction:</strong> PKR {previewData.deductions.absentDeduction.toLocaleString()}
+                            <div style={{ fontSize: '11px', color: '#6c757d', marginTop: '5px', marginLeft: '10px' }}>
+                              {criteriaData.lateThreshold && (
+                                <div>
+                                  • {criteriaData.lateThreshold} lates = 1 absent: 
+                                  {previewData.deductions.lateAsAbsent > 0 ? (
+                                    <span> {previewData.deductions.lateAsAbsent} absent day{previewData.deductions.lateAsAbsent !== 1 ? 's' : ''} from {previewData.calculations.lateDays} late{previewData.calculations.lateDays !== 1 ? 's' : ''}</span>
+                                  ) : (
+                                    <span style={{ color: '#999' }}> 0 absent days (no lates)</span>
+                                  )}
+                                </div>
+                              )}
+                              {criteriaData.halfDayThreshold > 0 && (
+                                <div>
+                                  • {criteriaData.halfDayThreshold} half-day{criteriaData.halfDayThreshold !== 1 ? 's' : ''} = 1 absent: 
+                                  {previewData.deductions.halfDayAsAbsent > 0 ? (
+                                    <span> {previewData.deductions.halfDayAsAbsent} absent day{previewData.deductions.halfDayAsAbsent !== 1 ? 's' : ''} from {previewData.calculations.halfDays} half-day{previewData.calculations.halfDays !== 1 ? 's' : ''}</span>
+                                  ) : (
+                                    <span style={{ color: '#999' }}> 0 absent days (no half-days)</span>
+                                  )}
+                                </div>
+                              )}
+                              {criteriaData.earlyDepartureThreshold > 0 && (
+                                <div>
+                                  • {criteriaData.earlyDepartureThreshold} early-departure{criteriaData.earlyDepartureThreshold !== 1 ? 's' : ''} = 1 absent: 
+                                  {previewData.deductions.earlyDepartureAsAbsent > 0 ? (
+                                    <span> {previewData.deductions.earlyDepartureAsAbsent} absent day{previewData.deductions.earlyDepartureAsAbsent !== 1 ? 's' : ''} from {previewData.calculations.earlyDepartureDays || 0} early-departure{(previewData.calculations.earlyDepartureDays || 0) !== 1 ? 's' : ''}</span>
+                                  ) : (
+                                    <span style={{ color: '#999' }}> 0 absent days (no early-departures)</span>
+                                  )}
+                                </div>
+                              )}
+                              {criteriaData.lateEarlyDepartureThreshold > 0 && (
+                                <div>
+                                  • {criteriaData.lateEarlyDepartureThreshold} late-early-departure{criteriaData.lateEarlyDepartureThreshold !== 1 ? 's' : ''} = 1 absent: 
+                                  {previewData.deductions.lateEarlyDepartureAsAbsent > 0 ? (
+                                    <span> {previewData.deductions.lateEarlyDepartureAsAbsent} absent day{previewData.deductions.lateEarlyDepartureAsAbsent !== 1 ? 's' : ''} from {previewData.calculations.lateEarlyDepartureDays || 0} late-early-departure{(previewData.calculations.lateEarlyDepartureDays || 0) !== 1 ? 's' : ''}</span>
+                                  ) : (
+                                    <span style={{ color: '#999' }}> 0 absent days (no late-early-departures)</span>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                        {previewData.deductions.excessLeaves > 0 && (
+                          <div style={{ color: '#dc3545' }}>
+                            <strong>Excess Leaves Deduction:</strong> {previewData.deductions.excessLeaves} days
+                          </div>
+                        )}
+                        {previewData.deductions.otherDeductions > 0 && (
+                          <div style={{ color: '#dc3545' }}>
+                            <strong>Other Deductions:</strong> PKR {previewData.deductions.otherDeductions.toLocaleString()}
+                          </div>
+                        )}
+                        <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid #dee2e6' }}>
+                          <strong style={{ fontSize: '14px' }}>Total Deductions:</strong> 
+                          <span style={{ color: '#dc3545', fontSize: '16px', marginLeft: '10px' }}>
+                            PKR {previewData.deductions.totalDeductions.toLocaleString()}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {previewData.additions.bonus > 0 && (
+                      <div style={{ backgroundColor: 'white', padding: '15px', borderRadius: '5px', marginBottom: '15px' }}>
+                        <h4 style={{ marginTop: 0, fontSize: '14px', color: '#6c757d' }}>Bonus Breakdown</h4>
+                        <div style={{ fontSize: '13px' }}>
+                          {previewData.bonusBreakdown.perfectAttendanceBonus > 0 && (
+                            <div style={{ color: '#28a745' }}>
+                              <strong>Perfect Attendance Bonus:</strong> PKR {previewData.bonusBreakdown.perfectAttendanceBonus.toLocaleString()}
+                            </div>
+                          )}
+                          <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid #dee2e6' }}>
+                            <strong style={{ fontSize: '14px' }}>Total Bonus:</strong> 
+                            <span style={{ color: '#28a745', fontSize: '16px', marginLeft: '10px' }}>
+                              PKR {previewData.additions.bonus.toLocaleString()}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    <div style={{ backgroundColor: '#e7f3ff', padding: '15px', borderRadius: '5px', border: '2px solid #2196f3' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                          <div style={{ fontSize: '12px', color: '#6c757d' }}>Base Salary</div>
+                          <div style={{ fontSize: '18px', fontWeight: 'bold' }}>PKR {previewData.baseSalary.toLocaleString()}</div>
+                        </div>
+                        <div style={{ fontSize: '20px', color: '#6c757d' }}>-</div>
+                        <div>
+                          <div style={{ fontSize: '12px', color: '#6c757d' }}>Deductions</div>
+                          <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#dc3545' }}>
+                            PKR {previewData.deductions.totalDeductions.toLocaleString()}
+                          </div>
+                        </div>
+                        <div style={{ fontSize: '20px', color: '#6c757d' }}>+</div>
+                        <div>
+                          <div style={{ fontSize: '12px', color: '#6c757d' }}>Additions</div>
+                          <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#28a745' }}>
+                            PKR {previewData.additions.totalAdditions.toLocaleString()}
+                          </div>
+                        </div>
+                        <div style={{ fontSize: '20px', color: '#6c757d' }}>=</div>
+                        <div>
+                          <div style={{ fontSize: '12px', color: '#6c757d' }}>Net Salary</div>
+                          <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#2196f3' }}>
+                            PKR {previewData.netSalary.toLocaleString()}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {calculationType === 'all' && previewAllData && (
+                  <div className="preview-all">
+                    <div style={{ backgroundColor: 'white', padding: '15px', borderRadius: '5px', marginBottom: '15px' }}>
+                      <h4 style={{ marginTop: 0, fontSize: '14px', color: '#6c757d' }}>Summary</h4>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', fontSize: '13px' }}>
+                        <div><strong>Total Employees:</strong> {previewAllData.summary.totalEmployees}</div>
+                        <div><strong>Calculated:</strong> {previewAllData.summary.calculated}</div>
+                        <div><strong>Errors:</strong> {previewAllData.summary.errors}</div>
+                        <div><strong>Total Net Salary:</strong> PKR {previewAllData.summary.totalNetSalary.toLocaleString()}</div>
+                      </div>
+                    </div>
+
+                    {previewAllData.errors && previewAllData.errors.length > 0 && (
+                      <div style={{ backgroundColor: '#fff3cd', padding: '15px', borderRadius: '5px', marginBottom: '15px', border: '1px solid #ffc107' }}>
+                        <h4 style={{ marginTop: 0, fontSize: '14px', color: '#856404' }}>Errors</h4>
+                        <div style={{ fontSize: '12px', maxHeight: '150px', overflowY: 'auto' }}>
+                          {previewAllData.errors.map((err, idx) => (
+                            <div key={idx} style={{ marginBottom: '5px' }}>
+                              <strong>{err.employeeId}</strong> ({err.name}): {err.message}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
+                      <table style={{ width: '100%', fontSize: '12px', backgroundColor: 'white', borderRadius: '5px' }}>
+                        <thead style={{ backgroundColor: '#f8f9fa', position: 'sticky', top: 0 }}>
+                          <tr>
+                            <th style={{ padding: '10px', textAlign: 'left' }}>Employee</th>
+                            <th style={{ padding: '10px', textAlign: 'right' }}>Base</th>
+                            <th style={{ padding: '10px', textAlign: 'center' }}>Present</th>
+                            <th style={{ padding: '10px', textAlign: 'center' }}>Absent</th>
+                            <th style={{ padding: '10px', textAlign: 'center' }}>Late</th>
+                            <th style={{ padding: '10px', textAlign: 'right' }}>Deductions</th>
+                            <th style={{ padding: '10px', textAlign: 'right' }}>Bonus</th>
+                            <th style={{ padding: '10px', textAlign: 'right' }}>Net Salary</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {previewAllData.previews.map((preview, idx) => (
+                            <tr key={idx} style={{ borderTop: '1px solid #dee2e6' }}>
+                              <td style={{ padding: '8px' }}>
+                                <div><strong>{preview.employeeId}</strong></div>
+                                <div style={{ fontSize: '11px', color: '#6c757d' }}>{preview.name}</div>
+                                <div style={{ fontSize: '10px', color: '#999' }}>{preview.department}</div>
+                              </td>
+                              <td style={{ padding: '8px', textAlign: 'right' }}>PKR {preview.baseSalary.toLocaleString()}</td>
+                              <td style={{ padding: '8px', textAlign: 'center', color: '#28a745' }}>{preview.presentDays}</td>
+                              <td style={{ padding: '8px', textAlign: 'center', color: '#dc3545' }}>{preview.absentDays}</td>
+                              <td style={{ padding: '8px', textAlign: 'center', color: '#ffc107' }}>{preview.lateDays}</td>
+                              <td style={{ padding: '8px', textAlign: 'right', color: '#dc3545' }}>
+                                PKR {preview.totalDeductions.toLocaleString()}
+                              </td>
+                              <td style={{ padding: '8px', textAlign: 'right', color: '#28a745' }}>
+                                {preview.bonus > 0 ? `PKR ${preview.bonus.toLocaleString()}` : '-'}
+                              </td>
+                              <td style={{ padding: '8px', textAlign: 'right', fontWeight: 'bold' }}>
+                                PKR {preview.netSalary.toLocaleString()}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}

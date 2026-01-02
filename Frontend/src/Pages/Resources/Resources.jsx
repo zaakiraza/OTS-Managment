@@ -2,9 +2,11 @@ import { useState, useEffect } from "react";
 import SideBar from "../../Components/SideBar/SideBar";
 import { resourceAPI } from "../../Config/resourceApi";
 import { departmentAPI, employeeAPI } from "../../Config/Api";
+import { useToast } from "../../Components/Common/Toast/Toast";
 import "../Assets/Assets.css";
 
 function Resources() {
+  const toast = useToast();
   const [resources, setResources] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [departments, setDepartments] = useState([]);
@@ -115,10 +117,10 @@ function Resources() {
     try {
       if (selectedResource) {
         await resourceAPI.update(selectedResource._id, formData);
-        alert("Resource updated successfully!");
+        toast.success("Resource updated successfully!");
       } else {
         await resourceAPI.create(formData);
-        alert("Resource created successfully!");
+        toast.success("Resource created successfully!");
       }
       setShowModal(false);
       resetForm();
@@ -126,7 +128,7 @@ function Resources() {
       fetchStats();
     } catch (error) {
       console.error("Error saving resource:", error);
-      alert(error.response?.data?.message || "Failed to save resource");
+      toast.error(error.response?.data?.message || "Failed to save resource");
     }
   };
 
@@ -134,12 +136,12 @@ function Resources() {
     if (!window.confirm("Are you sure you want to delete this resource?")) return;
     try {
       await resourceAPI.delete(id);
-      alert("Resource deleted successfully!");
+      toast.success("Resource deleted successfully!");
       fetchResources();
       fetchStats();
     } catch (error) {
       console.error("Error deleting resource:", error);
-      alert("Failed to delete resource");
+      toast.error(error.response?.data?.message || "Failed to delete resource");
     }
   };
 

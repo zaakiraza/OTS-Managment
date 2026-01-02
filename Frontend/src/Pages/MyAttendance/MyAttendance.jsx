@@ -61,9 +61,9 @@ function MyAttendance() {
   const calculateStats = (records) => {
     const stats = {
       totalDays: records.length,
-      present: records.filter((r) => r.status === "present" || r.status === "early-arrival").length,
+      present: records.filter((r) => r.status === "present" || r.status === "early-departure").length,
       absent: records.filter((r) => r.status === "absent").length,
-      late: records.filter((r) => r.status === "late" || r.status === "late-early-arrival").length,
+      late: records.filter((r) => r.status === "late" || r.status === "late-early-departure").length,
       halfDay: records.filter((r) => r.status === "half-day").length,
       onLeave: records.filter((r) => r.status === "leave").length,
     };
@@ -75,8 +75,8 @@ function MyAttendance() {
       present: "#10b981",
       absent: "#ef4444",
       late: "#f59e0b",
-      "late-early-arrival": "#f59e0b",
-      "early-arrival": "#10b981",
+      "late-early-departure": "#f59e0b",
+      "early-departure": "#10b981",
       "half-day": "#3b82f6",
       leave: "#8b5cf6",
       pending: "#6b7280",
@@ -89,8 +89,8 @@ function MyAttendance() {
       present: "Present",
       absent: "Absent",
       late: "Late",
-      "late-early-arrival": "Late Arrival",
-      "early-arrival": "Early Arrival",
+      "late-early-departure": "Late Departure",
+      "early-departure": "Early Departure",
       "half-day": "Half Day",
       leave: "On Leave",
       pending: "Pending",
