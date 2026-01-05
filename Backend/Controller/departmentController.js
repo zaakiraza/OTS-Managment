@@ -1,5 +1,6 @@
 import Department from "../Model/Department.js";
 import Employee from "../Model/Employee.js";
+import mongoose from "mongoose";
 import { logDepartmentAction } from "../Utils/auditLogger.js";
 
 // Create department
@@ -20,6 +21,33 @@ export const createDepartment = async (req, res) => {
 
     // Auto-generate code if not provided
     const deptCode = code ? code.toUpperCase() : name.substring(0, 3).toUpperCase() + Math.floor(Math.random() * 1000);
+
+    // For attendanceDepartment role, validate they can create under departments they have access to
+    const requestingUserRole = req.user?.role?.name || req.user?.role;
+    if (requestingUserRole === "attendanceDepartment" && parentDepartment) {
+      const parent = await Department.findById(parentDepartment);
+      if (!parent) {
+        return res.status(400).json({
+          success: false,
+          message: "Parent department not found",
+        });
+      }
+      
+      // Check if user created the parent department OR has created any sibling departments under this parent
+      const userCreatedParent = String(parent.createdBy) === String(req.user._id);
+      const hasCreatedSiblings = await Department.countDocuments({
+        parentDepartment: parentDepartment,
+        createdBy: req.user._id,
+        isActive: true
+      });
+      
+      if (!userCreatedParent && hasCreatedSiblings === 0) {
+        return res.status(403).json({
+          success: false,
+          message: "Access denied. You can only create departments under parents you created or where you have existing departments.",
+        });
+      }
+    }
 
     // Calculate hierarchy level and path
     let level = 0;
@@ -83,6 +111,90 @@ export const getAllDepartments = async (req, res) => {
     // If parentOnly=true, get only root departments
     if (parentOnly === 'true') {
       query.parentDepartment = null;
+    }
+    
+    // Filter by creator for non-superAdmin users
+    const userRole = req.user?.role?.name || req.user?.role;
+    if (userRole !== "superAdmin" && req.user?._id) {
+      // Get user's assigned department to include it and its sub-departments
+      const userEmployee = await Employee.findById(req.user._id)
+        .populate("department", "_id");
+      
+      if (userEmployee?.department) {
+        const userDeptId = userEmployee.department._id || userEmployee.department;
+        
+        // Find all departments where:
+        // 1. Created by the user, OR
+        // 2. Parent departments of departments they created (so they can create siblings), OR
+        // 3. It's the user's assigned department, OR
+        // 4. It's a sub-department of the user's assigned department
+        const allDepts = await Department.find({ isActive: true })
+          .populate("parentDepartment", "_id");
+        
+        const allowedDeptIds = new Set();
+        const parentIdsOfCreatedDepts = new Set();
+        
+        // First pass: collect departments created by user and their parent IDs
+        allDepts.forEach(dept => {
+          const createdBy = String(dept.createdBy);
+          if (createdBy === String(req.user._id)) {
+            allowedDeptIds.add(String(dept._id));
+            // If this dept has a parent, add parent ID to the set
+            if (dept.parentDepartment) {
+              const parentId = String(dept.parentDepartment._id || dept.parentDepartment);
+              parentIdsOfCreatedDepts.add(parentId);
+            }
+          }
+        });
+        
+        // Second pass: include parent departments and check against assigned department
+        allDepts.forEach(dept => {
+          const deptId = String(dept._id);
+          const parentId = dept.parentDepartment 
+            ? String(dept.parentDepartment._id || dept.parentDepartment) 
+            : null;
+          const deptPath = dept.path || "";
+          
+          // Include if:
+          // - Already added (created by user)
+          // - It's a parent of a department they created
+          // - It's the assigned department
+          // - It's a sub-department of assigned department
+          if (allowedDeptIds.has(deptId) ||
+              parentIdsOfCreatedDepts.has(deptId) ||
+              deptId === String(userDeptId) ||
+              parentId === String(userDeptId) ||
+              deptPath.includes(String(userDeptId))) {
+            allowedDeptIds.add(deptId);
+          }
+        });
+        
+        query._id = { $in: Array.from(allowedDeptIds).map(id => new mongoose.Types.ObjectId(id)) };
+      } else {
+        // If no assigned department, show departments created by user AND their parent departments
+        const userCreatedDepts = await Department.find({ 
+          createdBy: req.user._id, 
+          isActive: true 
+        }).populate("parentDepartment", "_id");
+        
+        const allowedDeptIds = new Set();
+        
+        // Add all user-created departments
+        userCreatedDepts.forEach(dept => {
+          allowedDeptIds.add(String(dept._id));
+          // Add parent department so user can create siblings
+          if (dept.parentDepartment) {
+            const parentId = String(dept.parentDepartment._id || dept.parentDepartment);
+            allowedDeptIds.add(parentId);
+          }
+        });
+        
+        if (allowedDeptIds.size > 0) {
+          query._id = { $in: Array.from(allowedDeptIds).map(id => new mongoose.Types.ObjectId(id)) };
+        } else {
+          query.createdBy = req.user._id;
+        }
+      }
     }
     
     const departments = await Department.find(query)
@@ -204,6 +316,17 @@ export const updateDepartment = async (req, res) => {
       });
     }
 
+    // For attendanceDepartment role, only allow editing departments they created
+    const requestingUserRole = req.user?.role?.name || req.user?.role;
+    if (requestingUserRole === "attendanceDepartment") {
+      if (String(currentDept.createdBy) !== String(req.user._id)) {
+        return res.status(403).json({
+          success: false,
+          message: "Access denied. You can only edit departments you created.",
+        });
+      }
+    }
+
     const updateData = { name, description, head, isActive, leverageTime, teamLead };
     if (code) updateData.code = code.toUpperCase();
 
@@ -304,6 +427,26 @@ async function updateChildPaths(parentId, parentPath, parentLevel) {
 // Delete department
 export const deleteDepartment = async (req, res) => {
   try {
+    // Get the department first to check permissions
+    const department = await Department.findById(req.params.id);
+    if (!department) {
+      return res.status(404).json({
+        success: false,
+        message: "Department not found",
+      });
+    }
+
+    // For attendanceDepartment role, only allow deleting departments they created
+    const requestingUserRole = req.user?.role?.name || req.user?.role;
+    if (requestingUserRole === "attendanceDepartment") {
+      if (String(department.createdBy) !== String(req.user._id)) {
+        return res.status(403).json({
+          success: false,
+          message: "Access denied. You can only delete departments you created.",
+        });
+      }
+    }
+
     // Check if department has active sub-departments
     const hasChildren = await Department.exists({
       parentDepartment: req.params.id,
@@ -317,22 +460,15 @@ export const deleteDepartment = async (req, res) => {
       });
     }
 
-    const department = await Department.findByIdAndUpdate(
+    const deletedDepartment = await Department.findByIdAndUpdate(
       req.params.id,
       { isActive: false },
       { new: true }
     );
 
-    if (!department) {
-      return res.status(404).json({
-        success: false,
-        message: "Department not found",
-      });
-    }
-
     // Audit log
-    await logDepartmentAction(req, "DELETE", department, {
-      before: { name: department.name, code: department.code, isActive: true },
+    await logDepartmentAction(req, "DELETE", deletedDepartment, {
+      before: { name: deletedDepartment.name, code: deletedDepartment.code, isActive: true },
       after: { isActive: false }
     });
 

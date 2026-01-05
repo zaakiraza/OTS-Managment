@@ -236,9 +236,8 @@ export const taskValidation = {
 export const ticketValidation = {
   create: [
     body("title")
+      .optional()
       .trim()
-      .notEmpty()
-      .withMessage("Ticket title is required")
       .isLength({ max: 200 })
       .withMessage("Title must be less than 200 characters")
       .escape(),
@@ -250,17 +249,16 @@ export const ticketValidation = {
       .withMessage("Description must be less than 5000 characters")
       .escape(),
     body("category")
-      .notEmpty()
-      .withMessage("Category is required")
+      .optional()
       .isIn(["Maintenance", "Technical", "HR", "Administrative", "Other"])
       .withMessage("Invalid category"),
     body("priority")
-      .notEmpty()
-      .withMessage("Priority is required")
+      .optional()
       .isIn(["Low", "Medium", "High", "Critical"])
       .withMessage("Invalid priority"),
     body("reportedAgainst")
-      .optional()
+      .notEmpty()
+      .withMessage("Report Against employee is required")
       .isMongoId()
       .withMessage("Invalid employee ID"),
     handleValidation,

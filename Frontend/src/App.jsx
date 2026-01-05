@@ -21,11 +21,13 @@ import Tasks from "./Pages/Tasks/Tasks";
 import MyTasks from "./Pages/MyTasks/MyTasks";
 import MyAssets from "./Pages/MyAssets/MyAssets";
 import MyAttendance from "./Pages/MyAttendance/MyAttendance";
+import LeaveApproval from "./Pages/LeaveApproval/LeaveApproval";
 import Resources from "./Pages/Resources/Resources";
 import AuditLogs from "./Pages/AuditLogs/AuditLogs";
 import Profile from "./Pages/Profile/Profile";
 import Feedback from "./Pages/Feedback/Feedback";
 import Todos from "./Pages/Todos/Todos";
+import EmailTemplates from "./Pages/EmailTemplates/EmailTemplates";
 
 function App() {
   const isAuthenticated = () => {
@@ -102,6 +104,14 @@ function App() {
           element={
             <ProtectedRoute allowedRoles={["superAdmin"]}>
               <AuditLogs />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/email-templates"
+          element={
+            <ProtectedRoute allowedRoles={["superAdmin"]}>
+              <EmailTemplates />
             </ProtectedRoute>
           }
         />
@@ -208,22 +218,32 @@ function App() {
           }
         />
 
-        {/* Employee & Team Lead Asset View */}
+        {/* My Assets - All Authenticated Users */}
         <Route
           path="/my-assets"
           element={
-            <ProtectedRoute allowedRoles={["employee", "teamLead"]}>
+            <ProtectedRoute allowedRoles={["superAdmin", "attendanceDepartment", "ITAssetManager", "teamLead", "employee"]}>
               <MyAssets />
             </ProtectedRoute>
           }
         />
 
-        {/* Employee & Team Lead Attendance View */}
+        {/* My Attendance - All Authenticated Users */}
         <Route
           path="/my-attendance"
           element={
-            <ProtectedRoute allowedRoles={["employee", "teamLead"]}>
+            <ProtectedRoute allowedRoles={["superAdmin", "attendanceDepartment", "ITAssetManager", "teamLead", "employee"]}>
               <MyAttendance />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Leave Approval - Super Admin and Attendance Department */}
+        <Route
+          path="/leave-approval"
+          element={
+            <ProtectedRoute allowedRoles={["superAdmin", "attendanceDepartment"]}>
+              <LeaveApproval />
             </ProtectedRoute>
           }
         />

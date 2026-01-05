@@ -6,10 +6,10 @@ export const submitFeedback = async (req, res) => {
   try {
     const { category, subject, message, priority } = req.body;
 
-    if (!subject || !message) {
+    if (!message) {
       return res.status(400).json({
         success: false,
-        message: "Subject and message are required",
+        message: "Message is required",
       });
     }
 
@@ -21,17 +21,17 @@ export const submitFeedback = async (req, res) => {
       submittedBy: req.user._id,
       submittedByName: req.user.name,
       submittedByEmail: employeeEmail,
-      category: category || "other",
+      category,
       subject,
       message,
-      priority: priority || "medium",
+      priority,
       status: "new",
     });
 
     // Audit log
     await logSystemAction(req, "CREATE", feedback, {
       after: { category, subject, status: "new" }
-    }, `Feedback submitted: ${subject}`);
+    }, `Feedback submitted: ${message.substring(0, 50)}`);
 
     res.status(201).json({
       success: true,

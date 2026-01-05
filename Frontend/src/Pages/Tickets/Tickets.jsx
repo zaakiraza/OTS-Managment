@@ -25,10 +25,7 @@ function Tickets() {
     showResolved: false,
   });
   const [formData, setFormData] = useState({
-    title: "",
     description: "",
-    category: "Maintenance",
-    priority: "Medium",
     department: "",
     reportedAgainst: "",
   });
@@ -341,10 +338,7 @@ function Tickets() {
   const handleEdit = (ticket) => {
     setSelectedTicket(ticket);
     setFormData({
-      title: ticket.title,
       description: ticket.description,
-      category: ticket.category,
-      priority: ticket.priority,
       reportedAgainst: ticket.reportedAgainst?._id || "",
       status: ticket.status,
       assignedTo: ticket.assignedTo?._id || "",
@@ -386,10 +380,7 @@ function Tickets() {
 
   const resetForm = () => {
     setFormData({
-      title: "",
       description: "",
-      category: "Maintenance",
-      priority: "Medium",
       department: "",
       reportedAgainst: "",
     });
@@ -445,7 +436,7 @@ function Tickets() {
               </div>
               <div>
                 <h1>Support Tickets</h1>
-                <p>Manage and track support requests</p>
+                <p>Manage and track Complains</p>
               </div>
             </div>
             <button className="btn-primary" onClick={() => setShowModal(true)}>
@@ -513,13 +504,15 @@ function Tickets() {
                   <div key={ticket._id} className="alert-ticket-item">
                     <div className="ticket-main-info">
                       <span className="ticket-id-badge">{ticket.ticketId}</span>
-                      <span className="ticket-title">{ticket.title}</span>
+                      <span className="ticket-title">{ticket.title || ticket.description?.substring(0, 50) || 'No title'}</span>
                     </div>
                     <div className="ticket-badges">
-                      <span className={`priority-badge ${ticket.priority.toLowerCase()}`}>
-                        <i className={`fas ${getPriorityIcon(ticket.priority)}`}></i>
-                        {ticket.priority}
-                      </span>
+                      {ticket.priority && (
+                        <span className={`priority-badge ${ticket.priority.toLowerCase()}`}>
+                          <i className={`fas ${getPriorityIcon(ticket.priority)}`}></i>
+                          {ticket.priority}
+                        </span>
+                      )}
                       <span className={`status-badge ${ticket.status.toLowerCase().replace(' ', '-')}`}>
                         <i className={`fas ${getStatusIcon(ticket.status)}`}></i>
                         {ticket.status}
@@ -537,63 +530,6 @@ function Tickets() {
               </div>
             </div>
           )}
-
-          {/* Filters */}
-          <div className="filters-card">
-            <div className="filters-header">
-              <i className="fas fa-filter"></i>
-              <span>Filter Tickets</span>
-            </div>
-            <div className="filters-body">
-              <div className="filter-group">
-                <label><i className="fas fa-tag"></i> Category</label>
-                <select
-                  value={filter.category}
-                  onChange={(e) => setFilter({ ...filter, category: e.target.value })}
-                >
-                  <option value="">All Categories</option>
-                  {categories.map((cat) => (
-                    <option key={cat} value={cat}>{cat}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="filter-group">
-                <label><i className="fas fa-flag"></i> Priority</label>
-                <select
-                  value={filter.priority}
-                  onChange={(e) => setFilter({ ...filter, priority: e.target.value })}
-                >
-                  <option value="">All Priorities</option>
-                  {priorities.map((priority) => (
-                    <option key={priority} value={priority}>{priority}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="filter-group">
-                <label><i className="fas fa-info-circle"></i> Status</label>
-                <select
-                  value={filter.status}
-                  onChange={(e) => setFilter({ ...filter, status: e.target.value })}
-                >
-                  <option value="">All Statuses</option>
-                  {statuses.map((status) => (
-                    <option key={status} value={status}>{status}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="filter-group checkbox-filter">
-                <label className="checkbox-wrapper">
-                  <input
-                    type="checkbox"
-                    checked={filter.showResolved}
-                    onChange={(e) => setFilter({ ...filter, showResolved: e.target.checked })}
-                  />
-                  <span className="checkmark"></span>
-                  <span className="checkbox-text">Show Resolved/Closed</span>
-                </label>
-              </div>
-            </div>
-          </div>
 
           {/* Tickets Table */}
           <div className="tickets-table-container">
@@ -636,19 +572,27 @@ function Tickets() {
                         <span className="ticket-id">{ticket.ticketId}</span>
                       </td>
                       <td>
-                        <span className="ticket-title-cell">{ticket.title}</span>
+                        <span className="ticket-title-cell">{ticket.title || ticket.description?.substring(0, 100) || 'No title'}</span>
                       </td>
                       <td>
-                        <span className={`category-badge ${ticket.category.toLowerCase()}`}>
-                          <i className={`fas ${getCategoryIcon(ticket.category)}`}></i>
-                          {ticket.category}
-                        </span>
+                        {ticket.category ? (
+                          <span className={`category-badge ${ticket.category.toLowerCase()}`}>
+                            <i className={`fas ${getCategoryIcon(ticket.category)}`}></i>
+                            {ticket.category}
+                          </span>
+                        ) : (
+                          <span style={{ color: '#999' }}>-</span>
+                        )}
                       </td>
                       <td>
-                        <span className={`priority-badge ${ticket.priority.toLowerCase()}`}>
-                          <i className={`fas ${getPriorityIcon(ticket.priority)}`}></i>
-                          {ticket.priority}
-                        </span>
+                        {ticket.priority ? (
+                          <span className={`priority-badge ${ticket.priority.toLowerCase()}`}>
+                            <i className={`fas ${getPriorityIcon(ticket.priority)}`}></i>
+                            {ticket.priority}
+                          </span>
+                        ) : (
+                          <span style={{ color: '#999' }}>-</span>
+                        )}
                       </td>
                       <td>
                         <span className={`status-badge ${ticket.status.toLowerCase().replace(' ', '-')}`}>
@@ -709,55 +653,20 @@ function Tickets() {
                     <div className="form-section">
                       <h4 className="section-title"><i className="fas fa-info-circle"></i> Ticket Information</h4>
                       <div className="form-group">
-                        <label><i className="fas fa-heading"></i> Title *</label>
-                        <input
-                          type="text"
-                          value={formData.title}
-                          onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                          placeholder="Enter ticket title"
-                          required
-                        />
-                      </div>
-                      <div className="form-group">
                         <label><i className="fas fa-align-left"></i> Description *</label>
                         <textarea
                           value={formData.description}
                           onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                           placeholder="Describe the issue in detail..."
                           required
+                          rows="6"
                         />
-                      </div>
-                      <div className="form-row">
-                        <div className="form-group">
-                          <label><i className="fas fa-tag"></i> Category *</label>
-                          <select
-                            value={formData.category}
-                            onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                            required
-                          >
-                            {categories.map((cat) => (
-                              <option key={cat} value={cat}>{cat}</option>
-                            ))}
-                          </select>
-                        </div>
-                        <div className="form-group">
-                          <label><i className="fas fa-flag"></i> Priority *</label>
-                          <select
-                            value={formData.priority}
-                            onChange={(e) => setFormData({ ...formData, priority: e.target.value })}
-                            required
-                          >
-                            {priorities.map((priority) => (
-                              <option key={priority} value={priority}>{priority}</option>
-                            ))}
-                          </select>
-                        </div>
                       </div>
                     </div>
 
                     {(departments.length > 0 || employees.length > 0) && (
                       <div className="form-section">
-                        <h4 className="section-title"><i className="fas fa-user-tag"></i> Report Against (Optional)</h4>
+                        <h4 className="section-title"><i className="fas fa-user-tag"></i> Report Against *</h4>
                         <div className="form-row">
                           {departments.length > 0 && (
                             <div className="form-group">
@@ -777,12 +686,13 @@ function Tickets() {
                           )}
                           {employees.length > 0 && (
                             <div className="form-group">
-                              <label><i className="fas fa-user"></i> Employee</label>
+                              <label><i className="fas fa-user"></i> Employee *</label>
                               <select
                                 value={formData.reportedAgainst}
                                 onChange={(e) => setFormData({ ...formData, reportedAgainst: e.target.value })}
+                                required
                               >
-                                <option value="">Not Applicable</option>
+                                <option value="">Select Employee</option>
                                 {filteredEmployees.map((emp) => (
                                   <option key={emp._id} value={emp._id}>
                                     {emp.name} - {emp.employeeId}
@@ -936,16 +846,20 @@ function Tickets() {
                 <div className="modal-body">
                   {/* Ticket Hero */}
                   <div className="ticket-hero">
-                    <h2 className="ticket-hero-title">{selectedTicket.title}</h2>
+                    <h2 className="ticket-hero-title">{selectedTicket.title || selectedTicket.description?.substring(0, 100) || 'Ticket Details'}</h2>
                     <div className="ticket-hero-badges">
-                      <span className={`category-badge ${selectedTicket.category.toLowerCase()}`}>
-                        <i className={`fas ${getCategoryIcon(selectedTicket.category)}`}></i>
-                        {selectedTicket.category}
-                      </span>
-                      <span className={`priority-badge ${selectedTicket.priority.toLowerCase()}`}>
-                        <i className={`fas ${getPriorityIcon(selectedTicket.priority)}`}></i>
-                        {selectedTicket.priority}
-                      </span>
+                      {selectedTicket.category && (
+                        <span className={`category-badge ${selectedTicket.category.toLowerCase()}`}>
+                          <i className={`fas ${getCategoryIcon(selectedTicket.category)}`}></i>
+                          {selectedTicket.category}
+                        </span>
+                      )}
+                      {selectedTicket.priority && (
+                        <span className={`priority-badge ${selectedTicket.priority.toLowerCase()}`}>
+                          <i className={`fas ${getPriorityIcon(selectedTicket.priority)}`}></i>
+                          {selectedTicket.priority}
+                        </span>
+                      )}
                       <span className={`status-badge ${selectedTicket.status.toLowerCase().replace(' ', '-')}`}>
                         <i className={`fas ${getStatusIcon(selectedTicket.status)}`}></i>
                         {selectedTicket.status}

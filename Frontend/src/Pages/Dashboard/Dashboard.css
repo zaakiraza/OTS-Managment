@@ -75,7 +75,8 @@
 }
 
 .stat-icon i {
-  color: var(--primary-dark, #093635);
+  /* color: var(--primary-dark, #093635); */
+  color: white;
 }
 
 .stat-icon.accent {

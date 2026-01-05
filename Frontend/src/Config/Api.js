@@ -173,4 +173,13 @@ export const todoAPI = {
   toggleStatus: (id) => api.patch(`/todos/${id}/toggle`),
 };
 
+// Leave API
+export const leaveAPI = {
+  apply: (data) => api.post("/leaves/apply", data),
+  getMyLeaves: (params) => api.get("/leaves/my-leaves", { params }),
+  getAllLeaves: (params) => api.get("/leaves/all", { params }),
+  updateStatus: (id, data) => api.put(`/leaves/${id}/status`, data),
+  cancel: (id) => api.delete(`/leaves/${id}`),
+};
+
 export default api;

@@ -472,6 +472,11 @@ const Salaries = () => {
 
       {loading && displayData.length === 0 ? (
         <div className="loading">Loading...</div>
+      ) : displayData.length === 0 ? (
+        <div className="no-data">
+          <p>No employees found in this department.</p>
+          <small>Try selecting a different department or add employees to this department.</small>
+        </div>
       ) : (
         <div className="salaries-table">
           <table>

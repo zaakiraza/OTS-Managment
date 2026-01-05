@@ -11,6 +11,11 @@ import AuditLog from "../Model/AuditLog.js";
  * Returns the actual client IP address, even if it's localhost (for local testing)
  */
 const getRealIP = (req) => {
+  // Safety check
+  if (!req || !req.headers) {
+    return 'unknown';
+  }
+  
   // Priority order for IP extraction:
   // 1. X-Forwarded-For (most common proxy header) - first IP is original client
   const forwardedFor = req.headers['x-forwarded-for'];

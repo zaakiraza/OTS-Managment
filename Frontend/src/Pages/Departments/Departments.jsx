@@ -228,29 +228,110 @@ const Departments = () => {
   const TreeNode = ({ dept, level = 0 }) => {
     const hasChildren = dept.children && dept.children.length > 0;
     const isExpanded = expandedDepts.has(dept._id);
+    const deptEmployees = employees.filter(emp => emp.department?._id === dept._id);
+    const hasEmployees = deptEmployees.length > 0;
 
     return (
       <div className="tree-node">
         <div className={`tree-node-content level-${level}`}>
-          <div className="tree-node-line">
-            {hasChildren && (
+          <div className="tree-node-line" onClick={() => toggleExpand(dept._id)} style={{ cursor: 'pointer' }}>
+            {(hasChildren || hasEmployees) && (
               <button 
                 className="tree-expand-btn"
-                onClick={() => toggleExpand(dept._id)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleExpand(dept._id);
+                }}
               >
                 <i className={`fas ${isExpanded ? 'fa-chevron-down' : 'fa-chevron-right'}`}></i>
               </button>
             )}
-            {!hasChildren && <span className="tree-leaf-icon"><i className="fas fa-circle" style={{fontSize: '6px'}}></i></span>}
+            {!hasChildren && !hasEmployees && <span className="tree-leaf-icon"><i className="fas fa-circle" style={{fontSize: '6px'}}></i></span>}
             <div className={`tree-node-box ${level === 0 ? 'root-node' : 'child-node'}`}>
               <span className="tree-node-name">{dept.name}</span>
               <span className="tree-node-code">{dept.code}</span>
+              {hasEmployees && (
+                <span className="tree-node-count" style={{ marginLeft: '10px', fontSize: '12px', opacity: 0.7 }}>
+                  <i className="fas fa-users"></i> {deptEmployees.length}
+                </span>
+              )}
             </div>
           </div>
         </div>
-        {hasChildren && isExpanded && (
+        {isExpanded && (
           <div className="tree-children">
-            {dept.children.map((child) => (
+            {/* Show employees first */}
+            {hasEmployees && (
+              <div className="tree-employees-list" style={{ marginLeft: level === 0 ? '60px' : '40px', marginBottom: '10px' }}>
+                {deptEmployees.map((emp) => (
+                  <div key={emp._id} className="tree-employee-card" style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    padding: '10px',
+                    marginBottom: '8px',
+                    background: '#f8f9fa',
+                    borderRadius: '6px',
+                    border: '1px solid #e0e0e0'
+                  }}>
+                    <div className="tree-emp-avatar" style={{
+                      width: '36px',
+                      height: '36px',
+                      borderRadius: '50%',
+                      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                      color: 'white',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontWeight: 'bold',
+                      marginRight: '12px'
+                    }}>
+                      {emp.name?.charAt(0).toUpperCase() || 'E'}
+                    </div>
+                    <div className="tree-emp-info" style={{ flex: 1 }}>
+                      <div className="tree-emp-name" style={{ fontWeight: '600', fontSize: '14px' }}>{emp.name}</div>
+                      <div className="tree-emp-details" style={{ fontSize: '12px', color: '#666', marginTop: '2px' }}>
+                        <span style={{ marginRight: '10px' }}>{emp.employeeId}</span>
+                        <span style={{ marginRight: '10px' }}>{emp.position}</span>
+                        {emp.isTeamLead && <span style={{ color: '#f59e0b' }}><i className="fas fa-star"></i> Team Lead</span>}
+                      </div>
+                    </div>
+                    <div className="tree-emp-actions">
+                      <button 
+                        className="btn-edit-small" 
+                        onClick={(e) => { e.stopPropagation(); handleEdit(dept); }}
+                        style={{
+                          padding: '6px 10px',
+                          background: '#3b82f6',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '4px',
+                          cursor: 'pointer',
+                          marginRight: '5px'
+                        }}
+                      >
+                        <i className="fas fa-edit"></i>
+                      </button>
+                      <button 
+                        className="btn-delete-small" 
+                        onClick={(e) => { e.stopPropagation(); handleDelete(dept._id); }}
+                        style={{
+                          padding: '6px 10px',
+                          background: '#ef4444',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '4px',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        <i className="fas fa-trash"></i>
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {/* Then show children departments */}
+            {hasChildren && dept.children.map((child) => (
               <TreeNode key={child._id} dept={child} level={level + 1} />
             ))}
           </div>

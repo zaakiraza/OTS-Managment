@@ -22,10 +22,11 @@ router.post("/device-checkin", deviceCheckIn);
 router.post("/mark", markAttendance);
 
 // Protected routes - require authentication
+// All authenticated users can view attendance (with filtering applied in controller)
 router.get("/", verifyToken, getAllAttendance);
-router.get("/today", verifyToken, getTodayAttendance);
-router.get("/stats", verifyToken, getAttendanceStats);
-router.get("/:id", verifyToken, getAttendanceById);
+router.get("/today", verifyToken, hasRole("superAdmin", "attendanceDepartment"), getTodayAttendance);
+router.get("/stats", verifyToken, hasRole("superAdmin", "attendanceDepartment"), getAttendanceStats);
+router.get("/:id", verifyToken, hasRole("superAdmin", "attendanceDepartment"), getAttendanceById);
 
 // Manual attendance entry (attendanceDepartment or superAdmin)
 router.post(

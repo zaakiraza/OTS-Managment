@@ -1,131 +1,225 @@
-import nodemailer from "nodemailer";
-import Settings from "../Model/Settings.js";
+import {
+  notifyTaskAssigned,
+  notifyTicketCreatedAgainst,
+  notifyTicketResolved,
+  notifyTaskStatusChange,
+  notifyTicketComment,
+  notifyPasswordChanged,
+  notifyTeamLeadAssignment,
+  notifyEmployeeCreated,
+  getEmailTemplate,
+} from '../Utils/emailNotifications.js';
 
-// Helper function to create transporter with current settings
-const createTransporter = async () => {
+// Sample data for previews
+const getSampleData = (templateId) => {
+  const samples = {
+    'task-assigned': {
+      userEmail: 'preview@example.com',
+      taskData: {
+        title: 'Implement User Dashboard',
+        description: 'Create a comprehensive dashboard showing user statistics, recent activities, and key metrics with real-time updates.',
+        priority: 'High',
+        dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days from now
+      }
+    },
+    'ticket-created': {
+      userEmail: 'preview@example.com',
+      ticketData: {
+        ticketId: 'TCK-12345',
+        subject: 'System Performance Issue',
+        description: 'The application is running slowly during peak hours. Users are experiencing significant delays in page load times.',
+        reportedBy: 'John Smith - Senior Manager',
+        priority: 'High',
+      }
+    },
+    'ticket-resolved': {
+      userEmail: 'preview@example.com',
+      ticketData: {
+        ticketId: 'TCK-12345',
+        subject: 'System Performance Issue',
+        resolution: 'Optimized database queries and added Redis caching layer. Performance improved by 60%. All tests passed successfully.',
+        resolvedBy: 'Jane Doe - Senior Developer',
+      }
+    },
+    'task-status-change': {
+      userEmail: 'preview@example.com',
+      taskData: {
+        taskId: 'TSK-789',
+        title: 'Implement User Dashboard',
+        status: 'In Progress',
+        comment: 'Started working on the frontend components. Backend API endpoints are ready and tested. Expected completion by Friday.',
+        updatedBy: 'Sarah Johnson - Frontend Developer',
+      }
+    },
+    'ticket-comment': {
+      userEmail: 'preview@example.com',
+      commentData: {
+        ticketId: 'TCK-12345',
+        ticketSubject: 'System Performance Issue',
+        commentedBy: 'Mike Wilson - DevOps Engineer',
+        comment: 'I have reviewed the logs and identified the bottleneck. The issue is in the database connection pool. I recommend increasing the pool size from 10 to 25 and implementing connection reuse strategies. This should resolve the performance degradation.',
+      }
+    },
+    'password-changed': {
+      userEmail: 'preview@example.com',
+      userData: {
+        email: 'preview@example.com',
+      }
+    },
+    'team-lead-assignment': {
+      userEmail: 'preview@example.com',
+      teamData: {
+        departmentName: 'Engineering Department',
+        assignedBy: 'David Brown - HR Manager',
+      }
+    },
+    'employee-created': {
+      userEmail: 'preview@example.com',
+      employeeData: {
+        name: 'Alex Martinez',
+        email: 'preview@example.com',
+        employeeId: 'EMP-2026-001',
+        department: 'Engineering Department',
+        tempPassword: 'TempPass123!',
+      }
+    },
+  };
+
+  return samples[templateId];
+};
+
+// Get list of all templates
+export const getTemplates = async (req, res) => {
   try {
-    // Try to get email settings from database
-    const emailService = await Settings.getValue("emailService", process.env.EMAIL_SERVICE || "gmail");
-    const emailUser = await Settings.getValue("emailUser", process.env.EMAIL_USER);
-    const emailPassword = await Settings.getValue("emailPassword", process.env.EMAIL_PASSWORD);
-
-    if (!emailUser || !emailPassword) {
-      console.warn("Email credentials not configured in database or environment variables");
-      return null;
-    }
-
-    return nodemailer.createTransport({
-      service: emailService,
-      auth: {
-        user: emailUser,
-        pass: emailPassword,
+    const templates = [
+      {
+        id: 'task-assigned',
+        name: 'Task Assigned',
+        description: 'Notification sent when a task is assigned to an employee',
+        category: 'Tasks'
       },
+      {
+        id: 'ticket-created',
+        name: 'Ticket Created Against',
+        description: 'Notification when a ticket is reported against an employee',
+        category: 'Tickets'
+      },
+      {
+        id: 'ticket-resolved',
+        name: 'Ticket Resolved',
+        description: 'Notification when a ticket is resolved',
+        category: 'Tickets'
+      },
+      {
+        id: 'task-status-change',
+        name: 'Task Status Change',
+        description: 'Notification when task status is updated',
+        category: 'Tasks'
+      },
+      {
+        id: 'ticket-comment',
+        name: 'Ticket Comment',
+        description: 'Notification when someone comments on a ticket',
+        category: 'Tickets'
+      },
+      {
+        id: 'password-changed',
+        name: 'Password Changed',
+        description: 'Security notification when password is changed',
+        category: 'Security'
+      },
+      {
+        id: 'team-lead-assignment',
+        name: 'Team Lead Assignment',
+        description: 'Notification when assigned as team lead',
+        category: 'Organization'
+      },
+      {
+        id: 'employee-created',
+        name: 'Employee Created',
+        description: 'Welcome email when new employee account is created',
+        category: 'Organization'
+      }
+    ];
+
+    res.status(200).json({
+      success: true,
+      templates,
     });
   } catch (error) {
-    console.error("Error creating email transporter:", error);
-    // Fallback to env variables
-    if (process.env.EMAIL_USER && process.env.EMAIL_PASSWORD) {
-      return nodemailer.createTransport({
-        service: process.env.EMAIL_SERVICE || "gmail",
-        auth: {
-          user: process.env.EMAIL_USER,
-          pass: process.env.EMAIL_PASSWORD,
-        },
+    console.error('Error fetching templates:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch templates',
+    });
+  }
+};
+
+// Get preview of a specific template
+export const getTemplatePreview = async (req, res) => {
+  try {
+    const { templateId } = req.params;
+    const sampleData = getSampleData(templateId);
+
+    if (!sampleData) {
+      return res.status(404).json({
+        success: false,
+        message: 'Template not found',
       });
     }
-    return null;
-  }
-};
 
-// Base email template with OMS theme
-export const getEmailTemplate = (content) => {
-  return `
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-      <meta charset="UTF-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>OMS Notification</title>
-    </head>
-    <body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f3f4f6;">
-      <table role="presentation" style="width: 100%; border-collapse: collapse; background-color: #f3f4f6;">
-        <tr>
-          <td align="center" style="padding: 40px 20px;">
-            <table role="presentation" style="max-width: 600px; width: 100%; border-collapse: collapse; background-color: #ffffff; border-radius: 12px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); overflow: hidden;">
-              <!-- Header -->
-              <tr>
-                <td style="background: linear-gradient(135deg, #093635 0%, #1F6A75 100%); padding: 30px; text-align: center;">
-                  <h1 style="margin: 0; color: #ffffff; font-size: 28px; font-weight: 700; letter-spacing: -0.5px;">
-                    Organization Management System
-                  </h1>
-                  <p style="margin: 8px 0 0 0; color: rgba(255, 255, 255, 0.9); font-size: 14px; font-weight: 500;">
-                    Your Workspace, Simplified
-                  </p>
-                </td>
-              </tr>
-
-              <!-- Content -->
-              <tr>
-                <td style="padding: 40px 30px;">
-                  ${content}
-                </td>
-              </tr>
-
-              <!-- Footer -->
-              <tr>
-                <td style="background: linear-gradient(135deg, #093635 0%, #1F6A75 100%); padding: 25px 30px; text-align: center;">
-                  <p style="margin: 0; color: rgba(255, 255, 255, 0.9); font-size: 14px; line-height: 1.6;">
-                    This is an automated notification from OMS.<br>
-                    Please do not reply to this email.
-                  </p>
-                  <p style="margin: 15px 0 0 0; color: rgba(255, 255, 255, 0.7); font-size: 12px;">
-                    © ${new Date().getFullYear()} Organization Management System. All rights reserved.
-                  </p>
-                </td>
-              </tr>
-            </table>
-          </td>
-        </tr>
-      </table>
-    </body>
-    </html>
-  `;
-};
-
-// Helper function to send email
-const sendEmail = async (to, subject, htmlContent) => {
-  try {
-    const transporter = await createTransporter();
+    // Generate HTML content based on template type
+    let htmlContent = '';
     
-    if (!transporter) {
-      return { 
-        success: false, 
-        error: "Email service not configured. Please configure email settings." 
-      };
+    switch (templateId) {
+      case 'task-assigned':
+        htmlContent = generateTaskAssignedContent(sampleData.taskData);
+        break;
+      case 'ticket-created':
+        htmlContent = generateTicketCreatedContent(sampleData.ticketData);
+        break;
+      case 'ticket-resolved':
+        htmlContent = generateTicketResolvedContent(sampleData.ticketData);
+        break;
+      case 'task-status-change':
+        htmlContent = generateTaskStatusChangeContent(sampleData.taskData);
+        break;
+      case 'ticket-comment':
+        htmlContent = generateTicketCommentContent(sampleData.commentData);
+        break;
+      case 'password-changed':
+        htmlContent = generatePasswordChangedContent(sampleData.userData);
+        break;
+      case 'team-lead-assignment':
+        htmlContent = generateTeamLeadContent(sampleData.teamData);
+        break;
+      case 'employee-created':
+        htmlContent = generateEmployeeCreatedContent(sampleData.employeeData);
+        break;
+      default:
+        throw new Error('Invalid template ID');
     }
 
-    const emailFromName = await Settings.getValue("emailFromName", "OMS - Organization Management System");
-    const emailUser = await Settings.getValue("emailUser", process.env.EMAIL_USER);
+    // Wrap content in email template
+    const fullHtml = getEmailTemplate(htmlContent);
 
-    const mailOptions = {
-      from: `"${emailFromName}" <${emailUser}>`,
-      to,
-      subject: `[OMS] ${subject}`,
-      html: getEmailTemplate(htmlContent),
-    };
-
-    const info = await transporter.sendMail(mailOptions);
-    console.log("Email sent:", info.messageId);
-    return { success: true, messageId: info.messageId };
+    res.status(200).json({
+      success: true,
+      html: fullHtml,
+    });
   } catch (error) {
-    console.error("Email sending failed:", error);
-    return { success: false, error: error.message };
+    console.error('Error generating preview:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to generate preview',
+      error: error.message,
+    });
   }
 };
 
-// Notification: Task Assigned
-const notifyTaskAssigned = async (userEmail, taskData) => {
-  const content = `
+// Helper functions to generate content for each template type
+const generateTaskAssignedContent = (taskData) => {
+  return `
     <div style="text-align: center; margin-bottom: 25px;">
       <div style="display: inline-block; background: linear-gradient(135deg, #F49040 0%, #EE8939 100%); color: #ffffff; padding: 8px 16px; border-radius: 20px; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">
         New Task Assignment
@@ -140,53 +234,29 @@ const notifyTaskAssigned = async (userEmail, taskData) => {
       <table role="presentation" style="width: 100%; border-collapse: collapse;">
         <tr>
           <td style="padding: 8px 0; color: #6b7280; font-size: 14px; font-weight: 600;">Task Title:</td>
-          <td style="padding: 8px 0; color: #093635; font-size: 14px; font-weight: 600;">${
-            taskData.title
-          }</td>
+          <td style="padding: 8px 0; color: #093635; font-size: 14px; font-weight: 600;">${taskData.title}</td>
         </tr>
         <tr>
           <td style="padding: 8px 0; color: #6b7280; font-size: 14px; font-weight: 600;">Description:</td>
-          <td style="padding: 8px 0; color: #374151; font-size: 14px;">${
-            taskData.description
-          }</td>
+          <td style="padding: 8px 0; color: #374151; font-size: 14px;">${taskData.description}</td>
         </tr>
         <tr>
           <td style="padding: 8px 0; color: #6b7280; font-size: 14px; font-weight: 600;">Priority:</td>
           <td style="padding: 8px 0;">
-            <span style="display: inline-block; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; background-color: ${
-              taskData.priority === "High"
-                ? "#fef3c7"
-                : taskData.priority === "Medium"
-                ? "#dbeafe"
-                : "#f3f4f6"
-            }; color: ${
-    taskData.priority === "High"
-      ? "#92400e"
-      : taskData.priority === "Medium"
-      ? "#1e40af"
-      : "#374151"
-  };">
+            <span style="display: inline-block; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; background-color: ${taskData.priority === 'High' ? '#fef3c7' : taskData.priority === 'Medium' ? '#dbeafe' : '#f3f4f6'}; color: ${taskData.priority === 'High' ? '#92400e' : taskData.priority === 'Medium' ? '#1e40af' : '#374151'};">
               ${taskData.priority}
             </span>
           </td>
         </tr>
         <tr>
           <td style="padding: 8px 0; color: #6b7280; font-size: 14px; font-weight: 600;">Due Date:</td>
-          <td style="padding: 8px 0; color: #374151; font-size: 14px;">${new Date(
-            taskData.dueDate
-          ).toLocaleDateString("en-US", {
-            year: "numeric",
-            month: "long",
-            day: "numeric",
-          })}</td>
+          <td style="padding: 8px 0; color: #374151; font-size: 14px;">${new Date(taskData.dueDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</td>
         </tr>
       </table>
     </div>
 
     <div style="text-align: center; margin-top: 30px;">
-      <a href="${
-        process.env.FRONTEND_URL
-      }/tasks" style="display: inline-block; background: linear-gradient(135deg, #093635 0%, #1F6A75 100%); color: #ffffff; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-weight: 600; font-size: 14px; box-shadow: 0 4px 6px rgba(9, 54, 53, 0.2); transition: all 0.3s ease;">
+      <a href="${process.env.FRONTEND_URL}/tasks" style="display: inline-block; background: linear-gradient(135deg, #093635 0%, #1F6A75 100%); color: #ffffff; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-weight: 600; font-size: 14px; box-shadow: 0 4px 6px rgba(9, 54, 53, 0.2); transition: all 0.3s ease;">
         View Task Details
       </a>
     </div>
@@ -195,13 +265,10 @@ const notifyTaskAssigned = async (userEmail, taskData) => {
       Please review the task details and start working on it at your earliest convenience.
     </p>
   `;
-
-  return await sendEmail(userEmail, "New Task Assigned", content);
 };
 
-// Notification: Ticket Created Against User
-const notifyTicketCreatedAgainst = async (userEmail, ticketData) => {
-  const content = `
+const generateTicketCreatedContent = (ticketData) => {
+  return `
     <div style="text-align: center; margin-bottom: 25px;">
       <div style="display: inline-block; background: linear-gradient(135deg, #F49040 0%, #EE8939 100%); color: #ffffff; padding: 8px 16px; border-radius: 20px; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">
         Ticket Reported
@@ -216,44 +283,24 @@ const notifyTicketCreatedAgainst = async (userEmail, ticketData) => {
       <table role="presentation" style="width: 100%; border-collapse: collapse;">
         <tr>
           <td style="padding: 8px 0; color: #6b7280; font-size: 14px; font-weight: 600;">Ticket ID:</td>
-          <td style="padding: 8px 0; color: #093635; font-size: 14px; font-weight: 600;">#${
-            ticketData.ticketId
-          }</td>
+          <td style="padding: 8px 0; color: #093635; font-size: 14px; font-weight: 600;">#${ticketData.ticketId}</td>
         </tr>
         <tr>
           <td style="padding: 8px 0; color: #6b7280; font-size: 14px; font-weight: 600;">Subject:</td>
-          <td style="padding: 8px 0; color: #093635; font-size: 14px; font-weight: 600;">${
-            ticketData.subject
-          }</td>
+          <td style="padding: 8px 0; color: #093635; font-size: 14px; font-weight: 600;">${ticketData.subject}</td>
         </tr>
         <tr>
           <td style="padding: 8px 0; color: #6b7280; font-size: 14px; font-weight: 600;">Description:</td>
-          <td style="padding: 8px 0; color: #374151; font-size: 14px;">${
-            ticketData.description
-          }</td>
+          <td style="padding: 8px 0; color: #374151; font-size: 14px;">${ticketData.description}</td>
         </tr>
         <tr>
           <td style="padding: 8px 0; color: #6b7280; font-size: 14px; font-weight: 600;">Reported By:</td>
-          <td style="padding: 8px 0; color: #374151; font-size: 14px;">${
-            ticketData.reportedBy
-          }</td>
+          <td style="padding: 8px 0; color: #374151; font-size: 14px;">${ticketData.reportedBy}</td>
         </tr>
         <tr>
           <td style="padding: 8px 0; color: #6b7280; font-size: 14px; font-weight: 600;">Priority:</td>
           <td style="padding: 8px 0;">
-            <span style="display: inline-block; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; background-color: ${
-              ticketData.priority === "High"
-                ? "#fef3c7"
-                : ticketData.priority === "Medium"
-                ? "#dbeafe"
-                : "#f3f4f6"
-            }; color: ${
-    ticketData.priority === "High"
-      ? "#92400e"
-      : ticketData.priority === "Medium"
-      ? "#1e40af"
-      : "#374151"
-  };">
+            <span style="display: inline-block; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; background-color: ${ticketData.priority === 'High' ? '#fef3c7' : ticketData.priority === 'Medium' ? '#dbeafe' : '#f3f4f6'}; color: ${ticketData.priority === 'High' ? '#92400e' : ticketData.priority === 'Medium' ? '#1e40af' : '#374151'};">
               ${ticketData.priority}
             </span>
           </td>
@@ -262,9 +309,7 @@ const notifyTicketCreatedAgainst = async (userEmail, ticketData) => {
     </div>
 
     <div style="text-align: center; margin-top: 30px;">
-      <a href="${process.env.FRONTEND_URL}/tickets/${
-    ticketData.ticketId
-  }" style="display: inline-block; background: linear-gradient(135deg, #093635 0%, #1F6A75 100%); color: #ffffff; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-weight: 600; font-size: 14px; box-shadow: 0 4px 6px rgba(9, 54, 53, 0.2); transition: all 0.3s ease;">
+      <a href="${process.env.FRONTEND_URL}/tickets/${ticketData.ticketId}" style="display: inline-block; background: linear-gradient(135deg, #093635 0%, #1F6A75 100%); color: #ffffff; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-weight: 600; font-size: 14px; box-shadow: 0 4px 6px rgba(9, 54, 53, 0.2);">
         View Ticket Details
       </a>
     </div>
@@ -273,17 +318,10 @@ const notifyTicketCreatedAgainst = async (userEmail, ticketData) => {
       Please review the ticket and provide your response at the earliest.
     </p>
   `;
-
-  return await sendEmail(
-    userEmail,
-    `Ticket #${ticketData.ticketId} Reported`,
-    content
-  );
 };
 
-// Notification: Ticket Resolved
-const notifyTicketResolved = async (userEmail, ticketData) => {
-  const content = `
+const generateTicketResolvedContent = (ticketData) => {
+  return `
     <div style="text-align: center; margin-bottom: 25px;">
       <div style="display: inline-block; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: #ffffff; padding: 8px 16px; border-radius: 20px; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">
         Ticket Resolved
@@ -298,28 +336,19 @@ const notifyTicketResolved = async (userEmail, ticketData) => {
       <table role="presentation" style="width: 100%; border-collapse: collapse;">
         <tr>
           <td style="padding: 8px 0; color: #6b7280; font-size: 14px; font-weight: 600;">Ticket ID:</td>
-          <td style="padding: 8px 0; color: #093635; font-size: 14px; font-weight: 600;">#${
-            ticketData.ticketId
-          }</td>
+          <td style="padding: 8px 0; color: #093635; font-size: 14px; font-weight: 600;">#${ticketData.ticketId}</td>
         </tr>
         <tr>
           <td style="padding: 8px 0; color: #6b7280; font-size: 14px; font-weight: 600;">Subject:</td>
-          <td style="padding: 8px 0; color: #093635; font-size: 14px; font-weight: 600;">${
-            ticketData.subject
-          }</td>
+          <td style="padding: 8px 0; color: #093635; font-size: 14px; font-weight: 600;">${ticketData.subject}</td>
         </tr>
         <tr>
           <td style="padding: 8px 0; color: #6b7280; font-size: 14px; font-weight: 600;">Resolution:</td>
-          <td style="padding: 8px 0; color: #374151; font-size: 14px;">${
-            ticketData.resolution ||
-            "The issue has been addressed and resolved."
-          }</td>
+          <td style="padding: 8px 0; color: #374151; font-size: 14px;">${ticketData.resolution || 'The issue has been addressed and resolved.'}</td>
         </tr>
         <tr>
           <td style="padding: 8px 0; color: #6b7280; font-size: 14px; font-weight: 600;">Resolved By:</td>
-          <td style="padding: 8px 0; color: #374151; font-size: 14px;">${
-            ticketData.resolvedBy
-          }</td>
+          <td style="padding: 8px 0; color: #374151; font-size: 14px;">${ticketData.resolvedBy}</td>
         </tr>
         <tr>
           <td style="padding: 8px 0; color: #6b7280; font-size: 14px; font-weight: 600;">Status:</td>
@@ -333,9 +362,7 @@ const notifyTicketResolved = async (userEmail, ticketData) => {
     </div>
 
     <div style="text-align: center; margin-top: 30px;">
-      <a href="${process.env.FRONTEND_URL}/tickets/${
-    ticketData.ticketId
-  }" style="display: inline-block; background: linear-gradient(135deg, #093635 0%, #1F6A75 100%); color: #ffffff; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-weight: 600; font-size: 14px; box-shadow: 0 4px 6px rgba(9, 54, 53, 0.2); transition: all 0.3s ease;">
+      <a href="${process.env.FRONTEND_URL}/tickets/${ticketData.ticketId}" style="display: inline-block; background: linear-gradient(135deg, #093635 0%, #1F6A75 100%); color: #ffffff; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-weight: 600; font-size: 14px; box-shadow: 0 4px 6px rgba(9, 54, 53, 0.2);">
         View Resolution Details
       </a>
     </div>
@@ -344,26 +371,18 @@ const notifyTicketResolved = async (userEmail, ticketData) => {
       If you have any further concerns, please feel free to create a new ticket.
     </p>
   `;
-
-  return await sendEmail(
-    userEmail,
-    `Ticket #${ticketData.ticketId} Resolved`,
-    content
-  );
 };
 
-// Notification: Task Status Change
-const notifyTaskStatusChange = async (userEmail, taskData) => {
+const generateTaskStatusChangeContent = (taskData) => {
   const statusColors = {
-    "To Do": { bg: "#f3f4f6", color: "#374151" },
-    "In Progress": { bg: "#dbeafe", color: "#1e40af" },
-    Completed: { bg: "#d1fae5", color: "#065f46" },
-    "On Hold": { bg: "#fef3c7", color: "#92400e" },
+    'To Do': { bg: '#f3f4f6', color: '#374151' },
+    'In Progress': { bg: '#dbeafe', color: '#1e40af' },
+    'Completed': { bg: '#d1fae5', color: '#065f46' },
+    'On Hold': { bg: '#fef3c7', color: '#92400e' }
   };
+  const statusColor = statusColors[taskData.status] || statusColors['To Do'];
 
-  const statusColor = statusColors[taskData.status] || statusColors["To Do"];
-
-  const content = `
+  return `
     <div style="text-align: center; margin-bottom: 25px;">
       <div style="display: inline-block; background: linear-gradient(135deg, #F49040 0%, #EE8939 100%); color: #ffffff; padding: 8px 16px; border-radius: 20px; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">
         Task Status Update
@@ -378,43 +397,31 @@ const notifyTaskStatusChange = async (userEmail, taskData) => {
       <table role="presentation" style="width: 100%; border-collapse: collapse;">
         <tr>
           <td style="padding: 8px 0; color: #6b7280; font-size: 14px; font-weight: 600;">Task Title:</td>
-          <td style="padding: 8px 0; color: #093635; font-size: 14px; font-weight: 600;">${
-            taskData.title
-          }</td>
+          <td style="padding: 8px 0; color: #093635; font-size: 14px; font-weight: 600;">${taskData.title}</td>
         </tr>
         <tr>
           <td style="padding: 8px 0; color: #6b7280; font-size: 14px; font-weight: 600;">New Status:</td>
           <td style="padding: 8px 0;">
-            <span style="display: inline-block; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; background-color: ${
-              statusColor.bg
-            }; color: ${statusColor.color};">
+            <span style="display: inline-block; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; background-color: ${statusColor.bg}; color: ${statusColor.color};">
               ${taskData.status}
             </span>
           </td>
         </tr>
-        ${
-          taskData.comment
-            ? `
+        ${taskData.comment ? `
         <tr>
           <td style="padding: 8px 0; color: #6b7280; font-size: 14px; font-weight: 600;">Comment:</td>
           <td style="padding: 8px 0; color: #374151; font-size: 14px;">${taskData.comment}</td>
         </tr>
-        `
-            : ""
-        }
+        ` : ''}
         <tr>
           <td style="padding: 8px 0; color: #6b7280; font-size: 14px; font-weight: 600;">Updated By:</td>
-          <td style="padding: 8px 0; color: #374151; font-size: 14px;">${
-            taskData.updatedBy
-          }</td>
+          <td style="padding: 8px 0; color: #374151; font-size: 14px;">${taskData.updatedBy}</td>
         </tr>
       </table>
     </div>
 
     <div style="text-align: center; margin-top: 30px;">
-      <a href="${process.env.FRONTEND_URL}/tasks/${
-    taskData.taskId
-  }" style="display: inline-block; background: linear-gradient(135deg, #093635 0%, #1F6A75 100%); color: #ffffff; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-weight: 600; font-size: 14px; box-shadow: 0 4px 6px rgba(9, 54, 53, 0.2); transition: all 0.3s ease;">
+      <a href="${process.env.FRONTEND_URL}/tasks/${taskData.taskId}" style="display: inline-block; background: linear-gradient(135deg, #093635 0%, #1F6A75 100%); color: #ffffff; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-weight: 600; font-size: 14px; box-shadow: 0 4px 6px rgba(9, 54, 53, 0.2);">
         View Task Details
       </a>
     </div>
@@ -423,17 +430,10 @@ const notifyTaskStatusChange = async (userEmail, taskData) => {
       Keep track of your tasks and stay updated with the latest progress.
     </p>
   `;
-
-  return await sendEmail(
-    userEmail,
-    `Task Status Updated: ${taskData.title}`,
-    content
-  );
 };
 
-// Notification: Ticket Comment
-const notifyTicketComment = async (userEmail, commentData) => {
-  const content = `
+const generateTicketCommentContent = (commentData) => {
+  return `
     <div style="text-align: center; margin-bottom: 25px;">
       <div style="display: inline-block; background: linear-gradient(135deg, #F49040 0%, #EE8939 100%); color: #ffffff; padding: 8px 16px; border-radius: 20px; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">
         New Comment
@@ -471,7 +471,7 @@ const notifyTicketComment = async (userEmail, commentData) => {
     </div>
 
     <div style="text-align: center; margin-top: 30px;">
-      <a href="${process.env.FRONTEND_URL}/tickets/${commentData.ticketId}" style="display: inline-block; background: linear-gradient(135deg, #093635 0%, #1F6A75 100%); color: #ffffff; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-weight: 600; font-size: 14px; box-shadow: 0 4px 6px rgba(9, 54, 53, 0.2); transition: all 0.3s ease;">
+      <a href="${process.env.FRONTEND_URL}/tickets/${commentData.ticketId}" style="display: inline-block; background: linear-gradient(135deg, #093635 0%, #1F6A75 100%); color: #ffffff; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-weight: 600; font-size: 14px; box-shadow: 0 4px 6px rgba(9, 54, 53, 0.2);">
         View Full Conversation
       </a>
     </div>
@@ -480,17 +480,10 @@ const notifyTicketComment = async (userEmail, commentData) => {
       Click the button above to view the ticket and respond to the comment.
     </p>
   `;
-
-  return await sendEmail(
-    userEmail,
-    `New Comment on Ticket #${commentData.ticketId}`,
-    content
-  );
 };
 
-// Notification: Password Changed
-const notifyPasswordChanged = async (userEmail, userData) => {
-  const content = `
+const generatePasswordChangedContent = (userData) => {
+  return `
     <div style="text-align: center; margin-bottom: 25px;">
       <div style="display: inline-block; background: linear-gradient(135deg, #F49040 0%, #EE8939 100%); color: #ffffff; padding: 8px 16px; border-radius: 20px; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">
         Security Alert
@@ -503,18 +496,7 @@ const notifyPasswordChanged = async (userEmail, userData) => {
 
     <div style="background: linear-gradient(135deg, rgba(9, 54, 53, 0.05) 0%, rgba(31, 106, 117, 0.05) 100%); border-left: 4px solid #1F6A75; border-radius: 8px; padding: 20px; margin-bottom: 25px;">
       <p style="margin: 0; color: #374151; font-size: 14px; line-height: 1.6;">
-        This is a confirmation that your password for <strong>${
-          userData.email
-        }</strong> was successfully changed on ${new Date().toLocaleString(
-    "en-US",
-    {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    }
-  )}.
+        This is a confirmation that your password for <strong>${userData.email}</strong> was successfully changed on ${new Date().toLocaleString('en-US', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}.
       </p>
     </div>
 
@@ -528,9 +510,7 @@ const notifyPasswordChanged = async (userEmail, userData) => {
     </div>
 
     <div style="text-align: center; margin-top: 30px;">
-      <a href="${
-        process.env.FRONTEND_URL
-      }/login" style="display: inline-block; background: linear-gradient(135deg, #093635 0%, #1F6A75 100%); color: #ffffff; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-weight: 600; font-size: 14px; box-shadow: 0 4px 6px rgba(9, 54, 53, 0.2); transition: all 0.3s ease;">
+      <a href="${process.env.FRONTEND_URL}/login" style="display: inline-block; background: linear-gradient(135deg, #093635 0%, #1F6A75 100%); color: #ffffff; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-weight: 600; font-size: 14px; box-shadow: 0 4px 6px rgba(9, 54, 53, 0.2);">
         Go to Login
       </a>
     </div>
@@ -539,13 +519,10 @@ const notifyPasswordChanged = async (userEmail, userData) => {
       For security reasons, please keep your password confidential and change it regularly.
     </p>
   `;
-
-  return await sendEmail(userEmail, "Password Changed Successfully", content);
 };
 
-// Notification: Team Lead Assignment
-const notifyTeamLeadAssignment = async (userEmail, teamData) => {
-  const content = `
+const generateTeamLeadContent = (teamData) => {
+  return `
     <div style="text-align: center; margin-bottom: 25px;">
       <div style="display: inline-block; background: linear-gradient(135deg, #F49040 0%, #EE8939 100%); color: #ffffff; padding: 8px 16px; border-radius: 20px; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">
         New Assignment
@@ -590,7 +567,7 @@ const notifyTeamLeadAssignment = async (userEmail, teamData) => {
     </div>
 
     <div style="text-align: center; margin-top: 30px;">
-      <a href="${process.env.FRONTEND_URL}/dashboard" style="display: inline-block; background: linear-gradient(135deg, #093635 0%, #1F6A75 100%); color: #ffffff; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-weight: 600; font-size: 14px; box-shadow: 0 4px 6px rgba(9, 54, 53, 0.2); transition: all 0.3s ease;">
+      <a href="${process.env.FRONTEND_URL}/dashboard" style="display: inline-block; background: linear-gradient(135deg, #093635 0%, #1F6A75 100%); color: #ffffff; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-weight: 600; font-size: 14px; box-shadow: 0 4px 6px rgba(9, 54, 53, 0.2);">
         Go to Dashboard
       </a>
     </div>
@@ -599,13 +576,10 @@ const notifyTeamLeadAssignment = async (userEmail, teamData) => {
       Congratulations on your new role! We're confident in your leadership abilities.
     </p>
   `;
-
-  return await sendEmail(userEmail, "Team Lead Assignment", content);
 };
 
-// Notification: Employee Created
-const notifyEmployeeCreated = async (userEmail, employeeData) => {
-  const content = `
+const generateEmployeeCreatedContent = (employeeData) => {
+  return `
     <div style="text-align: center; margin-bottom: 25px;">
       <div style="display: inline-block; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: #ffffff; padding: 8px 16px; border-radius: 20px; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">
         Welcome to OMS
@@ -620,44 +594,30 @@ const notifyEmployeeCreated = async (userEmail, employeeData) => {
       <table role="presentation" style="width: 100%; border-collapse: collapse;">
         <tr>
           <td style="padding: 8px 0; color: #6b7280; font-size: 14px; font-weight: 600;">Name:</td>
-          <td style="padding: 8px 0; color: #093635; font-size: 14px; font-weight: 600;">${
-            employeeData.name
-          }</td>
+          <td style="padding: 8px 0; color: #093635; font-size: 14px; font-weight: 600;">${employeeData.name}</td>
         </tr>
         <tr>
           <td style="padding: 8px 0; color: #6b7280; font-size: 14px; font-weight: 600;">Email:</td>
-          <td style="padding: 8px 0; color: #374151; font-size: 14px;">${
-            employeeData.email
-          }</td>
+          <td style="padding: 8px 0; color: #374151; font-size: 14px;">${employeeData.email}</td>
         </tr>
         <tr>
           <td style="padding: 8px 0; color: #6b7280; font-size: 14px; font-weight: 600;">Employee ID:</td>
-          <td style="padding: 8px 0; color: #374151; font-size: 14px;">${
-            employeeData.employeeId
-          }</td>
+          <td style="padding: 8px 0; color: #374151; font-size: 14px;">${employeeData.employeeId}</td>
         </tr>
         <tr>
           <td style="padding: 8px 0; color: #6b7280; font-size: 14px; font-weight: 600;">Department:</td>
-          <td style="padding: 8px 0; color: #374151; font-size: 14px;">${
-            employeeData.department
-          }</td>
+          <td style="padding: 8px 0; color: #374151; font-size: 14px;">${employeeData.department}</td>
         </tr>
-        ${
-          employeeData.tempPassword
-            ? `
+        ${employeeData.tempPassword ? `
         <tr>
           <td style="padding: 8px 0; color: #6b7280; font-size: 14px; font-weight: 600;">Temporary Password:</td>
           <td style="padding: 8px 0; color: #093635; font-size: 14px; font-weight: 600; font-family: monospace; background-color: #f3f4f6; padding: 8px; border-radius: 4px;">${employeeData.tempPassword}</td>
         </tr>
-        `
-            : ""
-        }
+        ` : ''}
       </table>
     </div>
 
-    ${
-      employeeData.tempPassword
-        ? `
+    ${employeeData.tempPassword ? `
     <div style="background-color: #fef3c7; border-left: 4px solid #f59e0b; border-radius: 8px; padding: 20px; margin-bottom: 25px;">
       <p style="margin: 0 0 8px 0; color: #92400e; font-size: 14px; font-weight: 600;">
         🔒 Important Security Notice
@@ -666,14 +626,10 @@ const notifyEmployeeCreated = async (userEmail, employeeData) => {
         Please change your temporary password immediately after logging in. Keep your credentials confidential and never share them with anyone.
       </p>
     </div>
-    `
-        : ""
-    }
+    ` : ''}
 
     <div style="text-align: center; margin-top: 30px;">
-      <a href="${
-        process.env.FRONTEND_URL
-      }/login" style="display: inline-block; background: linear-gradient(135deg, #093635 0%, #1F6A75 100%); color: #ffffff; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-weight: 600; font-size: 14px; box-shadow: 0 4px 6px rgba(9, 54, 53, 0.2); transition: all 0.3s ease;">
+      <a href="${process.env.FRONTEND_URL}/login" style="display: inline-block; background: linear-gradient(135deg, #093635 0%, #1F6A75 100%); color: #ffffff; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-weight: 600; font-size: 14px; box-shadow: 0 4px 6px rgba(9, 54, 53, 0.2);">
         Login to Your Account
       </a>
     </div>
@@ -682,21 +638,90 @@ const notifyEmployeeCreated = async (userEmail, employeeData) => {
       Welcome to the team! We're excited to have you on board.
     </p>
   `;
-
-  return await sendEmail(
-    userEmail,
-    "Welcome to Organization Management System",
-    content
-  );
 };
 
-export {
-  notifyTaskAssigned,
-  notifyTicketCreatedAgainst,
-  notifyTicketResolved,
-  notifyTaskStatusChange,
-  notifyTicketComment,
-  notifyPasswordChanged,
-  notifyTeamLeadAssignment,
-  notifyEmployeeCreated,
+// Send test email
+export const sendTestEmail = async (req, res) => {
+  try {
+    const { templateId } = req.params;
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email address is required',
+      });
+    }
+
+    // Check if email credentials are configured
+    if (!process.env.EMAIL_USER || !process.env.EMAIL_PASSWORD) {
+      return res.status(500).json({
+        success: false,
+        message: 'Email service not configured. Please configure EMAIL_USER and EMAIL_PASSWORD in the .env file.',
+        hint: 'Add EMAIL_USER and EMAIL_PASSWORD to your Backend/.env file to enable email sending.',
+      });
+    }
+
+    const sampleData = getSampleData(templateId);
+    if (!sampleData) {
+      return res.status(404).json({
+        success: false,
+        message: 'Template not found',
+      });
+    }
+
+    // Update email to the provided one
+    sampleData.userEmail = email;
+
+    // Send the actual email
+    let result;
+    switch (templateId) {
+      case 'task-assigned':
+        result = await notifyTaskAssigned(email, sampleData.taskData);
+        break;
+      case 'ticket-created':
+        result = await notifyTicketCreatedAgainst(email, sampleData.ticketData);
+        break;
+      case 'ticket-resolved':
+        result = await notifyTicketResolved(email, sampleData.ticketData);
+        break;
+      case 'task-status-change':
+        result = await notifyTaskStatusChange(email, sampleData.taskData);
+        break;
+      case 'ticket-comment':
+        result = await notifyTicketComment(email, sampleData.commentData);
+        break;
+      case 'password-changed':
+        result = await notifyPasswordChanged(email, sampleData.userData);
+        break;
+      case 'team-lead-assignment':
+        result = await notifyTeamLeadAssignment(email, sampleData.teamData);
+        break;
+      case 'employee-created':
+        result = await notifyEmployeeCreated(email, sampleData.employeeData);
+        break;
+      default:
+        throw new Error('Invalid template ID');
+    }
+
+    if (result.success) {
+      res.status(200).json({
+        success: true,
+        message: `Test email sent to ${email}`,
+      });
+    } else {
+      res.status(500).json({
+        success: false,
+        message: 'Failed to send test email',
+        error: result.error,
+      });
+    }
+  } catch (error) {
+    console.error('Error sending test email:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to send test email',
+      error: error.message || 'Unknown error occurred',
+    });
+  }
 };

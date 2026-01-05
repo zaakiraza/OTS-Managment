@@ -18,16 +18,14 @@ const feedbackSchema = new mongoose.Schema(
     category: {
       type: String,
       enum: ["bug", "feature", "improvement", "other"],
-      default: "other",
     },
     subject: {
       type: String,
-      required: true,
       trim: true,
     },
     message: {
       type: String,
-      required: true,
+      required: [true, "Message is required"],
       trim: true,
     },
     status: {
@@ -38,7 +36,6 @@ const feedbackSchema = new mongoose.Schema(
     priority: {
       type: String,
       enum: ["low", "medium", "high"],
-      default: "medium",
     },
     adminNotes: {
       type: String,

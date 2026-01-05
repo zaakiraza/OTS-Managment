@@ -6,7 +6,7 @@ import {
   getMonthlyAttendanceSummary,
   exportAttendanceData,
 } from "../Controller/reportController.js";
-import { verifyToken } from "../Middleware/auth.js";
+import { verifyToken, hasRole } from "../Middleware/auth.js";
 import { intensiveLimiter } from "../Middleware/rateLimiter.js";
 
 const router = express.Router();
@@ -16,6 +16,9 @@ router.use(verifyToken);
 
 // Apply intensive rate limiting to all report routes (resource-heavy operations)
 router.use(intensiveLimiter);
+
+// Only superAdmin and attendanceDepartment can generate reports
+router.use(hasRole("superAdmin", "attendanceDepartment"));
 
 // Generate attendance report with flexible filters
 router.get("/attendance", generateAttendanceReport);

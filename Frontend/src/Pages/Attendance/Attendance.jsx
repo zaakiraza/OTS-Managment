@@ -48,6 +48,7 @@ function Attendance() {
     date: new Date().toISOString().split("T")[0],
     userId: "",
     status: "",
+    department: "",
   });
   const [showEditModal, setShowEditModal] = useState(false);
   const [showManualModal, setShowManualModal] = useState(false);
@@ -96,6 +97,7 @@ function Attendance() {
     fetchTodayAttendance();
     fetchAttendanceStats();
     fetchSettings();
+    fetchDepartments();
   }, []);
 
   const fetchSettings = async () => {
@@ -158,6 +160,7 @@ function Attendance() {
       if (filter.date) params.date = filter.date;
       if (filter.userId) params.userId = filter.userId;
       if (filter.status) params.status = filter.status;
+      if (filter.department) params.department = filter.department;
 
       const response = await attendanceAPI.getAllAttendance(params);
       setAttendanceRecords(response.data.data || []);
@@ -588,6 +591,21 @@ function Attendance() {
                 max={new Date().toISOString().split("T")[0]}
                 onChange={handleFilterChange}
               />
+            </div>
+            <div className="filter-group">
+              <label>Department</label>
+              <select
+                name="department"
+                value={filter.department}
+                onChange={handleFilterChange}
+              >
+                <option value="">All Departments</option>
+                {departments.map((dept) => (
+                  <option key={dept._id} value={dept._id}>
+                    {dept.name}
+                  </option>
+                ))}
+              </select>
             </div>
             <div className="filter-group">
               <label>User ID</label>

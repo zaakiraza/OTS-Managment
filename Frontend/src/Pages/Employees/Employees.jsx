@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { employeeAPI, departmentAPI, roleAPI, exportAPI } from "../../Config/Api";
+import { employeeAPI, departmentAPI, roleAPI, exportAPI, authAPI } from "../../Config/Api";
 import SideBar from "../../Components/SideBar/SideBar";
 import { getStoredUser } from "../../Utils/storage";
 import { useToast } from "../../Components/Common/Toast/Toast";
@@ -56,28 +56,209 @@ const Employees = () => {
   });
 
   useEffect(() => {
-    // Get current user from storage
-    const user = getStoredUser();
-    setCurrentUser(user);
+    // Fetch current user from API to ensure department is populated
+    const fetchCurrentUser = async () => {
+      try {
+        const response = await authAPI.getMe();
+        if (response.data.success) {
+          setCurrentUser(response.data.data);
+        } else {
+          // Fallback to stored user if API fails
+          const user = getStoredUser();
+          setCurrentUser(user);
+        }
+      } catch (error) {
+        console.error("Error fetching current user:", error);
+        // Fallback to stored user if API fails
+        const user = getStoredUser();
+        setCurrentUser(user);
+      }
+    };
     
+    fetchCurrentUser();
     fetchEmployees();
     fetchDepartments();
     fetchRoles();
   }, []);
 
-  // Get filtered departments based on user role
+  // Auto-set department when modal opens and departments are loaded
+  useEffect(() => {
+    if (showModal && !editMode && currentUser && departments.length > 0) {
+      // Only auto-set if department is not already set
+      if (!formData.department || formData.department === "") {
+        if (currentUser?.role?.name === "attendanceDepartment") {
+          // Use assigned department or first available department
+          let defaultDepartment = "";
+          if (currentUser?.department) {
+            defaultDepartment = String(currentUser.department._id || currentUser.department);
+          } else {
+            // Get filtered departments
+            const filteredDepts = currentUser.role?.name !== "attendanceDepartment" 
+              ? departments 
+              : (() => {
+                  if (!currentUser.department) return departments;
+                  const userDeptId = String(currentUser.department._id || currentUser.department);
+                  return departments.filter(dept => {
+                    const deptId = String(dept._id);
+                    const parentDeptId = dept.parentDepartment 
+                      ? String(dept.parentDepartment._id || dept.parentDepartment) 
+                      : null;
+                    const deptPath = dept.path || "";
+                    return deptId === userDeptId || 
+                           parentDeptId === userDeptId || 
+                           deptPath.includes(userDeptId);
+                  });
+                })();
+            
+            if (filteredDepts.length > 0) {
+              defaultDepartment = String(filteredDepts[0]._id);
+            }
+          }
+          
+          if (defaultDepartment) {
+            setFormData(prev => ({ ...prev, department: defaultDepartment }));
+          }
+        }
+      }
+    }
+  }, [showModal, editMode, currentUser, departments, formData.department]);
+
+  // Get filtered departments for Primary Department dropdown
   const getFilteredDepartments = () => {
+    // For superAdmin and other roles, show all departments
     if (!currentUser || currentUser.role?.name !== "attendanceDepartment") {
       return departments;
     }
     
-    // For attendanceDepartment users, only show their own department
-    if (currentUser.department) {
-      const userDeptId = currentUser.department._id || currentUser.department;
-      return departments.filter(dept => dept._id === userDeptId);
+    // For attendanceDepartment users, only show departments they created
+    // Filter by createdBy field to exclude parent departments that are returned by backend
+    return departments.filter(dept => {
+      const deptCreatedBy = dept.createdBy?._id || dept.createdBy;
+      const currentUserId = currentUser._id;
+      return String(deptCreatedBy) === String(currentUserId);
+    });
+  };
+
+  // Get filtered departments for Additional Departments dropdown
+  // Show siblings of selected Primary Department AND their children, but NOT children of Primary itself
+  const getAdditionalDepartmentsOptions = () => {
+    if (!formData.department) {
+      return []; // No primary selected, don't show any additional departments
+    }
+
+    const primaryDeptId = String(formData.department);
+    const primaryDept = departments.find(d => String(d._id) === primaryDeptId);
+    
+    if (!primaryDept) {
+      return [];
+    }
+
+    // Get parent of primary department
+    const primaryParentId = primaryDept.parentDepartment 
+      ? String(primaryDept.parentDepartment._id || primaryDept.parentDepartment)
+      : null;
+
+    // First, collect all sibling department IDs
+    const siblingIds = new Set();
+    getFilteredDepartments().forEach(dept => {
+      const deptId = String(dept._id);
+      
+      // Skip primary department itself
+      if (deptId === primaryDeptId) {
+        return;
+      }
+
+      const deptParentId = dept.parentDepartment 
+        ? String(dept.parentDepartment._id || dept.parentDepartment)
+        : null;
+
+      // Add siblings (departments with same parent as primary)
+      if (primaryParentId && deptParentId === primaryParentId) {
+        siblingIds.add(deptId);
+      }
+    });
+
+    // Filter departments to show:
+    // 1. Siblings of primary (same parent)
+    // 2. Children of siblings
+    // 3. But NOT children of primary itself
+    const availableDepts = getFilteredDepartments().filter(dept => {
+      const deptId = String(dept._id);
+      
+      // Don't show primary department itself
+      if (deptId === primaryDeptId) {
+        return false;
+      }
+
+      const deptParentId = dept.parentDepartment 
+        ? String(dept.parentDepartment._id || dept.parentDepartment)
+        : null;
+
+      // Check if it's a child of primary department
+      const isChildOfPrimary = deptParentId === primaryDeptId || 
+                               (dept.path && dept.path.includes(primaryDeptId));
+
+      // Don't show children of primary
+      if (isChildOfPrimary) {
+        return false;
+      }
+
+      // Show if it's a sibling
+      if (siblingIds.has(deptId)) {
+        return true;
+      }
+
+      // Show if it's a child of any sibling
+      if (deptParentId && siblingIds.has(deptParentId)) {
+        return true;
+      }
+
+      // Show if it's a descendant of any sibling (check path)
+      for (const siblingId of siblingIds) {
+        if (dept.path && dept.path.includes(siblingId)) {
+          return true;
+        }
+      }
+
+      return false;
+    });
+
+    return availableDepts;
+  };
+
+  // Get filtered departments for Team Lead Of dropdown
+  // Only show departments selected in Primary + Additional Departments
+  const getTeamLeadOfOptions = () => {
+    const selectedDeptIds = new Set();
+    
+    // Add primary department
+    if (formData.department) {
+      selectedDeptIds.add(String(formData.department));
+      
+      // Also add children of primary department
+      const primaryDeptId = String(formData.department);
+      getFilteredDepartments().forEach(dept => {
+        const deptParentId = dept.parentDepartment 
+          ? String(dept.parentDepartment._id || dept.parentDepartment)
+          : null;
+        
+        // Check if it's a child of primary department
+        if (deptParentId === primaryDeptId || 
+            (dept.path && dept.path.includes(primaryDeptId))) {
+          selectedDeptIds.add(String(dept._id));
+        }
+      });
     }
     
-    return [];
+    // Add additional departments
+    formData.additionalDepartments.forEach(deptId => {
+      selectedDeptIds.add(String(deptId));
+    });
+
+    // Return only departments that are in selected set
+    return getFilteredDepartments().filter(dept => 
+      selectedDeptIds.has(String(dept._id))
+    );
   };
 
   const fetchEmployees = async (deptId = "", page = 1, search = "") => {
@@ -309,13 +490,40 @@ const Employees = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // Validate required fields before submission
+    if (!formData.department || formData.department === "") {
+      toast.error("Please select a primary department");
+      return;
+    }
+    
+    if (!formData.role || formData.role === "") {
+      toast.error("Please select an employee role");
+      return;
+    }
+    
     try {
       setLoading(true);
+      
+      // Ensure department is a valid string (not empty)
+      const submitData = {
+        ...formData,
+        department: formData.department || null,
+      };
+      
+      // Remove empty additional/leading departments arrays if they're empty
+      if (!submitData.additionalDepartments || submitData.additionalDepartments.length === 0) {
+        submitData.additionalDepartments = [];
+      }
+      if (!submitData.leadingDepartments || submitData.leadingDepartments.length === 0) {
+        submitData.leadingDepartments = [];
+      }
+      
       let response;
       if (editMode) {
-        response = await employeeAPI.update(editId, formData);
+        response = await employeeAPI.update(editId, submitData);
       } else {
-        response = await employeeAPI.create(formData);
+        response = await employeeAPI.create(submitData);
       }
       
       if (response.data.success) {
@@ -447,6 +655,34 @@ const Employees = () => {
     const updates = { [field]: newDepts };
     if (field === 'leadingDepartments' && newDepts.length > 0) {
       updates.isTeamLead = true;
+    }
+
+    // If changing additional departments, clear invalid team lead selections
+    if (field === 'additionalDepartments') {
+      // Recalculate valid team lead options based on new additional departments
+      const validTeamLeadIds = new Set();
+      
+      // Add primary department and its children
+      if (formData.department) {
+        validTeamLeadIds.add(String(formData.department));
+        const primaryDeptId = String(formData.department);
+        getFilteredDepartments().forEach(dept => {
+          const deptParentId = dept.parentDepartment 
+            ? String(dept.parentDepartment._id || dept.parentDepartment)
+            : null;
+          if (deptParentId === primaryDeptId || (dept.path && dept.path.includes(primaryDeptId))) {
+            validTeamLeadIds.add(String(dept._id));
+          }
+        });
+      }
+      
+      // Add new additional departments
+      newDepts.forEach(deptId => validTeamLeadIds.add(String(deptId)));
+      
+      // Filter out invalid team lead selections
+      updates.leadingDepartments = formData.leadingDepartments.filter(leadDeptId => 
+        validTeamLeadIds.has(String(leadDeptId))
+      );
     }
     
     setFormData({ ...formData, ...updates });
@@ -619,11 +855,49 @@ const Employees = () => {
             </>
           )}
           <button className="btn-primary" onClick={() => {
+            setEditMode(false);
+            setEditId(null);
+            
             // Auto-set department for attendanceDepartment users
-            if (currentUser?.role?.name === "attendanceDepartment" && currentUser?.department) {
-              const userDeptId = currentUser.department._id || currentUser.department;
-              setFormData(prev => ({ ...prev, department: userDeptId }));
+            // If there's only one department available, use it
+            let defaultDepartment = "";
+            if (currentUser?.role?.name === "attendanceDepartment") {
+              if (currentUser?.department) {
+                defaultDepartment = String(currentUser.department._id || currentUser.department);
+              } else {
+                // If no assigned department, use the first available department
+                const filteredDepts = getFilteredDepartments();
+                if (filteredDepts.length > 0) {
+                  defaultDepartment = String(filteredDepts[0]._id);
+                }
+              }
             }
+            
+            // Reset form data with default department
+            setFormData({
+              name: "",
+              email: "",
+              phone: "",
+              cnic: "",
+              biometricId: "",
+              department: defaultDepartment,
+              additionalDepartments: [],
+              leadingDepartments: [],
+              position: "",
+              salary: { monthlySalary: "", currency: "PKR", leaveThreshold: 0 },
+              workSchedule: {
+                checkInTime: "09:00",
+                checkOutTime: "17:00",
+                workingDaysPerWeek: 5,
+                weeklyOffs: ["Saturday", "Sunday"],
+                workingHoursPerWeek: 40,
+              },
+              joiningDate: "",
+              password: "",
+              isTeamLead: false,
+              role: "",
+            });
+            
             setShowModal(true);
           }}>
             + Add Employee
@@ -861,21 +1135,27 @@ const Employees = () => {
                 <div className="form-group">
                   <label>Primary Department *</label>
                   <select
-                    value={formData.department}
-                    onChange={(e) =>
+                    value={formData.department || ""}
+                    onChange={(e) => {
+                      const newPrimaryDept = e.target.value;
+                      
+                      // When primary changes, we need to:
+                      // 1. Remove it from additional departments
+                      // 2. Clear additional departments (they depend on primary being siblings)
+                      // 3. Clear team lead departments (they depend on primary + additional)
                       setFormData({ 
                         ...formData, 
-                        department: e.target.value,
-                        // Remove from additional departments if selected as primary
-                        additionalDepartments: formData.additionalDepartments.filter(d => d !== e.target.value)
-                      })
-                    }
+                        department: newPrimaryDept,
+                        additionalDepartments: [],
+                        leadingDepartments: []
+                      });
+                    }}
                     required
                     disabled={currentUser?.role?.name === "attendanceDepartment" && getFilteredDepartments().length === 1}
                   >
                     <option value="">Select Primary Department</option>
                     {getFilteredDepartments().map((dept) => (
-                      <option key={dept._id} value={dept._id}>
+                      <option key={dept._id} value={String(dept._id)}>
                         {"—".repeat(dept.level || 0)} {dept.name} ({dept.code})
                         {dept.parentDepartment ? ` ← ${dept.parentDepartment.name || ''}` : ''}
                       </option>
@@ -883,7 +1163,9 @@ const Employees = () => {
                   </select>
                   <small style={{color: '#64748b', fontSize: '12px', marginTop: '4px'}}>
                     {currentUser?.role?.name === "attendanceDepartment" 
-                      ? "You can only assign employees to your own department"
+                      ? getFilteredDepartments().length === 1 
+                        ? "Department is auto-selected based on your assignment"
+                        : "You can only assign employees to your own department or its sub-departments"
                       : "Used for attendance tracking and salary calculation"}
                   </small>
                 </div>
@@ -891,15 +1173,12 @@ const Employees = () => {
                 <div className="form-group full-width">
                   <label>Additional Departments</label>
                   <div className="checkbox-grid multi-dept-grid">
-                    {getFilteredDepartments()
-                      .filter(dept => dept._id !== formData.department)
-                      .map((dept) => (
+                    {getAdditionalDepartmentsOptions().map((dept) => (
                         <label key={dept._id} className="checkbox-label dept-checkbox">
                           <input
                             type="checkbox"
                             checked={formData.additionalDepartments.includes(dept._id)}
                             onChange={() => handleMultiDeptToggle(dept._id, 'additionalDepartments')}
-                            disabled={currentUser?.role?.name === "attendanceDepartment"}
                           />
                           <span className="dept-name">
                             {"—".repeat(dept.level || 0)} {dept.name}
@@ -910,21 +1189,20 @@ const Employees = () => {
                   </div>
                   <small style={{color: '#64748b', fontSize: '12px', marginTop: '4px'}}>
                     {currentUser?.role?.name === "attendanceDepartment"
-                      ? "You can only assign employees to your own department"
-                      : "Select departments where this employee also works (in addition to primary)"}
+                      ? "You can only assign employees to departments you created (showing siblings of primary department)"
+                      : "Select departments where this employee also works (showing siblings of primary department)"}
                   </small>
                 </div>
 
                 <div className="form-group full-width">
                   <label>Team Lead Of</label>
                   <div className="checkbox-grid multi-dept-grid leading-grid">
-                    {getFilteredDepartments().map((dept) => (
+                    {getTeamLeadOfOptions().map((dept) => (
                       <label key={dept._id} className="checkbox-label dept-checkbox lead-checkbox">
                         <input
                           type="checkbox"
                           checked={formData.leadingDepartments.includes(dept._id)}
                           onChange={() => handleMultiDeptToggle(dept._id, 'leadingDepartments')}
-                          disabled={currentUser?.role?.name === "attendanceDepartment"}
                         />
                         <span className="dept-name">
                           {"—".repeat(dept.level || 0)} {dept.name}
@@ -935,8 +1213,8 @@ const Employees = () => {
                   </div>
                   <small style={{color: '#64748b', fontSize: '12px', marginTop: '4px'}}>
                     {currentUser?.role?.name === "attendanceDepartment"
-                      ? "You can only assign team lead roles within your own department"
-                      : "Select departments where this employee is a Team Lead"}
+                      ? "You can only assign team lead roles within selected departments (primary + additional + their children)"
+                      : "Select departments where this employee is a Team Lead (from primary + additional departments)"}
                   </small>
                 </div>
 

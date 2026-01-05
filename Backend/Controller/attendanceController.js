@@ -260,6 +260,46 @@ export const getAllAttendance = async (req, res) => {
       filter.status = status;
     }
 
+    // Filter by department
+    if (req.query.department) {
+      // Find all employees in the selected department
+      const employeesInDept = await Employee.find({
+        primaryDepartment: req.query.department,
+        isActive: true
+      }).select('_id');
+      
+      const deptEmployeeIds = employeesInDept.map(emp => emp._id);
+      filter.employee = { $in: deptEmployeeIds };
+    }
+
+    // For attendanceDepartment role, only show attendance of employees they created + their own attendance
+    const requestingUserRole = req.user?.role?.name || req.user?.role;
+    if (requestingUserRole === "attendanceDepartment") {
+      // Get all employees created by this user
+      const employeesCreatedByUser = await Employee.find({
+        createdBy: req.user._id,
+        isActive: true
+      }).select('_id');
+      
+      const employeeIds = employeesCreatedByUser.map(emp => emp._id);
+      
+      // Also add the logged-in user's own ID to see their own attendance
+      employeeIds.push(req.user._id);
+      
+      // Add to filter - only show attendance for these employees
+      if (filter.employee) {
+        // If employee filter already exists, ensure it's in the allowed list
+        filter.employee = { $in: [filter.employee, ...employeeIds] };
+      } else {
+        filter.employee = { $in: employeeIds };
+      }
+    }
+    // For regular users (not superAdmin or attendanceDepartment), only show their own attendance
+    else if (requestingUserRole !== "superAdmin") {
+      // Override any employee filter to ensure users can only see their own data
+      filter.employee = req.user._id;
+    }
+
     const attendanceRecords = await Attendance.find(filter)
       .select('+checkIn +checkOut') // Explicitly include these fields
       .populate("employee", "name employeeId email phone department")
@@ -286,7 +326,7 @@ export const getAllAttendance = async (req, res) => {
 export const getAttendanceById = async (req, res) => {
   try {
     const attendance = await Attendance.findById(req.params.id)
-      .populate("employee", "name employeeId email phone department")
+      .populate("employee", "name employeeId email phone department createdBy")
       .populate("modifiedBy", "name");
 
     if (!attendance) {
@@ -294,6 +334,24 @@ export const getAttendanceById = async (req, res) => {
         success: false,
         message: "Attendance record not found",
       });
+    }
+
+    // For attendanceDepartment role, only allow viewing attendance of employees they created or their own
+    const requestingUserRole = req.user?.role?.name || req.user?.role;
+    if (requestingUserRole === "attendanceDepartment") {
+      const attendanceEmployeeId = attendance.employee?._id || attendance.employee;
+      const employeeCreatedBy = attendance.employee?.createdBy?._id || attendance.employee?.createdBy;
+      
+      // Allow if it's their own attendance OR if they created the employee
+      const isOwnAttendance = String(attendanceEmployeeId) === String(req.user._id);
+      const isCreatedByUser = String(employeeCreatedBy) === String(req.user._id);
+      
+      if (!isOwnAttendance && !isCreatedByUser) {
+        return res.status(403).json({
+          success: false,
+          message: "Access denied. You can only view attendance of employees you created.",
+        });
+      }
     }
 
     res.status(200).json({
@@ -315,12 +373,31 @@ export const getTodayAttendance = async (req, res) => {
     const today = getTodayUTC();
     const tomorrow = new Date(today.getTime() + TIME.ONE_DAY);
 
-    const attendanceRecords = await Attendance.find({ 
+    const filter = { 
       date: {
         $gte: today,
         $lt: tomorrow
       }
-    })
+    };
+
+    // For attendanceDepartment role, only show attendance of employees they created + their own attendance
+    const requestingUserRole = req.user?.role?.name || req.user?.role;
+    if (requestingUserRole === "attendanceDepartment") {
+      // Get all employees created by this user
+      const employeesCreatedByUser = await Employee.find({
+        createdBy: req.user._id,
+        isActive: true
+      }).select('_id');
+      
+      const employeeIds = employeesCreatedByUser.map(emp => emp._id);
+      
+      // Also add the logged-in user's own ID to see their own attendance
+      employeeIds.push(req.user._id);
+      
+      filter.employee = { $in: employeeIds };
+    }
+
+    const attendanceRecords = await Attendance.find(filter)
       .select('+checkIn +checkOut') // Explicitly include these fields
       .populate("employee", "name employeeId email phone department")
       .populate("modifiedBy", "name")
@@ -602,6 +679,22 @@ export const getAttendanceStats = async (req, res) => {
       };
     }
 
+    // For attendanceDepartment role, only show stats for employees they created
+    const requestingUserRole = req.user?.role?.name || req.user?.role;
+    let employeeFilter = { isActive: true };
+    
+    if (requestingUserRole === "attendanceDepartment") {
+      // Get all employees created by this user
+      const employeesCreatedByUser = await Employee.find({
+        createdBy: req.user._id,
+        isActive: true
+      }).select('_id');
+      
+      const employeeIds = employeesCreatedByUser.map(emp => emp._id);
+      filter.employee = { $in: employeeIds };
+      employeeFilter.createdBy = req.user._id;
+    }
+
     const stats = await Attendance.aggregate([
       { $match: filter },
       {
@@ -612,7 +705,7 @@ export const getAttendanceStats = async (req, res) => {
       },
     ]);
 
-    const totalEmployees = await Employee.countDocuments({ isActive: true });
+    const totalEmployees = await Employee.countDocuments(employeeFilter);
 
     res.status(200).json({
       success: true,

@@ -110,11 +110,18 @@ export const authLimiter = rateLimit({
     message: "Too many login attempts. Please try again later.",
   },
   handler: (req, res, next, options) => {
+    // Calculate actual time remaining until rate limit resets
+    const resetTime = new Date(req.rateLimit.resetTime);
+    const now = new Date();
+    const remainingMs = resetTime - now;
+    const remainingSeconds = Math.ceil(remainingMs / 1000);
+    const remainingMinutes = Math.ceil(remainingSeconds / 60);
+    
     res.status(429).json({
       success: false,
       errorCode: ErrorCodes.RATE_LIMIT_EXCEEDED,
-      message: `Too many login attempts. Please try again after ${Math.ceil(options.windowMs / 60000)} minutes.`,
-      retryAfter: Math.ceil(options.windowMs / 1000),
+      message: `Too many login attempts. Please try again after ${remainingMinutes} minute${remainingMinutes !== 1 ? 's' : ''}.`,
+      retryAfter: remainingSeconds > 0 ? remainingSeconds : 1,
     });
   },
 });

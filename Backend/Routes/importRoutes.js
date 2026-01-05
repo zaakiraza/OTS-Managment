@@ -1,7 +1,7 @@
 import express from "express";
 import multer from "multer";
 import { importAttendance, importAttendanceText } from "../Controller/importController.js";
-import { verifyToken } from "../Middleware/auth.js";
+import { verifyToken, hasRole } from "../Middleware/auth.js";
 
 const router = express.Router();
 
@@ -17,10 +17,10 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage });
 
-// Import attendance from file upload
-router.post("/upload", verifyToken, upload.single('file'), importAttendance);
+// Import attendance from file upload - Only superAdmin and attendanceDepartment
+router.post("/upload", verifyToken, hasRole("superAdmin", "attendanceDepartment"), upload.single('file'), importAttendance);
 
-// Import attendance from text content
-router.post("/text", verifyToken, importAttendanceText);
+// Import attendance from text content - Only superAdmin and attendanceDepartment
+router.post("/text", verifyToken, hasRole("superAdmin", "attendanceDepartment"), importAttendanceText);
 
 export default router;

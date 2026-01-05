@@ -18,7 +18,7 @@ export const verifyToken = async (req, res, next) => {
     // Find employee
     const employee = await Employee.findById(decoded.id)
       .populate("role", "name description permissions")
-      .populate("department", "name");
+      .populate("department", "_id name code");
     
     if (!employee || !employee.isActive) {
       return res.status(401).json({

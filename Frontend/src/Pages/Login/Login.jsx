@@ -13,6 +13,7 @@ function Login() {
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
 
   const handleChange = (e) => {
     setFormData({
@@ -24,10 +25,12 @@ function Login() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError("");
-    setLoading(true);
+    e.stopPropagation();
 
     try {
+      setError("");
+      setLoading(true);
+
       console.log("Attempting login with:", formData.email);
       const response = await authAPI.login(formData);
       console.log("Login response:", response.data);
@@ -51,69 +54,144 @@ function Login() {
         };
 
         const redirectPath = redirectMap[userRole] || "/dashboard";
-        console.log("Redirecting to:", redirectPath); // Debug log
         navigate(redirectPath);
+      } else {
+        // If response is not successful, treat as error
+        hidsetError(response.data?.message || "Login failed. Please try again.");
+        toast.error(
+          response.data?.message || "Login failed. Please try again."
+        );
+        setLoading(false);
       }
     } catch (err) {
       console.error("Login error:", err);
       console.error("Error response:", err.response);
-      const errorMessage =
+
+      let errorMessage =
         err.response?.data?.message || "Login failed. Please try again.";
+
+      // Check if this is a rate limit error and format the time remaining
+      if (err.response?.data?.retryAfter) {
+        const retryAfterSeconds = err.response.data.retryAfter;
+        const minutes = Math.floor(retryAfterSeconds / 60);
+        const seconds = retryAfterSeconds % 60;
+
+        if (minutes > 0) {
+          errorMessage = `Too many login attempts. Please try again after ${minutes} minute${
+            minutes !== 1 ? "s" : ""
+          }${
+            seconds > 0
+              ? ` and ${seconds} second${seconds !== 1 ? "s" : ""}`
+              : ""
+          }.`;
+        } else {
+          errorMessage = `Too many login attempts. Please try again after ${seconds} second${
+            seconds !== 1 ? "s" : ""
+          }.`;
+        }
+      }
+
       console.error("Error message:", errorMessage);
       setError(errorMessage);
       toast.error(errorMessage);
-    } finally {
       setLoading(false);
     }
   };
 
   return (
     <div className="login-container">
+      <div className="login-background-shapes">
+        <div className="shape shape-1"></div>
+        <div className="shape shape-2"></div>
+        <div className="shape shape-3"></div>
+      </div>
+
       <div className="login-card">
         <div className="login-header">
+          <div className="logo-container">
+            <div className="logo-circle">
+              <i className="fas fa-building"></i>
+            </div>
+          </div>
           <h1>Welcome Back</h1>
           <p>Sign in to your account</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="login-form">
-          {error && <div className="error-message">{error}</div>}
+        <form
+          onSubmit={(e) => {
+            handleSubmit(e);
+          }}
+          className="login-form"
+        >
+          {error && (
+            <div className="error-message">
+              <i className="fas fa-exclamation-circle"></i>
+              <span>{error}</span>
+            </div>
+          )}
 
           <div className="form-group">
-            <label htmlFor="email">Email / Employee ID</label>
-            <input
-              type="text"
-              id="email"
-              name="email"
-              value={formData.email}
-              onChange={handleChange}
-              placeholder="Enter your email or Employee ID"
-              required
-              autoComplete="username"
-            />
+            <label htmlFor="email">
+              <i className="fas fa-user"></i>
+              Email / Employee ID
+            </label>
+            <div className="input-wrapper">
+              <input
+                type="text"
+                id="email"
+                name="email"
+                value={formData.email}
+                onChange={handleChange}
+                placeholder="Enter your email or Employee ID"
+                required
+                autoComplete="username"
+              />
+            </div>
           </div>
 
           <div className="form-group">
-            <label htmlFor="password">Password</label>
-            <input
-              type="password"
-              id="password"
-              name="password"
-              value={formData.password}
-              onChange={handleChange}
-              placeholder="Enter your password"
-              required
-              autoComplete="current-password"
-            />
+            <label htmlFor="password">
+              <i className="fas fa-lock"></i>
+              Password
+            </label>
+            <div className="input-wrapper password-wrapper">
+              <input
+                type={showPassword ? "text" : "password"}
+                id="password"
+                name="password"
+                value={formData.password}
+                onChange={handleChange}
+                placeholder="Enter your password"
+                required
+                autoComplete="current-password"
+              />
+              <button
+                type="button"
+                className="toggle-password"
+                onClick={() => setShowPassword(!showPassword)}
+                tabIndex="-1"
+              >
+                <i
+                  className={`fas ${showPassword ? "fa-eye-slash" : "fa-eye"}`}
+                ></i>
+              </button>
+            </div>
           </div>
 
           <button type="submit" className="login-button" disabled={loading}>
-            {loading ? "Signing in..." : "Sign In"}
+            {loading ? (
+              <>
+                <i className="fas fa-spinner fa-spin"></i>
+                <span>Signing in...</span>
+              </>
+            ) : (
+              <>
+                <span>Sign In</span>
+                <i className="fas fa-arrow-right"></i>
+              </>
+            )}
           </button>
         </form>
-
-        <div className="login-footer">
-          <p>Organization Management System</p>
-        </div>
 
         {/* <div className="test-credentials">
           <div className="credentials-header">

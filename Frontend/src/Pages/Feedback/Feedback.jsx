@@ -12,10 +12,7 @@ function Feedback() {
   const [showViewModal, setShowViewModal] = useState(false);
   const [selectedFeedback, setSelectedFeedback] = useState(null);
   const [formData, setFormData] = useState({
-    category: "other",
-    subject: "",
     message: "",
-    priority: "medium",
   });
   const [filter, setFilter] = useState({
     status: "",
@@ -69,10 +66,7 @@ function Feedback() {
       toast.success("Feedback submitted successfully!");
       setShowModal(false);
       setFormData({
-        category: "other",
-        subject: "",
         message: "",
-        priority: "medium",
       });
       fetchFeedbacks();
     } catch (error) {
@@ -228,11 +222,9 @@ function Feedback() {
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>Category</th>
-                  <th>Subject</th>
+                  <th>Message</th>
                   <th>Submitted By</th>
                   <th>Status</th>
-                  <th>Priority</th>
                   <th>Date</th>
                   <th>Actions</th>
                 </tr>
@@ -254,12 +246,9 @@ function Feedback() {
                   feedbacks.map((feedback) => (
                     <tr key={feedback._id}>
                       <td>
-                        <span className="category-badge">
-                          <i className={`fas ${getCategoryIcon(feedback.category)}`}></i>
-                          {feedback.category}
-                        </span>
+                        {feedback.message?.substring(0, 60)}
+                        {feedback.message?.length > 60 ? '...' : ''}
                       </td>
-                      <td>{feedback.subject}</td>
                       <td>
                         {isSuperAdmin
                           ? feedback.submittedByName || feedback.submittedBy?.name
@@ -271,14 +260,6 @@ function Feedback() {
                           style={{ background: getStatusColor(feedback.status) }}
                         >
                           {feedback.status}
-                        </span>
-                      </td>
-                      <td>
-                        <span
-                          className="priority-badge"
-                          style={{ background: getPriorityColor(feedback.priority) }}
-                        >
-                          {feedback.priority}
                         </span>
                       </td>
                       <td>
@@ -322,37 +303,6 @@ function Feedback() {
                 <form onSubmit={handleSubmit} className="modal-body">
                   <div className="form-group">
                     <label>
-                      <i className="fas fa-tag"></i> Category <span className="required">*</span>
-                    </label>
-                    <select
-                      value={formData.category}
-                      onChange={(e) =>
-                        setFormData({ ...formData, category: e.target.value })
-                      }
-                      required
-                    >
-                      <option value="bug">Bug Report</option>
-                      <option value="feature">Feature Request</option>
-                      <option value="improvement">Improvement Suggestion</option>
-                      <option value="other">Other</option>
-                    </select>
-                  </div>
-                  <div className="form-group">
-                    <label>
-                      <i className="fas fa-heading"></i> Subject <span className="required">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.subject}
-                      onChange={(e) =>
-                        setFormData({ ...formData, subject: e.target.value })
-                      }
-                      placeholder="Brief description of your feedback"
-                      required
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label>
                       <i className="fas fa-align-left"></i> Message <span className="required">*</span>
                     </label>
                     <textarea
@@ -360,25 +310,10 @@ function Feedback() {
                       onChange={(e) =>
                         setFormData({ ...formData, message: e.target.value })
                       }
-                      rows="5"
+                      rows="8"
                       placeholder="Describe your feedback in detail..."
                       required
                     />
-                  </div>
-                  <div className="form-group">
-                    <label>
-                      <i className="fas fa-exclamation-circle"></i> Priority
-                    </label>
-                    <select
-                      value={formData.priority}
-                      onChange={(e) =>
-                        setFormData({ ...formData, priority: e.target.value })
-                      }
-                    >
-                      <option value="low">Low</option>
-                      <option value="medium">Medium</option>
-                      <option value="high">High</option>
-                    </select>
                   </div>
                   <div className="modal-actions">
                     <button

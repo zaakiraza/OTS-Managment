@@ -24,6 +24,8 @@ import iclockRoutes from "./Routes/iclockRoutes.js";
 import settingsRoutes from "./Routes/settingsRoutes.js";
 import feedbackRoutes from "./Routes/feedbackRoutes.js";
 import todoRoutes from "./Routes/todoRoutes.js";
+import leaveRoutes from "./Routes/leaveRoutes.js";
+import emailTemplateRoutes from "./Routes/emailTemplateRoutes.js";
 import { connectToDevice, startPolling } from "./Utils/zktecoDevice.js";
 import { scheduleAbsenteeCheck } from "./Utils/markAbsentees.js";
 import logger from "./Utils/logger.js";
@@ -94,6 +96,8 @@ app.use("/api/audit-logs", auditLogRoutes);
 app.use("/api/settings", settingsRoutes);
 app.use("/api/feedback", feedbackRoutes);
 app.use("/api/todos", todoRoutes);
+app.use("/api/leaves", leaveRoutes);
+app.use("/api/email-templates", emailTemplateRoutes);
 app.use("/iclock", iclockRoutes);
 
 // 404 Handler - catches all unmatched routes

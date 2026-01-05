@@ -148,6 +148,10 @@ export const updateMultipleSettings = async (req, res) => {
       "manualAttendanceEnabled",
       "importAttendanceEnabled",
       "autoMarkAbsentEnabled",
+      "emailService",
+      "emailUser",
+      "emailPassword",
+      "emailFromName",
     ];
 
     const results = [];
@@ -234,6 +238,10 @@ function getDefaultDescription(key) {
     manualAttendanceEnabled: "Allow attendance department to mark attendance manually",
     importAttendanceEnabled: "Allow attendance department to import attendance data",
     autoMarkAbsentEnabled: "Automatically mark absent employees at end of day",
+    emailService: "Email service provider for system notifications",
+    emailUser: "Email address for sending notifications",
+    emailPassword: "Email password or app password",
+    emailFromName: "Sender name displayed in emails",
   };
   return descriptions[key] || "";
 }

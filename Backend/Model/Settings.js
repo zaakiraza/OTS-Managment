@@ -10,6 +10,10 @@ const settingsSchema = new mongoose.Schema(
         "manualAttendanceEnabled",
         "importAttendanceEnabled",
         "autoMarkAbsentEnabled",
+        "emailService",
+        "emailUser",
+        "emailPassword",
+        "emailFromName",
       ],
     },
     value: {

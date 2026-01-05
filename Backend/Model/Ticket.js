@@ -9,7 +9,6 @@ const ticketSchema = new mongoose.Schema(
     },
     title: {
       type: String,
-      required: [true, "Title is required"],
       trim: true,
     },
     description: {
@@ -19,13 +18,11 @@ const ticketSchema = new mongoose.Schema(
     },
     category: {
       type: String,
-      required: [true, "Category is required"],
       enum: ["Maintenance", "Technical", "HR", "Administrative", "Other"],
     },
     priority: {
       type: String,
       enum: ["Low", "Medium", "High", "Critical"],
-      default: "Medium",
     },
     status: {
       type: String,
@@ -40,6 +37,7 @@ const ticketSchema = new mongoose.Schema(
     reportedAgainst: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Employee",
+      required: [true, "Report Against employee is required"],
     },
     assignedTo: {
       type: mongoose.Schema.Types.ObjectId,
