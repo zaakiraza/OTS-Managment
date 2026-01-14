@@ -176,17 +176,17 @@ employeeSchema.index({ isActive: 1 }); // For filtering active employees
 
 // Hash password before saving
 employeeSchema.pre("save", async function () {
-  // Only hash if password is modified or new
-  if (!this.isModified("password")) return;
-  
-  // If no password provided, generate default: Emp@{last4digits}
-  if (!this.password) {
-    const last4 = this.employeeId.slice(-4);
-    this.password = `Emp@${last4}`;
+  // If this is a new document or password is being modified
+  if (this.isNew || this.isModified("password")) {
+    // If no password provided, generate default: Emp@{last4digits}
+    if (!this.password) {
+      const last4 = this.employeeId.slice(-4);
+      this.password = `Emp@${last4}`;
+    }
+    
+    // Hash the password
+    this.password = await bcrypt.hash(this.password, 10);
   }
-  
-  // Hash the password
-  this.password = await bcrypt.hash(this.password, 10);
 });
 
 // Method to compare passwords

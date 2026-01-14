@@ -3,6 +3,7 @@ import Department from "../Model/Department.js";
 import Role from "../Model/Role.js";
 import mongoose from "mongoose";
 import bcrypt from "bcrypt";
+import ExcelJS from "exceljs";
 import { notifyPasswordChanged, notifyEmployeeCreated } from "../Utils/emailNotifications.js";
 import { logEmployeeAction } from "../Utils/auditLogger.js";
 
@@ -231,7 +232,8 @@ export const createEmployee = async (req, res) => {
       // We need to generate it here too so we can send it in the email
       const last4 = newEmployeeId.slice(-4);
       plainPassword = `Emp@${last4}`;
-      // Don't set password - let pre-save hook handle it
+      // Don't set password - pre-save hook will generate it for new documents
+      // The hook checks this.isNew, so it will run for new employees
     }
 
     const employee = await Employee.create(employeeData);
@@ -244,10 +246,27 @@ export const createEmployee = async (req, res) => {
 
     // Send email notification if email is provided
     if (populatedEmployee.email) {
-      notifyEmployeeCreated(populatedEmployee, plainPassword).catch((err) => {
-        console.error("Failed to send employee creation email:", err);
+      console.log(`[Employee Created] Attempting to send welcome email to: ${populatedEmployee.email}`);
+      notifyEmployeeCreated(populatedEmployee.email, {
+        name: populatedEmployee.name,
+        email: populatedEmployee.email,
+        employeeId: populatedEmployee.employeeId,
+        department: populatedEmployee.department?.name || "N/A",
+        tempPassword: plainPassword,
+      })
+      .then((result) => {
+        if (result.success) {
+          console.log(`[Employee Created] Welcome email sent successfully to ${populatedEmployee.email}. Message ID: ${result.messageId}`);
+        } else {
+          console.error(`[Employee Created] Failed to send email to ${populatedEmployee.email}:`, result.error);
+        }
+      })
+      .catch((err) => {
+        console.error(`[Employee Created] Error sending email to ${populatedEmployee.email}:`, err);
         // Don't fail the request if email fails
       });
+    } else {
+      console.log(`[Employee Created] No email provided for employee ${populatedEmployee.employeeId} (${populatedEmployee.name}). Skipping email notification.`);
     }
 
     // Audit log
@@ -750,6 +769,518 @@ export const deleteEmployee = async (req, res) => {
       message: "Employee deleted successfully",
     });
   } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// Download Excel template for employee import
+export const downloadEmployeeTemplate = async (req, res) => {
+  try {
+    // Fetch departments and roles for dropdowns
+    const departments = await Department.find({ isActive: true }).sort({ code: 1 });
+    const roles = await Role.find({ 
+      isActive: true,
+      name: { $in: ["teamLead", "employee"] } // Only allow teamLead and employee
+    }).sort({ name: 1 });
+
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet("Employees");
+
+    // Define columns with clear required/optional labels
+    worksheet.columns = [
+      { header: "Name *", key: "name", width: 25 },
+      { header: "Email (Optional)", key: "email", width: 30 },
+      { header: "Phone (Optional)", key: "phone", width: 15 },
+      { header: "CNIC (Optional) - Format: XXXXX-XXXXXXX-X", key: "cnic", width: 35 },
+      { header: "Biometric ID (Optional) - Format: 1,5,13", key: "biometricId", width: 30 },
+      { header: "Department Code *", key: "departmentCode", width: 25 },
+      { header: "Position *", key: "position", width: 25 },
+      { header: "Role Name *", key: "roleName", width: 20 },
+      { header: "Monthly Salary (Optional)", key: "monthlySalary", width: 20 },
+      { header: "Currency (Optional) - Default: PKR", key: "currency", width: 25 },
+      { header: "Leave Threshold (Optional) - Default: 0", key: "leaveThreshold", width: 30 },
+      { header: "Check In Time (Optional) - Default: 09:00", key: "checkInTime", width: 30 },
+      { header: "Check Out Time (Optional) - Default: 17:00", key: "checkOutTime", width: 30 },
+      { header: "Working Days Per Week (Optional) - Default: 5", key: "workingDaysPerWeek", width: 35 },
+      { header: "Working Hours Per Week (Optional) - Default: 40", key: "workingHoursPerWeek", width: 35 },
+      { header: "Weekly Offs (Optional) - Format: Saturday,Sunday", key: "weeklyOffs", width: 35 },
+      { header: "Joining Date (Optional) - Format: YYYY-MM-DD", key: "joiningDate", width: 30 },
+      { header: "Password (Optional) - Auto-generated if empty", key: "password", width: 35 },
+      { header: "Is Team Lead (Optional) - true/false", key: "isTeamLead", width: 30 },
+    ];
+
+    // Style header row
+    worksheet.getRow(1).font = { bold: true };
+    worksheet.getRow(1).fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: "FF093635" },
+    };
+    worksheet.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
+    worksheet.getRow(1).alignment = { vertical: "middle", horizontal: "center" };
+    worksheet.getRow(1).height = 25;
+
+    // Add instructions row
+    const instructionRow = worksheet.addRow([]);
+    instructionRow.height = 40;
+    instructionRow.getCell(1).value = "Instructions:";
+    instructionRow.getCell(1).font = { bold: true, color: { argb: "FF093635" } };
+    worksheet.mergeCells(`A2:${String.fromCharCode(64 + worksheet.columnCount)}2`);
+    instructionRow.getCell(1).value = "Instructions: Fields marked with * are required. Optional fields can be left empty. Use dropdowns for Department Code and Role Name. Biometric ID should be comma-separated numbers (e.g., 1,5,13). CNIC format: XXXXX-XXXXXXX-X";
+    instructionRow.getCell(1).alignment = { vertical: "middle", wrapText: true };
+    instructionRow.getCell(1).fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: "FFF0F9FF" },
+    };
+
+    // Add department codes list in a separate sheet
+    const deptSheet = workbook.addWorksheet("Department Codes");
+    deptSheet.columns = [
+      { header: "Department Code", key: "code", width: 20 },
+      { header: "Department Name", key: "name", width: 30 },
+    ];
+    deptSheet.getRow(1).font = { bold: true };
+    deptSheet.getRow(1).fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: "FF093635" },
+    };
+    deptSheet.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
+    
+    departments.forEach(dept => {
+      deptSheet.addRow({
+        code: dept.code,
+        name: dept.name,
+      });
+    });
+
+    // Add role names list in a separate sheet
+    const roleSheet = workbook.addWorksheet("Role Names");
+    roleSheet.columns = [
+      { header: "Role Name", key: "name", width: 20 },
+      { header: "Description", key: "description", width: 40 },
+    ];
+    roleSheet.getRow(1).font = { bold: true };
+    roleSheet.getRow(1).fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: "FF093635" },
+    };
+    roleSheet.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
+    
+    roles.forEach(role => {
+      roleSheet.addRow({
+        name: role.name,
+        description: role.description || "",
+      });
+    });
+
+    // Create named ranges for data validation
+    const deptCodes = departments.map(d => d.code);
+    const roleNames = roles.map(r => r.name);
+
+    // Add data validation for Department Code column (column F = 6)
+    worksheet.getColumn(6).eachCell((cell, rowNumber) => {
+      if (rowNumber > 2) { // Skip header and instruction rows
+        cell.dataValidation = {
+          type: 'list',
+          allowBlank: false,
+          formulae: [`"${deptCodes.join(',')}"`],
+          showErrorMessage: true,
+          errorTitle: 'Invalid Department Code',
+          error: `Please select a valid department code from the list. See "Department Codes" sheet for available codes.`,
+        };
+      }
+    });
+
+    // Add data validation for Role Name column (column H = 8)
+    worksheet.getColumn(8).eachCell((cell, rowNumber) => {
+      if (rowNumber > 2) { // Skip header and instruction rows
+        cell.dataValidation = {
+          type: 'list',
+          allowBlank: false,
+          formulae: [`"${roleNames.join(',')}"`],
+          showErrorMessage: true,
+          errorTitle: 'Invalid Role Name',
+          error: `Please select either "teamLead" or "employee" (case-sensitive).`,
+        };
+      }
+    });
+
+    // Add data validation for Currency column (column J = 10)
+    worksheet.getColumn(10).eachCell((cell, rowNumber) => {
+      if (rowNumber > 2) {
+        cell.dataValidation = {
+          type: 'list',
+          allowBlank: true,
+          formulae: ['"PKR,USD,EUR,GBP"'],
+          showErrorMessage: true,
+          errorTitle: 'Invalid Currency',
+          error: 'Please select a valid currency: PKR, USD, EUR, or GBP',
+        };
+      }
+    });
+
+    // Add data validation for Is Team Lead column (column S = 19)
+    worksheet.getColumn(19).eachCell((cell, rowNumber) => {
+      if (rowNumber > 2) {
+        cell.dataValidation = {
+          type: 'list',
+          allowBlank: true,
+          formulae: ['"true,false"'],
+          showErrorMessage: true,
+          errorTitle: 'Invalid Value',
+          error: 'Please enter either "true" or "false"',
+        };
+      }
+    });
+
+    // Add example row
+    const exampleRow = worksheet.addRow({
+      name: "John Doe",
+      email: "john.doe@example.com",
+      phone: "+923001234567",
+      cnic: "12345-1234567-1",
+      biometricId: "1,5,13",
+      departmentCode: departments.length > 0 ? departments[0].code : "IT",
+      position: "Software Developer",
+      roleName: "employee",
+      monthlySalary: "50000",
+      currency: "PKR",
+      leaveThreshold: "10",
+      checkInTime: "09:00",
+      checkOutTime: "17:00",
+      workingDaysPerWeek: "5",
+      workingHoursPerWeek: "40",
+      weeklyOffs: "Saturday,Sunday",
+      joiningDate: "2026-01-01",
+      password: "",
+      isTeamLead: "false",
+    });
+
+    // Style example row (light gray background)
+    exampleRow.eachCell((cell) => {
+      cell.fill = {
+        type: "pattern",
+        pattern: "solid",
+        fgColor: { argb: "FFF5F5F5" },
+      };
+    });
+
+    // Set response headers
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    );
+    res.setHeader(
+      "Content-Disposition",
+      "attachment; filename=employee_import_template.xlsx"
+    );
+
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// Import employees from Excel file
+export const importEmployees = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: "No file uploaded",
+      });
+    }
+
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.readFile(req.file.path);
+    const worksheet = workbook.getWorksheet(1); // Get first worksheet
+
+    if (!worksheet) {
+      return res.status(400).json({
+        success: false,
+        message: "Excel file is empty or invalid",
+      });
+    }
+
+    const results = {
+      success: [],
+      failed: [],
+      total: 0,
+    };
+
+    // Get all departments and roles for lookup
+    const departments = await Department.find({ isActive: true });
+    const roles = await Role.find({ 
+      isActive: true,
+      name: { $in: ["teamLead", "employee"] } // Only allow teamLead and employee
+    });
+    const deptMap = new Map(departments.map(d => [d.code.toUpperCase(), d]));
+    const roleMap = new Map(roles.map(r => [r.name, r])); // Use exact case for role names
+
+    // Get user's department for validation (if attendanceDepartment)
+    const requestingUserRole = req.user?.role?.name || req.user?.role;
+    let userDepartment = req.user.department;
+    
+    if (requestingUserRole === "attendanceDepartment") {
+      if (!userDepartment || !userDepartment._id) {
+        const currentEmployee = await Employee.findById(req.user._id)
+          .populate("department", "_id name code");
+        userDepartment = currentEmployee?.department;
+      }
+    }
+
+    // Process rows (skip header row 1 and instruction row 2, start from row 3)
+    for (let rowNumber = 3; rowNumber <= worksheet.rowCount; rowNumber++) {
+      const row = worksheet.getRow(rowNumber);
+      
+      // Skip empty rows
+      if (!row.getCell(1).value) {
+        continue;
+      }
+
+      results.total++;
+
+      try {
+        // Extract data from row
+        const name = row.getCell(1).value?.toString().trim();
+        const email = row.getCell(2).value?.toString().trim() || null;
+        const phone = row.getCell(3).value?.toString().trim() || null;
+        const cnic = row.getCell(4).value?.toString().trim() || null;
+        let biometricId = row.getCell(5).value?.toString().trim() || null;
+        const departmentCode = row.getCell(6).value?.toString().trim().toUpperCase();
+        const position = row.getCell(7).value?.toString().trim() || "";
+        const roleName = row.getCell(8).value?.toString().trim(); // Keep original case for validation
+        const monthlySalary = row.getCell(9).value?.toString().trim() || null;
+        const currency = row.getCell(10).value?.toString().trim() || "PKR";
+        const leaveThreshold = parseInt(row.getCell(11).value) || 0;
+        const checkInTime = row.getCell(12).value?.toString().trim() || "09:00";
+        const checkOutTime = row.getCell(13).value?.toString().trim() || "17:00";
+        const workingDaysPerWeek = parseInt(row.getCell(14).value) || 5;
+        const workingHoursPerWeek = parseInt(row.getCell(15).value) || 40;
+        const weeklyOffsStr = row.getCell(16).value?.toString().trim() || "Saturday,Sunday";
+        const joiningDate = row.getCell(17).value?.toString().trim() || null;
+        const password = row.getCell(18).value?.toString().trim() || null;
+        const isTeamLead = row.getCell(19).value?.toString().toLowerCase() === "true";
+
+        // Validation
+        if (!name) {
+          throw new Error("Name is required");
+        }
+
+        if (!departmentCode) {
+          throw new Error("Department code is required");
+        }
+
+        const department = deptMap.get(departmentCode);
+        if (!department) {
+          const availableCodes = Array.from(deptMap.keys()).join(", ");
+          throw new Error(`Department with code "${departmentCode}" not found. Available codes: ${availableCodes || "None"}`);
+        }
+
+        // Validate department access for attendanceDepartment users
+        if (requestingUserRole === "attendanceDepartment") {
+          const requestedDeptId = String(department._id);
+          const userCreatedDept = String(department.createdBy) === String(req.user._id);
+          
+          if (userDepartment && userDepartment._id) {
+            const userDeptId = String(userDepartment._id || userDepartment);
+            const requestedParentId = department.parentDepartment 
+              ? String(department.parentDepartment._id || department.parentDepartment) 
+              : null;
+            const requestedPath = department.path || "";
+            
+            const isAllowed = userCreatedDept ||
+                             requestedDeptId === userDeptId || 
+                             requestedParentId === userDeptId || 
+                             requestedPath.includes(userDeptId);
+            
+            if (!isAllowed) {
+              throw new Error(`Access denied. You cannot create employees in department "${departmentCode}"`);
+            }
+          } else if (!userCreatedDept) {
+            throw new Error(`Access denied. You cannot create employees in department "${departmentCode}"`);
+          }
+        }
+
+        if (!roleName) {
+          throw new Error("Role name is required");
+        }
+
+        // Validate role name is exactly "teamLead" or "employee" (case-sensitive)
+        if (roleName !== "teamLead" && roleName !== "employee") {
+          throw new Error(`Invalid role name "${roleName}". Must be exactly "teamLead" or "employee" (case-sensitive).`);
+        }
+
+        const role = roleMap.get(roleName);
+        if (!role) {
+          throw new Error(`Role "${roleName}" not found in database. Available roles: teamLead, employee`);
+        }
+
+        // Check if employee with email already exists
+        if (email) {
+          const existingEmployee = await Employee.findOne({ email });
+          if (existingEmployee) {
+            throw new Error(`Employee with email "${email}" already exists`);
+          }
+        }
+
+        // Generate employee ID
+        const deptCode = department.code.substring(0, 3).toUpperCase();
+        const lastEmployee = await Employee.findOne({
+          employeeId: { $regex: `^${deptCode}` },
+        })
+          .sort({ employeeId: -1 })
+          .limit(1);
+
+        let newEmployeeId;
+        if (lastEmployee) {
+          const lastNumber = parseInt(lastEmployee.employeeId.replace(deptCode, ""));
+          newEmployeeId = `${deptCode}${String(lastNumber + 1).padStart(4, "0")}`;
+        } else {
+          newEmployeeId = `${deptCode}0001`;
+        }
+
+        // Parse weekly offs
+        const weeklyOffs = weeklyOffsStr.split(",").map(day => day.trim());
+
+        // Prepare employee data
+        const employeeData = {
+          employeeId: newEmployeeId,
+          name,
+          department: department._id,
+          position,
+          role: role._id,
+          salary: {
+            monthlySalary: monthlySalary ? parseFloat(monthlySalary) : null,
+            currency,
+            leaveThreshold,
+          },
+          workSchedule: {
+            checkInTime,
+            checkOutTime,
+            workingDaysPerWeek,
+            weeklyOffs,
+            workingHoursPerWeek,
+          },
+          createdBy: req.user._id,
+          isTeamLead,
+        };
+
+        if (email) employeeData.email = email;
+        if (phone) employeeData.phone = phone;
+        if (cnic) {
+          // Validate CNIC format: XXXXX-XXXXXXX-X
+          if (!/^\d{5}-\d{7}-\d{1}$/.test(cnic)) {
+            throw new Error(`Invalid CNIC format "${cnic}". Use format: XXXXX-XXXXXXX-X`);
+          }
+          employeeData.cnic = cnic;
+        }
+        if (biometricId) {
+          // Validate biometric ID format: comma-separated numbers (e.g., 1,5,13)
+          const bioIds = biometricId.split(',').map(id => id.trim());
+          const isValidFormat = bioIds.every(id => /^\d+$/.test(id));
+          if (!isValidFormat) {
+            throw new Error(`Invalid Biometric ID format "${biometricId}". Use comma-separated numbers (e.g., 1,5,13)`);
+          }
+          // Store as comma-separated string
+          employeeData.biometricId = bioIds.join(',');
+        }
+        if (joiningDate) {
+          // Validate date format
+          const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+          if (!dateRegex.test(joiningDate)) {
+            throw new Error(`Invalid joining date format "${joiningDate}". Use format: YYYY-MM-DD`);
+          }
+          employeeData.joiningDate = joiningDate;
+        }
+
+        // Handle password
+        let plainPassword = password && password.trim() ? password : null;
+        if (!plainPassword) {
+          const last4 = newEmployeeId.slice(-4);
+          plainPassword = `Emp@${last4}`;
+        } else {
+          employeeData.password = plainPassword;
+        }
+
+        // Create employee
+        const employee = await Employee.create(employeeData);
+
+        const populatedEmployee = await Employee.findById(employee._id)
+          .populate("department", "name code")
+          .populate("role", "name description");
+
+        // Send email notification (async, don't wait)
+        if (populatedEmployee.email) {
+          notifyEmployeeCreated(populatedEmployee.email, {
+            name: populatedEmployee.name,
+            email: populatedEmployee.email,
+            employeeId: populatedEmployee.employeeId,
+            department: populatedEmployee.department?.name || "N/A",
+            tempPassword: plainPassword,
+          }).catch((err) => {
+            console.error(`Failed to send email to ${populatedEmployee.email}:`, err);
+          });
+        }
+
+        // Audit log
+        await logEmployeeAction(req, "CREATE", populatedEmployee, {
+          after: { name: populatedEmployee.name, employeeId: populatedEmployee.employeeId, department: populatedEmployee.department?.name }
+        });
+
+        results.success.push({
+          row: rowNumber,
+          employeeId: newEmployeeId,
+          name,
+          email: email || "N/A",
+        });
+      } catch (error) {
+        results.failed.push({
+          row: rowNumber,
+          name: row.getCell(1).value?.toString() || "Unknown",
+          error: error.message,
+        });
+      }
+    }
+
+    // Delete uploaded file
+    const fs = await import("fs");
+    if (fs.existsSync(req.file.path)) {
+      fs.unlinkSync(req.file.path);
+    }
+
+    res.status(200).json({
+      success: true,
+      message: `Import completed. ${results.success.length} employees created successfully, ${results.failed.length} failed.`,
+      data: {
+        total: results.total,
+        successful: results.success.length,
+        failed: results.failed.length,
+        details: {
+          success: results.success,
+          failed: results.failed,
+        },
+      },
+    });
+  } catch (error) {
+    // Delete uploaded file on error
+    if (req.file && req.file.path) {
+      const fs = await import("fs");
+      if (fs.existsSync(req.file.path)) {
+        fs.unlinkSync(req.file.path);
+      }
+    }
+
     res.status(500).json({
       success: false,
       message: error.message,

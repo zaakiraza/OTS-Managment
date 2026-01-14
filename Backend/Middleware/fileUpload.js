@@ -123,6 +123,27 @@ export const imageUpload = multer({
 }).single("image");
 
 /**
+ * Excel file upload for employee import
+ */
+export const excelUpload = multer({
+  storage: createStorage("general"),
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = [
+      "application/vnd.ms-excel",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ];
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error("Only Excel files (.xlsx, .xls) are allowed"), false);
+    }
+  },
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB
+  },
+}).single("excelFile");
+
+/**
  * Middleware to handle multer errors
  */
 export const handleUploadError = (err, req, res, next) => {
@@ -184,6 +205,7 @@ export default {
   ticketAttachmentUpload,
   taskAttachmentUpload,
   imageUpload,
+  excelUpload,
   handleUploadError,
   getFileInfo,
   deleteFile,

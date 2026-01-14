@@ -5,14 +5,22 @@ import {
   getEmployeeById,
   updateEmployee,
   deleteEmployee,
+  downloadEmployeeTemplate,
+  importEmployees,
 } from "../Controller/employeeController.js";
 import { verifyToken, hasRole } from "../Middleware/auth.js";
 import { employeeValidation, paginationValidation, validateMongoId } from "../Middleware/validators.js";
+import { excelUpload, handleUploadError } from "../Middleware/fileUpload.js";
 
 const router = express.Router();
 
 // All routes require authentication
 router.use(verifyToken);
+
+// Import/Export operations - Only superAdmin and attendanceDepartment
+// IMPORTANT: These specific routes must come BEFORE parameterized routes like /:id
+router.get("/template/download", hasRole("superAdmin", "attendanceDepartment"), downloadEmployeeTemplate);
+router.post("/import", hasRole("superAdmin", "attendanceDepartment"), excelUpload, handleUploadError, importEmployees);
 
 // Create, Update, Delete - Only superAdmin and attendanceDepartment
 router.post("/", hasRole("superAdmin", "attendanceDepartment"), employeeValidation.create, createEmployee);
