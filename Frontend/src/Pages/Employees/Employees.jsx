@@ -21,6 +21,10 @@ const Employees = () => {
   const [expandedDepts, setExpandedDepts] = useState(new Set());
   const [searchTerm, setSearchTerm] = useState("");
   const [exporting, setExporting] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importFile, setImportFile] = useState(null);
+  const [importResults, setImportResults] = useState(null);
   const [pagination, setPagination] = useState({
     page: 1,
     limit: 50,
@@ -418,6 +422,80 @@ const Employees = () => {
       }
     } catch (error) {
       console.error("Error fetching roles:", error);
+    }
+  };
+
+  // Import functions
+  const handleDownloadTemplate = async () => {
+    try {
+      const response = await employeeAPI.downloadTemplate();
+      const blob = new Blob([response.data], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "employee_import_template.xlsx";
+      link.click();
+      window.URL.revokeObjectURL(url);
+      toast.success("Template downloaded successfully!");
+    } catch (error) {
+      console.error("Template download failed:", error);
+      toast.error("Failed to download template");
+    }
+  };
+
+  const handleFileSelect = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const validTypes = [
+        "application/vnd.ms-excel",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      ];
+      if (!validTypes.includes(file.type)) {
+        toast.error("Please select a valid Excel file (.xlsx or .xls)");
+        return;
+      }
+      if (file.size > 10 * 1024 * 1024) {
+        toast.error("File size must be less than 10MB");
+        return;
+      }
+      setImportFile(file);
+    }
+  };
+
+  const handleImportEmployees = async () => {
+    if (!importFile) {
+      toast.error("Please select an Excel file");
+      return;
+    }
+
+    try {
+      setImporting(true);
+      const formData = new FormData();
+      formData.append("excelFile", importFile);
+
+      const response = await employeeAPI.importEmployees(formData);
+      
+      if (response.data.success) {
+        setImportResults(response.data.data);
+        toast.success(
+          `Import completed! ${response.data.data.successful} employees created successfully, ${response.data.data.failed} failed.`
+        );
+        
+        // Refresh employee list
+        fetchEmployees(selectedDept, pagination.page, searchTerm);
+        
+        // Reset file input
+        setImportFile(null);
+        const fileInput = document.getElementById("excelFileInput");
+        if (fileInput) fileInput.value = "";
+      }
+    } catch (error) {
+      console.error("Import failed:", error);
+      toast.error(error.response?.data?.message || "Failed to import employees");
+    } finally {
+      setImporting(false);
     }
   };
 
@@ -854,6 +932,26 @@ const Employees = () => {
               </div>
             </>
           )}
+          <button 
+            className="btn-secondary" 
+            onClick={handleDownloadTemplate}
+            style={{ marginRight: "10px" }}
+            title="Download Excel template for importing employees"
+          >
+            <i className="fas fa-download"></i> Download Template
+          </button>
+          <button 
+            className="btn-secondary" 
+            onClick={() => {
+              setShowImportModal(true);
+              setImportResults(null);
+              setImportFile(null);
+            }}
+            style={{ marginRight: "10px" }}
+            title="Import employees from Excel file"
+          >
+            <i className="fas fa-file-upload"></i> Import Employees
+          </button>
           <button className="btn-primary" onClick={() => {
             setEditMode(false);
             setEditId(null);
@@ -1390,6 +1488,163 @@ const Employees = () => {
       )}
         </div>
       </div>
+
+      {/* Import Employees Modal */}
+      {showImportModal && (
+        <div className="modal-overlay" onClick={() => setShowImportModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "600px" }}>
+            <div className="modal-header">
+              <h2>
+                <i className="fas fa-file-upload"></i> Import Employees from Excel
+              </h2>
+              <button className="close-btn" onClick={() => setShowImportModal(false)}>
+                ×
+              </button>
+            </div>
+            <div className="modal-body">
+              <div style={{ marginBottom: "20px" }}>
+                <p style={{ color: "#666", marginBottom: "15px" }}>
+                  <i className="fas fa-info-circle"></i> Import multiple employees at once using an Excel file.
+                </p>
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={handleDownloadTemplate}
+                  style={{ width: "100%", marginBottom: "15px" }}
+                >
+                  <i className="fas fa-download"></i> Download Template
+                </button>
+              </div>
+
+              <div className="form-group">
+                <label>
+                  <i className="fas fa-file-excel"></i> Select Excel File (.xlsx)
+                </label>
+                <input
+                  id="excelFileInput"
+                  type="file"
+                  accept=".xlsx,.xls"
+                  onChange={handleFileSelect}
+                  style={{
+                    padding: "10px",
+                    border: "1px solid #ddd",
+                    borderRadius: "4px",
+                    width: "100%",
+                  }}
+                />
+                {importFile && (
+                  <small style={{ color: "#10b981", display: "block", marginTop: "5px" }}>
+                    <i className="fas fa-check-circle"></i> Selected: {importFile.name}
+                  </small>
+                )}
+              </div>
+
+              {importResults && (
+                <div
+                  style={{
+                    marginTop: "20px",
+                    padding: "15px",
+                    borderRadius: "8px",
+                    backgroundColor: "#f0f9ff",
+                    border: "1px solid #bae6fd",
+                  }}
+                >
+                  <h4 style={{ marginTop: 0, color: "#0369a1" }}>
+                    <i className="fas fa-chart-bar"></i> Import Results
+                  </h4>
+                  <div style={{ marginBottom: "10px" }}>
+                    <strong>Total:</strong> {importResults.total} rows
+                  </div>
+                  <div style={{ marginBottom: "10px", color: "#10b981" }}>
+                    <strong>Successful:</strong> {importResults.successful} employees created
+                  </div>
+                  <div style={{ marginBottom: "10px", color: "#ef4444" }}>
+                    <strong>Failed:</strong> {importResults.failed} rows
+                  </div>
+
+                  {importResults.failed > 0 && importResults.details?.failed?.length > 0 && (
+                    <div style={{ marginTop: "15px" }}>
+                      <strong style={{ color: "#ef4444" }}>Failed Rows:</strong>
+                      <div
+                        style={{
+                          maxHeight: "200px",
+                          overflowY: "auto",
+                          marginTop: "10px",
+                          padding: "10px",
+                          backgroundColor: "#fff",
+                          borderRadius: "4px",
+                          border: "1px solid #fee2e2",
+                        }}
+                      >
+                        {importResults.details.failed.map((item, idx) => (
+                          <div key={idx} style={{ marginBottom: "8px", fontSize: "13px" }}>
+                            <strong>Row {item.row}:</strong> {item.name} -{" "}
+                            <span style={{ color: "#ef4444" }}>{item.error}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {importResults.successful > 0 && importResults.details?.success?.length > 0 && (
+                    <div style={{ marginTop: "15px" }}>
+                      <strong style={{ color: "#10b981" }}>Successfully Created:</strong>
+                      <div
+                        style={{
+                          maxHeight: "200px",
+                          overflowY: "auto",
+                          marginTop: "10px",
+                          padding: "10px",
+                          backgroundColor: "#fff",
+                          borderRadius: "4px",
+                          border: "1px solid #d1fae5",
+                        }}
+                      >
+                        {importResults.details.success.map((item, idx) => (
+                          <div key={idx} style={{ marginBottom: "8px", fontSize: "13px" }}>
+                            <strong>Row {item.row}:</strong> {item.name} ({item.employeeId}) -{" "}
+                            <span style={{ color: "#10b981" }}>✓ Created</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="modal-actions" style={{ marginTop: "20px" }}>
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => {
+                    setShowImportModal(false);
+                    setImportResults(null);
+                    setImportFile(null);
+                  }}
+                >
+                  <i className="fas fa-times"></i> Close
+                </button>
+                <button
+                  type="button"
+                  className="btn-primary"
+                  onClick={handleImportEmployees}
+                  disabled={!importFile || importing}
+                >
+                  {importing ? (
+                    <>
+                      <i className="fas fa-spinner fa-spin"></i> Importing...
+                    </>
+                  ) : (
+                    <>
+                      <i className="fas fa-upload"></i> Import Employees
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

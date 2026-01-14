@@ -93,6 +93,12 @@ export const employeeAPI = {
   create: (data) => api.post("/employees", data),
   update: (id, data) => api.put(`/employees/${id}`, data),
   delete: (id) => api.delete(`/employees/${id}`),
+  downloadTemplate: () => api.get("/employees/template/download", { responseType: "blob" }),
+  importEmployees: (formData) => api.post("/employees/import", formData, {
+    headers: {
+      "Content-Type": "multipart/form-data",
+    },
+  }),
 };
 
 // Salary API

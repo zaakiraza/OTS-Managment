@@ -56,6 +56,21 @@ function Tasks() {
     }
   }, [filter]);
 
+  // Update filtered employees when department changes or employees are loaded
+  useEffect(() => {
+    if (formData.department && employees.length > 0) {
+      // Convert both to strings for comparison
+      const deptIdStr = String(formData.department);
+      const filtered = employees.filter(emp => {
+        const empDeptId = emp.department?._id || emp.department;
+        return String(empDeptId) === deptIdStr;
+      });
+      setFilteredEmployees(filtered);
+    } else if (!formData.department) {
+      setFilteredEmployees([]);
+    }
+  }, [formData.department, employees]);
+
   const fetchTasks = async () => {
     try {
       setLoading(true);
@@ -164,10 +179,16 @@ function Tasks() {
     setFormData({ ...formData, department: departmentId, assignedTo: [] });
     
     if (departmentId) {
-      const filtered = employees.filter(emp => emp.department?._id === departmentId);
+      // Convert both to strings for comparison
+      const deptIdStr = String(departmentId);
+      const filtered = employees.filter(emp => {
+        const empDeptId = emp.department?._id || emp.department;
+        return String(empDeptId) === deptIdStr;
+      });
       setFilteredEmployees(filtered);
+      console.log(`[Tasks] Department changed to: ${departmentId}, Found ${filtered.length} employees`);
     } else {
-      setFilteredEmployees(employees);
+      setFilteredEmployees([]);
     }
   };
 
