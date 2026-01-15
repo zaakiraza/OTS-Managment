@@ -110,15 +110,6 @@ app.use(globalErrorHandler);
 app.listen(process.env.PORT, async () => {
   logger.info(`Server is running on port ${process.env.PORT}`);
   
-  // Check email configuration on startup
-  if (process.env.EMAIL_USER && process.env.EMAIL_PASSWORD) {
-    logger.info(`Email service configured: ${process.env.EMAIL_SERVICE || 'gmail'}, user: ${process.env.EMAIL_USER}`);
-  } else {
-    logger.warn("Email service NOT configured. EMAIL_USER and EMAIL_PASSWORD must be set in .env file");
-    logger.warn(`EMAIL_USER: ${process.env.EMAIL_USER ? 'SET' : 'NOT SET'}`);
-    logger.warn(`EMAIL_PASSWORD: ${process.env.EMAIL_PASSWORD ? 'SET' : 'NOT SET'}`);
-  }
-  
   // Connect to ZKTeco biometric device and start polling
   logger.info('Initializing ZKTeco biometric integration...');
   const connected = await connectToDevice();

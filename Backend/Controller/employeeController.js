@@ -792,24 +792,21 @@ export const downloadEmployeeTemplate = async (req, res) => {
     // Define columns with clear required/optional labels
     worksheet.columns = [
       { header: "Name *", key: "name", width: 25 },
-      { header: "Email (Optional)", key: "email", width: 30 },
-      { header: "Phone (Optional)", key: "phone", width: 15 },
-      { header: "CNIC (Optional) - Format: XXXXX-XXXXXXX-X", key: "cnic", width: 35 },
-      { header: "Biometric ID (Optional) - Format: 1,5,13", key: "biometricId", width: 30 },
-      { header: "Department Code *", key: "departmentCode", width: 25 },
+      { header: "Email*", key: "email", width: 30 },
+      { header: "Phone (Optional)", key: "phone", width: 22 },
+      { header: "CNIC (Optional) - Format: XXXXX-XXXXXXX-X", key: "cnic", width: 47 },
+      { header: "Biometric ID - Format: 1,5,13", key: "biometricId", width: 40 },
+      { header: "Department Code * (for OTS School:SCH, Morning School: MSCH, Evening School:ESCH, Primary School:PSCH, Secondary School:SSCH)", key: "departmentCode", width: 32 },
       { header: "Position *", key: "position", width: 25 },
-      { header: "Role Name *", key: "roleName", width: 20 },
-      { header: "Monthly Salary (Optional)", key: "monthlySalary", width: 20 },
-      { header: "Currency (Optional) - Default: PKR", key: "currency", width: 25 },
-      { header: "Leave Threshold (Optional) - Default: 0", key: "leaveThreshold", width: 30 },
-      { header: "Check In Time (Optional) - Default: 09:00", key: "checkInTime", width: 30 },
-      { header: "Check Out Time (Optional) - Default: 17:00", key: "checkOutTime", width: 30 },
-      { header: "Working Days Per Week (Optional) - Default: 5", key: "workingDaysPerWeek", width: 35 },
-      { header: "Working Hours Per Week (Optional) - Default: 40", key: "workingHoursPerWeek", width: 35 },
-      { header: "Weekly Offs (Optional) - Format: Saturday,Sunday", key: "weeklyOffs", width: 35 },
-      { header: "Joining Date (Optional) - Format: YYYY-MM-DD", key: "joiningDate", width: 30 },
-      { header: "Password (Optional) - Auto-generated if empty", key: "password", width: 35 },
-      { header: "Is Team Lead (Optional) - true/false", key: "isTeamLead", width: 30 },
+      { header: "Role Name *(employee in All)", key: "roleName", width: 30 },
+      { header: "Monthly Salary (Optional)", key: "monthlySalary", width: 31 },
+      { header: "Check In Time*", key: "checkInTime", width: 37 },
+      { header: "Check Out Time*", key: "checkOutTime", width: 37 },
+      { header: "Working Days Per Week*", key: "workingDaysPerWeek", width: 28 },
+      { header: "Working Hours Per Week*", key: "workingHoursPerWeek", width: 28 },
+      { header: "Weekly Offs (Optional) - Format: Saturday,Sunday", key: "weeklyOffs", width: 47 },
+      { header: "Joining Date (Optional) - Format: YYYY-MM-DD", key: "joiningDate", width: 47 },
+      { header: "Is Team Lead (Optional) - false in all", key: "isTeamLead", width: 35 },
     ];
 
     // Style header row
@@ -911,22 +908,8 @@ export const downloadEmployeeTemplate = async (req, res) => {
       }
     });
 
-    // Add data validation for Currency column (column J = 10)
-    worksheet.getColumn(10).eachCell((cell, rowNumber) => {
-      if (rowNumber > 2) {
-        cell.dataValidation = {
-          type: 'list',
-          allowBlank: true,
-          formulae: ['"PKR,USD,EUR,GBP"'],
-          showErrorMessage: true,
-          errorTitle: 'Invalid Currency',
-          error: 'Please select a valid currency: PKR, USD, EUR, or GBP',
-        };
-      }
-    });
-
-    // Add data validation for Is Team Lead column (column S = 19)
-    worksheet.getColumn(19).eachCell((cell, rowNumber) => {
+    // Add data validation for Is Team Lead column (column P = 16)
+    worksheet.getColumn(16).eachCell((cell, rowNumber) => {
       if (rowNumber > 2) {
         cell.dataValidation = {
           type: 'list',
@@ -941,24 +924,21 @@ export const downloadEmployeeTemplate = async (req, res) => {
 
     // Add example row
     const exampleRow = worksheet.addRow({
-      name: "John Doe",
-      email: "john.doe@example.com",
+      name: "Raza",
+      email: "raza@example.com",
       phone: "+923001234567",
       cnic: "12345-1234567-1",
-      biometricId: "1,5,13",
-      departmentCode: departments.length > 0 ? departments[0].code : "IT",
-      position: "Software Developer",
+      biometricId: "2",
+      departmentCode: departments.length > 0 ? departments[0].code : "ESCH",
+      position: "Developer",
       roleName: "employee",
-      monthlySalary: "50000",
-      currency: "PKR",
-      leaveThreshold: "10",
+      monthlySalary: "10000",
       checkInTime: "09:00",
       checkOutTime: "17:00",
       workingDaysPerWeek: "5",
       workingHoursPerWeek: "40",
       weeklyOffs: "Saturday,Sunday",
       joiningDate: "2026-01-01",
-      password: "",
       isTeamLead: "false",
     });
 
@@ -1027,6 +1007,36 @@ export const importEmployees = async (req, res) => {
     const deptMap = new Map(departments.map(d => [d.code.toUpperCase(), d]));
     const roleMap = new Map(roles.map(r => [r.name, r])); // Use exact case for role names
 
+    // Helper function to extract time from Excel cells (handles both string and Date objects)
+    const extractTime = (cellValue) => {
+      if (!cellValue) return null;
+      
+      // If it's a Date object (Excel time format) - use UTC to avoid timezone issues
+      if (cellValue instanceof Date) {
+        const hours = cellValue.getUTCHours().toString().padStart(2, '0');
+        const minutes = cellValue.getUTCMinutes().toString().padStart(2, '0');
+        return `${hours}:${minutes}`;
+      }
+      
+      // If it's already a string
+      if (typeof cellValue === 'string') {
+        const timeStr = cellValue.trim();
+        if (/^\d{1,2}:\d{2}$/.test(timeStr)) {
+          const [h, m] = timeStr.split(':');
+          return `${h.padStart(2, '0')}:${m}`;
+        }
+      }
+      
+      // Try to convert to string and parse
+      const timeStr = cellValue.toString().trim();
+      if (/^\d{1,2}:\d{2}$/.test(timeStr)) {
+        const [h, m] = timeStr.split(':');
+        return `${h.padStart(2, '0')}:${m}`;
+      }
+      
+      return null;
+    };
+
     // Get user's department for validation (if attendanceDepartment)
     const requestingUserRole = req.user?.role?.name || req.user?.role;
     let userDepartment = req.user.department;
@@ -1061,16 +1071,13 @@ export const importEmployees = async (req, res) => {
         const position = row.getCell(7).value?.toString().trim() || "";
         const roleName = row.getCell(8).value?.toString().trim(); // Keep original case for validation
         const monthlySalary = row.getCell(9).value?.toString().trim() || null;
-        const currency = row.getCell(10).value?.toString().trim() || "PKR";
-        const leaveThreshold = parseInt(row.getCell(11).value) || 0;
-        const checkInTime = row.getCell(12).value?.toString().trim() || "09:00";
-        const checkOutTime = row.getCell(13).value?.toString().trim() || "17:00";
-        const workingDaysPerWeek = parseInt(row.getCell(14).value) || 5;
-        const workingHoursPerWeek = parseInt(row.getCell(15).value) || 40;
-        const weeklyOffsStr = row.getCell(16).value?.toString().trim() || "Saturday,Sunday";
-        const joiningDate = row.getCell(17).value?.toString().trim() || null;
-        const password = row.getCell(18).value?.toString().trim() || null;
-        const isTeamLead = row.getCell(19).value?.toString().toLowerCase() === "true";
+        const checkInTime = extractTime(row.getCell(10).value) || "09:00";
+        const checkOutTime = extractTime(row.getCell(11).value) || "17:00";
+        const workingDaysPerWeek = parseInt(row.getCell(12).value) || 5;
+        const workingHoursPerWeek = parseInt(row.getCell(13).value) || 40;
+        const weeklyOffsStr = row.getCell(14).value?.toString().trim() || "";
+        const joiningDate = row.getCell(15).value?.toString().trim() || null;
+        const isTeamLead = row.getCell(16).value?.toString().toLowerCase() === "true";
 
         // Validation
         if (!name) {
@@ -1150,8 +1157,15 @@ export const importEmployees = async (req, res) => {
           newEmployeeId = `${deptCode}0001`;
         }
 
-        // Parse weekly offs
-        const weeklyOffs = weeklyOffsStr.split(",").map(day => day.trim());
+        // Parse weekly offs - filter out invalid values and default to Saturday,Sunday if empty
+        let weeklyOffs = ["Saturday", "Sunday"]; // Default
+        if (weeklyOffsStr && weeklyOffsStr.length > 0) {
+          const validDays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+          const parsedDays = weeklyOffsStr.split(",").map(day => day.trim()).filter(day => validDays.includes(day));
+          if (parsedDays.length > 0) {
+            weeklyOffs = parsedDays;
+          }
+        }
 
         // Prepare employee data
         const employeeData = {
@@ -1162,8 +1176,8 @@ export const importEmployees = async (req, res) => {
           role: role._id,
           salary: {
             monthlySalary: monthlySalary ? parseFloat(monthlySalary) : null,
-            currency,
-            leaveThreshold,
+            currency: "PKR",
+            leaveThreshold: 0,
           },
           workSchedule: {
             checkInTime,
@@ -1204,14 +1218,7 @@ export const importEmployees = async (req, res) => {
           employeeData.joiningDate = joiningDate;
         }
 
-        // Handle password
-        let plainPassword = password && password.trim() ? password : null;
-        if (!plainPassword) {
-          const last4 = newEmployeeId.slice(-4);
-          plainPassword = `Emp@${last4}`;
-        } else {
-          employeeData.password = plainPassword;
-        }
+        // Password will be auto-generated by the Employee model's pre-save hook (Emp@{last4digits})
 
         // Create employee
         const employee = await Employee.create(employeeData);
