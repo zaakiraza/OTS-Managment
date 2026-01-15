@@ -15,8 +15,14 @@ function Profile() {
   useEffect(() => {
     fetchUserProfile();
     fetchAttendanceStats();
-    fetchRecentAttendance();
   }, []);
+
+  // Fetch attendance when user is loaded
+  useEffect(() => {
+    if (user?._id) {
+      fetchRecentAttendance();
+    }
+  }, [user]);
 
   const fetchUserProfile = async () => {
     try {
@@ -88,7 +94,12 @@ function Profile() {
 
   const formatTime = (time) => {
     if (!time) return "--:--";
-    return time;
+    const date = new Date(time);
+    return date.toLocaleTimeString("en-US", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false
+    });
   };
 
   const formatDate = (dateStr) => {
@@ -100,15 +111,39 @@ function Profile() {
     });
   };
 
+  const formatStatus = (status) => {
+    if (!status) return "N/A";
+    
+    // Custom status labels to match attendance screen
+    const statusLabels = {
+      "present": "Present",
+      "absent": "Absent",
+      "late": "Late",
+      "half-day": "Half Day",
+      "early-departure": "Early Departure",
+      "late-early-departure": "Late + Early Departure",
+      "leave": "Leave",
+      "pending": "Pending",
+    };
+    
+    return statusLabels[status?.toLowerCase()] || status
+      .split("-")
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(" ");
+  };
+
   const getStatusColor = (status) => {
     const colors = {
-      Present: "#10b981",
-      Absent: "#ef4444",
-      Late: "#f59e0b",
-      "Half Day": "#8b5cf6",
-      Leave: "#6b7280",
+      "present": "#10b981",
+      "absent": "#ef4444",
+      "late": "#f59e0b",
+      "half-day": "#8b5cf6",
+      "leave": "#6b7280",
+      "early-departure": "#fb923c",
+      "late-early-departure": "#dc2626",
+      "pending": "#64748b",
     };
-    return colors[status] || "#64748b";
+    return colors[status?.toLowerCase()] || "#64748b";
   };
 
   if (loading) {
@@ -303,6 +338,54 @@ function Profile() {
                       </div>
                     </div>
                   )}
+
+                  {/* Day-Specific Schedules */}
+                  {user?.workSchedule?.daySchedules && Object.keys(user.workSchedule.daySchedules).length > 0 && (
+                    <div className="day-schedules">
+                      <h4><i className="fas fa-calendar-day"></i> Day-Specific Schedules</h4>
+                      <div className="day-schedules-list">
+                        {["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"].map((day) => {
+                          const daySchedule = user.workSchedule.daySchedules[day];
+                          const isWeeklyOff = user.workSchedule.weeklyOffs?.includes(day);
+                          const hasCustomSchedule = daySchedule && Object.keys(daySchedule).length > 0;
+                          
+                          return (
+                            <div 
+                              key={day} 
+                              className={`day-schedule-item ${hasCustomSchedule ? 'custom' : ''} ${isWeeklyOff ? 'off-day' : ''}`}
+                            >
+                              <div className="day-name">
+                                <strong>{day}</strong>
+                                {isWeeklyOff && <span className="badge-off">Weekly Off</span>}
+                              </div>
+                              <div className="day-timing">
+                                {hasCustomSchedule ? (
+                                  daySchedule.isOff ? (
+                                    <span className="timing-off">
+                                      <i className="fas fa-ban"></i> Off Day
+                                    </span>
+                                  ) : (
+                                    <>
+                                      <span className="timing-custom">
+                                        <i className="fas fa-clock"></i> {daySchedule.checkInTime} - {daySchedule.checkOutTime}
+                                      </span>
+                                      {daySchedule.isHalfDay && <span className="badge-half">Half Day</span>}
+                                    </>
+                                  )
+                                ) : (
+                                  !isWeeklyOff && (
+                                    <span className="timing-default">
+                                      {user?.workSchedule?.checkInTime || "09:00"} - {user?.workSchedule?.checkOutTime || "17:00"}
+                                    </span>
+                                  )
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <div className="schedule-card">
@@ -359,7 +442,7 @@ function Profile() {
                                   background: getStatusColor(record.status),
                                 }}
                               >
-                                {record.status}
+                                {formatStatus(record.status)}
                               </span>
                             </td>
                           </tr>

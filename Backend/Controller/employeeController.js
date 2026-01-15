@@ -807,6 +807,20 @@ export const downloadEmployeeTemplate = async (req, res) => {
       { header: "Weekly Offs (Optional) - Format: Saturday,Sunday", key: "weeklyOffs", width: 47 },
       { header: "Joining Date (Optional) - Format: YYYY-MM-DD", key: "joiningDate", width: 47 },
       { header: "Is Team Lead (Optional) - false in all", key: "isTeamLead", width: 35 },
+      { header: "Monday Check-In (Optional)", key: "mondayCheckIn", width: 30 },
+      { header: "Monday Check-Out (Optional)", key: "mondayCheckOut", width: 30 },
+      { header: "Tuesday Check-In (Optional)", key: "tuesdayCheckIn", width: 30 },
+      { header: "Tuesday Check-Out (Optional)", key: "tuesdayCheckOut", width: 30 },
+      { header: "Wednesday Check-In (Optional)", key: "wednesdayCheckIn", width: 30 },
+      { header: "Wednesday Check-Out (Optional)", key: "wednesdayCheckOut", width: 30 },
+      { header: "Thursday Check-In (Optional)", key: "thursdayCheckIn", width: 30 },
+      { header: "Thursday Check-Out (Optional)", key: "thursdayCheckOut", width: 30 },
+      { header: "Friday Check-In (Optional)", key: "fridayCheckIn", width: 30 },
+      { header: "Friday Check-Out (Optional)", key: "fridayCheckOut", width: 30 },
+      { header: "Saturday Check-In (Optional)", key: "saturdayCheckIn", width: 30 },
+      { header: "Saturday Check-Out (Optional)", key: "saturdayCheckOut", width: 30 },
+      { header: "Sunday Check-In (Optional)", key: "sundayCheckIn", width: 30 },
+      { header: "Sunday Check-Out (Optional)", key: "sundayCheckOut", width: 30 },
     ];
 
     // Style header row
@@ -940,6 +954,8 @@ export const downloadEmployeeTemplate = async (req, res) => {
       weeklyOffs: "Saturday,Sunday",
       joiningDate: "2026-01-01",
       isTeamLead: "false",
+      fridayCheckIn: "09:00",
+      fridayCheckOut: "13:00",
     });
 
     // Style example row (light gray background)
@@ -1078,6 +1094,20 @@ export const importEmployees = async (req, res) => {
         const weeklyOffsStr = row.getCell(14).value?.toString().trim() || "";
         const joiningDate = row.getCell(15).value?.toString().trim() || null;
         const isTeamLead = row.getCell(16).value?.toString().toLowerCase() === "true";
+        const mondayCheckIn = extractTime(row.getCell(17).value) || null;
+        const mondayCheckOut = extractTime(row.getCell(18).value) || null;
+        const tuesdayCheckIn = extractTime(row.getCell(19).value) || null;
+        const tuesdayCheckOut = extractTime(row.getCell(20).value) || null;
+        const wednesdayCheckIn = extractTime(row.getCell(21).value) || null;
+        const wednesdayCheckOut = extractTime(row.getCell(22).value) || null;
+        const thursdayCheckIn = extractTime(row.getCell(23).value) || null;
+        const thursdayCheckOut = extractTime(row.getCell(24).value) || null;
+        const fridayCheckIn = extractTime(row.getCell(25).value) || null;
+        const fridayCheckOut = extractTime(row.getCell(26).value) || null;
+        const saturdayCheckIn = extractTime(row.getCell(27).value) || null;
+        const saturdayCheckOut = extractTime(row.getCell(28).value) || null;
+        const sundayCheckIn = extractTime(row.getCell(29).value) || null;
+        const sundayCheckOut = extractTime(row.getCell(30).value) || null;
 
         // Validation
         if (!name) {
@@ -1185,10 +1215,82 @@ export const importEmployees = async (req, res) => {
             workingDaysPerWeek,
             weeklyOffs,
             workingHoursPerWeek,
+            daySchedules: {},
           },
           createdBy: req.user._id,
           isTeamLead,
         };
+
+        // Add day-specific schedules if provided (only if both check-in and check-out are specified)
+        const daySchedules = {};
+        
+        if (mondayCheckIn && mondayCheckOut) {
+          daySchedules.Monday = {
+            checkInTime: mondayCheckIn,
+            checkOutTime: mondayCheckOut,
+            isHalfDay: false,
+            isOff: false
+          };
+        }
+        
+        if (tuesdayCheckIn && tuesdayCheckOut) {
+          daySchedules.Tuesday = {
+            checkInTime: tuesdayCheckIn,
+            checkOutTime: tuesdayCheckOut,
+            isHalfDay: false,
+            isOff: false
+          };
+        }
+        
+        if (wednesdayCheckIn && wednesdayCheckOut) {
+          daySchedules.Wednesday = {
+            checkInTime: wednesdayCheckIn,
+            checkOutTime: wednesdayCheckOut,
+            isHalfDay: false,
+            isOff: false
+          };
+        }
+        
+        if (thursdayCheckIn && thursdayCheckOut) {
+          daySchedules.Thursday = {
+            checkInTime: thursdayCheckIn,
+            checkOutTime: thursdayCheckOut,
+            isHalfDay: false,
+            isOff: false
+          };
+        }
+        
+        if (fridayCheckIn && fridayCheckOut) {
+          daySchedules.Friday = {
+            checkInTime: fridayCheckIn,
+            checkOutTime: fridayCheckOut,
+            isHalfDay: false,
+            isOff: false
+          };
+        }
+        
+        if (saturdayCheckIn && saturdayCheckOut) {
+          daySchedules.Saturday = {
+            checkInTime: saturdayCheckIn,
+            checkOutTime: saturdayCheckOut,
+            isHalfDay: false,
+            isOff: false
+          };
+        }
+        
+        if (sundayCheckIn && sundayCheckOut) {
+          daySchedules.Sunday = {
+            checkInTime: sundayCheckIn,
+            checkOutTime: sundayCheckOut,
+            isHalfDay: false,
+            isOff: false
+          };
+        }
+        
+        // Only add daySchedules to workSchedule if at least one day has custom schedule
+        if (Object.keys(daySchedules).length > 0) {
+          employeeData.workSchedule.daySchedules = daySchedules;
+        }
 
         if (email) employeeData.email = email;
         if (phone) employeeData.phone = phone;

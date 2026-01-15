@@ -126,6 +126,17 @@ const employeeSchema = new mongoose.Schema(
         default: ["Saturday", "Sunday"],
         enum: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
       },
+      // Day-specific schedules (optional) - overrides default checkIn/checkOut for specific days
+      daySchedules: {
+        type: Map,
+        of: {
+          checkInTime: String,
+          checkOutTime: String,
+          isHalfDay: { type: Boolean, default: false },
+          isOff: { type: Boolean, default: false }
+        },
+        default: new Map()
+      }
     },
     joiningDate: {
       type: Date,

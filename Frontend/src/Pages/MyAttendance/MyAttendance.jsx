@@ -170,7 +170,7 @@ function MyAttendance() {
       present: "Present",
       absent: "Absent",
       late: "Late",
-      "late-early-departure": "Late Departure",
+      "late-early-departure": "Late + Early Departure",
       "early-departure": "Early Departure",
       "half-day": "Half Day",
       leave: "On Leave",

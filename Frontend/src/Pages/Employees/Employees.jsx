@@ -52,6 +52,7 @@ const Employees = () => {
       workingDaysPerWeek: 5,
       weeklyOffs: ["Saturday", "Sunday"],
       workingHoursPerWeek: 40,
+      daySchedules: {}, // Day-specific schedules
     },
     joiningDate: "",
     password: "",
@@ -678,6 +679,7 @@ const Employees = () => {
         workingDaysPerWeek: emp.workSchedule.workingDaysPerWeek,
         weeklyOffs: emp.workSchedule.weeklyOffs,
         workingHoursPerWeek: emp.workSchedule.workingHoursPerWeek,
+        daySchedules: emp.workSchedule.daySchedules || {},
       },
       joiningDate: emp.joiningDate ? emp.joiningDate.split('T')[0] : "",
       password: "",
@@ -715,6 +717,7 @@ const Employees = () => {
         workingDaysPerWeek: 5,
         weeklyOffs: ["Saturday", "Sunday"],
         workingHoursPerWeek: 40,
+        daySchedules: {},
       },
       joiningDate: "",
       password: "",
@@ -851,6 +854,61 @@ const Employees = () => {
         workingDaysPerWeek: workingDays,
         workingHoursPerWeek: weeklyHours,
       },
+    });
+  };
+
+  const handleDayScheduleChange = (day, field, value) => {
+    const daySchedules = { ...formData.workSchedule.daySchedules };
+    
+    if (!daySchedules[day]) {
+      daySchedules[day] = {
+        checkInTime: formData.workSchedule.checkInTime,
+        checkOutTime: formData.workSchedule.checkOutTime,
+        isHalfDay: false,
+        isOff: false
+      };
+    }
+    
+    daySchedules[day][field] = value;
+    
+    setFormData({
+      ...formData,
+      workSchedule: {
+        ...formData.workSchedule,
+        daySchedules
+      }
+    });
+  };
+
+  const handleRemoveDaySchedule = (day) => {
+    const daySchedules = { ...formData.workSchedule.daySchedules };
+    delete daySchedules[day];
+    
+    setFormData({
+      ...formData,
+      workSchedule: {
+        ...formData.workSchedule,
+        daySchedules
+      }
+    });
+  };
+
+  const handleAddDaySchedule = (day) => {
+    const daySchedules = { ...formData.workSchedule.daySchedules };
+    
+    daySchedules[day] = {
+      checkInTime: formData.workSchedule.checkInTime,
+      checkOutTime: formData.workSchedule.checkOutTime,
+      isHalfDay: false,
+      isOff: false
+    };
+    
+    setFormData({
+      ...formData,
+      workSchedule: {
+        ...formData.workSchedule,
+        daySchedules
+      }
     });
   };
 
@@ -1467,6 +1525,124 @@ const Employees = () => {
                       {day}
                     </label>
                   ))}
+                </div>
+              </div>
+
+              {/* Day-Specific Schedules Section */}
+              <div className="form-group" style={{padding: '0 29px', marginTop: '20px'}}>
+                <label style={{display: 'flex', alignItems: 'center', gap: '8px'}}>
+                  <i className="fas fa-calendar-alt"></i>
+                  Day-Specific Schedules (Optional)
+                  <small style={{fontWeight: 'normal', color: '#64748b'}}> - Override default times for specific days</small>
+                </label>
+                
+                <div style={{marginTop: '12px'}}>
+                  {["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"].map((day) => {
+                    const isWeeklyOff = formData.workSchedule.weeklyOffs.includes(day);
+                    const hasDaySchedule = formData.workSchedule.daySchedules && formData.workSchedule.daySchedules[day];
+                    const daySchedule = hasDaySchedule ? formData.workSchedule.daySchedules[day] : null;
+                    
+                    return (
+                      <div key={day} style={{
+                        border: '1px solid #e5e7eb',
+                        borderRadius: '8px',
+                        padding: '12px',
+                        marginBottom: '8px',
+                        backgroundColor: isWeeklyOff ? '#f9fafb' : hasDaySchedule ? '#f0f9ff' : '#fff'
+                      }}>
+                        <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: hasDaySchedule ? '12px' : '0'}}>
+                          <div style={{display: 'flex', alignItems: 'center', gap: '12px'}}>
+                            <strong style={{minWidth: '100px', color: isWeeklyOff ? '#9ca3af' : '#1f2937'}}>{day}</strong>
+                            {isWeeklyOff && <span style={{fontSize: '12px', color: '#6b7280', fontStyle: 'italic'}}>(Weekly Off)</span>}
+                            {!isWeeklyOff && !hasDaySchedule && (
+                              <span style={{fontSize: '12px', color: '#6b7280'}}>
+                                Uses default: {formData.workSchedule.checkInTime} - {formData.workSchedule.checkOutTime}
+                              </span>
+                            )}
+                          </div>
+                          {!isWeeklyOff && (
+                            hasDaySchedule ? (
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveDaySchedule(day)}
+                                style={{
+                                  padding: '4px 12px',
+                                  fontSize: '12px',
+                                  background: '#ef4444',
+                                  color: 'white',
+                                  border: 'none',
+                                  borderRadius: '4px',
+                                  cursor: 'pointer'
+                                }}
+                              >
+                                <i className="fas fa-times"></i> Remove
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => handleAddDaySchedule(day)}
+                                style={{
+                                  padding: '4px 12px',
+                                  fontSize: '12px',
+                                  background: '#3b82f6',
+                                  color: 'white',
+                                  border: 'none',
+                                  borderRadius: '4px',
+                                  cursor: 'pointer'
+                                }}
+                              >
+                                <i className="fas fa-plus"></i> Custom Schedule
+                              </button>
+                            )
+                          )}
+                        </div>
+                        
+                        {hasDaySchedule && (
+                          <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '12px', marginTop: '8px'}}>
+                            <div>
+                              <label style={{fontSize: '12px', color: '#6b7280', marginBottom: '4px', display: 'block'}}>Check-in</label>
+                              <input
+                                type="time"
+                                value={daySchedule.checkInTime}
+                                onChange={(e) => handleDayScheduleChange(day, 'checkInTime', e.target.value)}
+                                style={{width: '100%', padding: '6px', borderRadius: '4px', border: '1px solid #d1d5db'}}
+                                disabled={daySchedule.isOff}
+                              />
+                            </div>
+                            <div>
+                              <label style={{fontSize: '12px', color: '#6b7280', marginBottom: '4px', display: 'block'}}>Check-out</label>
+                              <input
+                                type="time"
+                                value={daySchedule.checkOutTime}
+                                onChange={(e) => handleDayScheduleChange(day, 'checkOutTime', e.target.value)}
+                                style={{width: '100%', padding: '6px', borderRadius: '4px', border: '1px solid #d1d5db'}}
+                                disabled={daySchedule.isOff}
+                              />
+                            </div>
+                            <div>
+                              <label style={{fontSize: '12px', color: '#6b7280', marginBottom: '4px', display: 'block'}}>Half Day</label>
+                              <input
+                                type="checkbox"
+                                checked={daySchedule.isHalfDay}
+                                onChange={(e) => handleDayScheduleChange(day, 'isHalfDay', e.target.checked)}
+                                style={{marginTop: '8px'}}
+                                disabled={daySchedule.isOff}
+                              />
+                            </div>
+                            <div>
+                              <label style={{fontSize: '12px', color: '#6b7280', marginBottom: '4px', display: 'block'}}>Is Off</label>
+                              <input
+                                type="checkbox"
+                                checked={daySchedule.isOff}
+                                onChange={(e) => handleDayScheduleChange(day, 'isOff', e.target.checked)}
+                                style={{marginTop: '8px'}}
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
 

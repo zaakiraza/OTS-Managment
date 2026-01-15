@@ -128,17 +128,43 @@ attendanceSchema.pre("save", async function () {
       const checkInLeverage = employee.department?.leverageTime?.checkInMinutes || ATTENDANCE.DEFAULT_CHECK_IN_LEVERAGE;
       const checkOutLeverage = employee.department?.leverageTime?.checkOutMinutes || ATTENDANCE.DEFAULT_CHECK_OUT_LEVERAGE;
       
+      // Get day of week for this attendance record
+      const dayOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][checkInDate.getUTCDay()];
+      
+      // Check if there's a day-specific schedule for this day
+      let checkInTime = employee.workSchedule.checkInTime;
+      let checkOutTime = employee.workSchedule.checkOutTime;
+      let isDaySpecificSchedule = false;
+      
+      if (employee.workSchedule.daySchedules && employee.workSchedule.daySchedules.get(dayOfWeek)) {
+        const daySchedule = employee.workSchedule.daySchedules.get(dayOfWeek);
+        if (!daySchedule.isOff) {
+          checkInTime = daySchedule.checkInTime || checkInTime;
+          checkOutTime = daySchedule.checkOutTime || checkOutTime;
+          isDaySpecificSchedule = true;
+        }
+      }
+      
       // Calculate daily working hours (weekly hours / working days per week)
       const dailyHours = employee.workSchedule.workingHoursPerWeek / employee.workSchedule.workingDaysPerWeek;
-      const halfDayThreshold = dailyHours * ATTENDANCE.HALF_DAY_MULTIPLIER;
+      
+      // If day has specific schedule with different hours, calculate expected hours for this day
+      let expectedDailyHours = dailyHours;
+      if (isDaySpecificSchedule) {
+        const [schedInHr, schedInMin] = checkInTime.split(":").map(Number);
+        const [schedOutHr, schedOutMin] = checkOutTime.split(":").map(Number);
+        expectedDailyHours = (schedOutHr * 60 + schedOutMin - (schedInHr * 60 + schedInMin)) / 60;
+      }
+      
+      const halfDayThreshold = expectedDailyHours * ATTENDANCE.HALF_DAY_MULTIPLIER;
       
       // Calculate extra working hours (actual hours - scheduled hours)
       // Only count positive values (worked more than scheduled)
-      this.extraWorkingHours = Math.max(0, this.workingHours - dailyHours);
+      this.extraWorkingHours = Math.max(0, this.workingHours - expectedDailyHours);
       
       // Get scheduled check-in and check-out times (in PKT)
-      const [scheduleInHour, scheduleInMinute] = employee.workSchedule.checkInTime.split(":").map(Number);
-      const [scheduleOutHour, scheduleOutMinute] = employee.workSchedule.checkOutTime.split(":").map(Number);
+      const [scheduleInHour, scheduleInMinute] = checkInTime.split(":").map(Number);
+      const [scheduleOutHour, scheduleOutMinute] = checkOutTime.split(":").map(Number);
       
       // Convert scheduled times (PKT) to UTC for comparison
       // Scheduled times are in PKT, so we need to subtract 5 hours to get UTC
