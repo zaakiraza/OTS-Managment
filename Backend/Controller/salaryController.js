@@ -5,6 +5,15 @@ import Role from "../Model/Role.js";
 import logger from "../Utils/logger.js";
 import { SALARY, ATTENDANCE } from "../Config/constants.js";
 import { logSalaryAction } from "../Utils/auditLogger.js";
+import { createNotification, createBulkNotifications } from "./notificationController.js";
+
+// Helper to get superAdmin IDs
+const getSuperAdminIds = async () => {
+  const superAdminRole = await Role.findOne({ name: "superAdmin" });
+  if (!superAdminRole) return [];
+  const admins = await Employee.find({ role: superAdminRole._id, isActive: true }).select("_id");
+  return admins.map((a) => a._id);
+};
 
 // Calculate salary for a specific month
 export const calculateSalary = async (req, res) => {
@@ -302,6 +311,26 @@ export const calculateSalary = async (req, res) => {
         runValidators: true,
       }
     ).populate("employee", "employeeId name email department position");
+
+    // Notify superAdmin about salary calculation
+    try {
+      if (req.user.role?.name !== "superAdmin") {
+        const superAdminIds = await getSuperAdminIds();
+        if (superAdminIds.length > 0) {
+          await createBulkNotifications({
+            recipients: superAdminIds,
+            type: "salary_generated",
+            title: "Salary Calculated",
+            message: `${req.user.name} calculated salary for ${salary.employee?.name} (${month}/${year})`,
+            referenceId: salary._id,
+            referenceType: "Salary",
+            sender: req.user._id,
+          });
+        }
+      }
+    } catch (notifError) {
+      console.error("Error creating salary notification:", notifError);
+    }
 
     res.status(201).json({
       success: true,

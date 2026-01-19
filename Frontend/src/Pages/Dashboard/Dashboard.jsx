@@ -56,8 +56,15 @@ function Dashboard() {
       <div className="main-content">
         <div className="dashboard-container">
           <div className="page-header">
-            <h1>Dashboard</h1>
-            <p>Welcome back, {user?.name || "Admin"}!</p>
+            <div className="header-content">
+              <div className="header-icon">
+                <i className="fas fa-tachometer-alt"></i>
+              </div>
+              <div>
+                <h1>Dashboard</h1>
+                <p>Welcome back, {user?.name || "Admin"}!</p>
+              </div>
+            </div>
           </div>
 
           <div className="stats-grid">

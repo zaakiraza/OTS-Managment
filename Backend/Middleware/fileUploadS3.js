@@ -52,8 +52,7 @@ const createS3Storage = (folder) => {
       const safeName = file.originalname
         .replace(/[^a-zA-Z0-9.-]/g, "_")
         .substring(0, 50);
-      // Structure: OTS Managment/folder/filename
-      const key = `OTS Managment/${folder}/${uniqueSuffix}-${safeName}`;
+      const key = `${folder}/${uniqueSuffix}-${safeName}`;
       cb(null, key);
     },
   });
@@ -138,7 +137,8 @@ export const imageUpload = multer({
 }).single("image");
 
 /**
- * Excel file upload for employee import (memory storage for processing)
+ * Excel file upload for employee import (temporary local storage)
+ * Excel files are processed and then deleted, so we use memory storage
  */
 export const excelUpload = multer({
   storage: multer.memoryStorage(),
@@ -245,4 +245,3 @@ export default {
   deleteFile,
   deleteFiles,
 };
-

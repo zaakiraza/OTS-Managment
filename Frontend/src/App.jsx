@@ -5,6 +5,7 @@ import {
   Navigate,
 } from "react-router-dom";
 import { ToastContainer } from "./Components/Common/Toast/Toast";
+import { NotificationProvider } from "./Context/NotificationContext";
 import Login from "./Pages/Login/Login";
 import Dashboard from "./Pages/Dashboard/Dashboard";
 import Users from "./Pages/Users/Users";
@@ -28,6 +29,7 @@ import Profile from "./Pages/Profile/Profile";
 import Feedback from "./Pages/Feedback/Feedback";
 import Todos from "./Pages/Todos/Todos";
 import EmailTemplates from "./Pages/EmailTemplates/EmailTemplates";
+import Notifications from "./Pages/Notifications/Notifications";
 
 function App() {
   const isAuthenticated = () => {
@@ -70,14 +72,15 @@ function App() {
 
   return (
     <ToastContainer>
-      <Router>
-        <Routes>
-        <Route path="/login" element={<Login />} />
-        
-        {/* SuperAdmin Only Routes */}
-        <Route
-          path="/dashboard"
-          element={
+      <NotificationProvider>
+        <Router>
+          <Routes>
+          <Route path="/login" element={<Login />} />
+          
+          {/* SuperAdmin Only Routes */}
+          <Route
+            path="/dashboard"
+            element={
             <ProtectedRoute allowedRoles={["superAdmin"]}>
               <Dashboard />
             </ProtectedRoute>
@@ -270,10 +273,21 @@ function App() {
           }
         />
 
+        {/* Notifications - All Authenticated Users */}
+        <Route
+          path="/notifications"
+          element={
+            <ProtectedRoute allowedRoles={["superAdmin", "attendanceDepartment", "ITAssetManager", "teamLead", "employee"]}>
+              <Notifications />
+            </ProtectedRoute>
+          }
+        />
+
         <Route path="/" element={<Navigate to="/login" />} />
         <Route path="*" element={<Navigate to="/login" />} />
         </Routes>
       </Router>
+      </NotificationProvider>
     </ToastContainer>
   );
 }

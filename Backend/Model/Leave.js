@@ -46,6 +46,16 @@ const leaveSchema = new mongoose.Schema(
     totalDays: {
       type: Number,
     },
+    attachments: [
+      {
+        url: String,
+        originalName: String,
+        uploadedAt: {
+          type: Date,
+          default: Date.now,
+        },
+      },
+    ],
   },
   {
     timestamps: true,

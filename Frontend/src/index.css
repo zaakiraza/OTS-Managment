@@ -120,3 +120,81 @@ code {
     padding-bottom: 80px;
   }
 }
+
+/* ===== Global Page Header Styles ===== */
+.page-header {
+  margin-bottom: 28px;
+}
+
+.page-header .header-content {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.page-header .header-icon {
+  width: 56px;
+  height: 56px;
+  min-width: 56px;
+  background: linear-gradient(135deg, #1F6A75 0%, #093635 100%);
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 24px;
+  box-shadow: 0 8px 20px rgba(31, 106, 117, 0.25);
+}
+
+.page-header h1 {
+  font-size: 26px;
+  color: #0D0D0D;
+  margin: 0;
+  font-weight: 700;
+}
+
+.page-header p {
+  font-size: 14px;
+  color: #6B7280;
+  margin: 4px 0 0 0;
+}
+
+@media (max-width: 768px) {
+  .page-header .header-icon {
+    width: 48px;
+    height: 48px;
+    min-width: 48px;
+    font-size: 20px;
+    border-radius: 12px;
+  }
+
+  .page-header h1 {
+    font-size: 22px;
+  }
+
+  .page-header p {
+    font-size: 13px;
+  }
+}
+
+@media (max-width: 480px) {
+  .page-header .header-content {
+    gap: 12px;
+  }
+
+  .page-header .header-icon {
+    width: 42px;
+    height: 42px;
+    min-width: 42px;
+    font-size: 18px;
+    border-radius: 10px;
+  }
+
+  .page-header h1 {
+    font-size: 18px;
+  }
+
+  .page-header p {
+    font-size: 12px;
+  }
+}

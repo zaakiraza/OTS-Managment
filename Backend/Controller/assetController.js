@@ -2,6 +2,7 @@ import Asset from "../Model/Asset.js";
 import AssetAssignment from "../Model/AssetAssignment.js";
 import Employee from "../Model/Employee.js";
 import { logAssetAction, logImportAction } from "../Utils/auditLogger.js";
+import { createNotification } from "./notificationController.js";
 
 // Get all assets
 export const getAllAssets = async (req, res) => {
@@ -311,6 +312,24 @@ export const assignAsset = async (req, res) => {
       after: { assignedTo: employee.name, employeeId: employee.employeeId }
     });
 
+    // Send notification to employee
+    try {
+      await createNotification({
+        recipient: employeeId,
+        type: "asset_assigned",
+        title: "Asset Assigned",
+        message: `You have been assigned ${asset.name} (${asset.assetId})`,
+        data: {
+          referenceId: asset._id,
+          referenceType: "Asset",
+          extra: { assetId: asset.assetId, assetName: asset.name },
+        },
+        sender: req.user._id,
+      });
+    } catch (notifError) {
+      console.error("Error creating asset notification:", notifError);
+    }
+
     res.status(200).json({
       success: true,
       message: "Asset assigned successfully",
@@ -371,6 +390,26 @@ export const returnAsset = async (req, res) => {
       before: { assignedTo: populatedAssignment.employee?.name },
       after: { status: asset.status, condition: conditionAtReturn }
     });
+
+    // Notify employee about asset return confirmation
+    try {
+      if (populatedAssignment.employee) {
+        await createNotification({
+          recipient: populatedAssignment.employee._id,
+          type: "asset_returned",
+          title: "Asset Returned",
+          message: `Your return of ${asset.name} (${asset.assetId}) has been processed`,
+          data: {
+            referenceId: asset._id,
+            referenceType: "Asset",
+            extra: { assetId: asset.assetId, assetName: asset.name, condition: conditionAtReturn },
+          },
+          sender: req.user._id,
+        });
+      }
+    } catch (notifError) {
+      console.error("Error creating asset return notification:", notifError);
+    }
 
     res.status(200).json({
       success: true,

@@ -8,8 +8,10 @@ function LeaveApproval() {
   const [loading, setLoading] = useState(false);
   const [filterStatus, setFilterStatus] = useState("pending");
   const [showRejectModal, setShowRejectModal] = useState(false);
+  const [showViewModal, setShowViewModal] = useState(false);
   const [selectedLeave, setSelectedLeave] = useState(null);
   const [rejectionReason, setRejectionReason] = useState("");
+  const [lightboxImage, setLightboxImage] = useState(null);
 
   useEffect(() => {
     fetchLeaves();
@@ -52,6 +54,11 @@ function LeaveApproval() {
     setShowRejectModal(true);
   };
 
+  const handleView = (leave) => {
+    setSelectedLeave(leave);
+    setShowViewModal(true);
+  };
+
   const submitRejection = async (e) => {
     e.preventDefault();
     
@@ -88,9 +95,14 @@ function LeaveApproval() {
       <div className="main-content">
         <div className="leave-approval-page">
           <div className="page-header">
-            <div>
-              <h1>Leave Approval</h1>
-              <p>Review and manage employee leave requests</p>
+            <div className="header-content">
+              <div className="header-icon">
+                <i className="fas fa-calendar-check"></i>
+              </div>
+              <div>
+                <h1>Leave Approval</h1>
+                <p>Review and manage employee leave requests</p>
+              </div>
             </div>
           </div>
 
@@ -156,7 +168,7 @@ function LeaveApproval() {
                     <tr key={leave._id}>
                       <td>
                         <div className="employee-info">
-                          <strong>{leave.employee?.fullName || "N/A"}</strong>
+                          <strong>{leave.employee?.name || "N/A"}</strong>
                           <small>{leave.employee?.employeeId || ""}</small>
                         </div>
                       </td>
@@ -188,39 +200,31 @@ function LeaveApproval() {
                       </td>
                       <td>{new Date(leave.createdAt).toLocaleDateString()}</td>
                       <td>
-                        {leave.status === "pending" ? (
-                          <div className="action-buttons">
-                            <button
-                              className="btn btn-success btn-sm"
-                              onClick={() => handleApprove(leave._id)}
-                            >
-                              <i className="fas fa-check"></i> Approve
-                            </button>
-                            <button
-                              className="btn btn-danger btn-sm"
-                              onClick={() => handleReject(leave)}
-                            >
-                              <i className="fas fa-times"></i> Reject
-                            </button>
-                          </div>
-                        ) : leave.status === "approved" ? (
-                          <div className="approved-info">
-                            <small>
-                              Approved by: {leave.approvedBy?.fullName || "N/A"}
-                            </small>
-                          </div>
-                        ) : (
-                          <div className="rejected-info">
-                            {leave.rejectionReason && (
+                        <div className="action-buttons">
+                          <button
+                            className="btn btn-info btn-sm"
+                            onClick={() => handleView(leave)}
+                            title="View Details"
+                          >
+                            <i className="fas fa-eye"></i>
+                          </button>
+                          {leave.status === "pending" && (
+                            <>
                               <button
-                                className="btn btn-secondary btn-sm"
-                                onClick={() => alert(`Rejection Reason: ${leave.rejectionReason}`)}
+                                className="btn btn-success btn-sm"
+                                onClick={() => handleApprove(leave._id)}
                               >
-                                <i className="fas fa-info-circle"></i> View Reason
+                                <i className="fas fa-check"></i> Approve
                               </button>
-                            )}
-                          </div>
-                        )}
+                              <button
+                                className="btn btn-danger btn-sm"
+                                onClick={() => handleReject(leave)}
+                              >
+                                <i className="fas fa-times"></i> Reject
+                              </button>
+                            </>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -247,7 +251,7 @@ function LeaveApproval() {
             <form onSubmit={submitRejection}>
               <div className="modal-body">
                 <div className="leave-details">
-                  <p><strong>Employee:</strong> {selectedLeave?.employee?.fullName}</p>
+                  <p><strong>Employee:</strong> {selectedLeave?.employee?.name}</p>
                   <p><strong>Duration:</strong> {new Date(selectedLeave?.startDate).toLocaleDateString()} - {new Date(selectedLeave?.endDate).toLocaleDateString()}</p>
                   <p><strong>Total Days:</strong> {selectedLeave?.totalDays}</p>
                 </div>
@@ -276,6 +280,165 @@ function LeaveApproval() {
               </div>
             </form>
           </div>
+        </div>
+      )}
+
+      {/* View Leave Modal */}
+      {showViewModal && selectedLeave && (
+        <div className="modal-overlay" onClick={() => setShowViewModal(false)}>
+          <div className="modal-content modal-large" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Leave Request Details</h2>
+              <button
+                className="close-btn"
+                onClick={() => setShowViewModal(false)}
+              >
+                <i className="fas fa-times"></i>
+              </button>
+            </div>
+            <div className="modal-body">
+              <div className="leave-details-grid">
+                <div className="detail-item">
+                  <label>Employee</label>
+                  <span>{selectedLeave.employee?.name} ({selectedLeave.employee?.employeeId})</span>
+                </div>
+                <div className="detail-item">
+                  <label>Department</label>
+                  <span>{selectedLeave.employee?.department?.name || "N/A"}</span>
+                </div>
+                <div className="detail-item">
+                  <label>Leave Type</label>
+                  <span className="leave-type-badge">
+                    {selectedLeave.leaveType.charAt(0).toUpperCase() + selectedLeave.leaveType.slice(1)}
+                  </span>
+                </div>
+                <div className="detail-item">
+                  <label>Status</label>
+                  <span
+                    className="status-badge"
+                    style={{
+                      background: getStatusColor(selectedLeave.status),
+                      color: "white",
+                    }}
+                  >
+                    {selectedLeave.status.charAt(0).toUpperCase() + selectedLeave.status.slice(1)}
+                  </span>
+                </div>
+                <div className="detail-item">
+                  <label>Start Date</label>
+                  <span>{new Date(selectedLeave.startDate).toLocaleDateString()}</span>
+                </div>
+                <div className="detail-item">
+                  <label>End Date</label>
+                  <span>{new Date(selectedLeave.endDate).toLocaleDateString()}</span>
+                </div>
+                <div className="detail-item">
+                  <label>Total Days</label>
+                  <span className="days-badge">{selectedLeave.totalDays}</span>
+                </div>
+                <div className="detail-item">
+                  <label>Applied On</label>
+                  <span>{new Date(selectedLeave.createdAt).toLocaleDateString()}</span>
+                </div>
+              </div>
+              
+              <div className="detail-item full-width">
+                <label>Reason</label>
+                <p className="reason-text-full">{selectedLeave.reason}</p>
+              </div>
+
+              {selectedLeave.status === "approved" && selectedLeave.approvedBy && (
+                <div className="detail-item full-width">
+                  <label>Approved By</label>
+                  <span>{selectedLeave.approvedBy?.name} on {new Date(selectedLeave.approvedDate).toLocaleDateString()}</span>
+                </div>
+              )}
+
+              {selectedLeave.status === "rejected" && selectedLeave.rejectionReason && (
+                <div className="detail-item full-width">
+                  <label>Rejection Reason</label>
+                  <p className="rejection-reason-text">{selectedLeave.rejectionReason}</p>
+                </div>
+              )}
+
+              {selectedLeave.attachments && selectedLeave.attachments.length > 0 && (
+                <div className="detail-item full-width">
+                  <label>Attachments ({selectedLeave.attachments.length})</label>
+                  <div className="attachments-preview">
+                    {selectedLeave.attachments.map((attachment, index) => (
+                      <div key={index} className="attachment-preview-item">
+                        {attachment.mimeType?.startsWith("image/") || attachment.path?.startsWith("data:image") ? (
+                          <img 
+                            src={attachment.path?.startsWith("data:") ? attachment.path : `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}${attachment.url || attachment.path}`} 
+                            alt={attachment.originalName || attachment.filename}
+                            className="attachment-image"
+                            onClick={() => setLightboxImage(attachment.path?.startsWith("data:") ? attachment.path : `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}${attachment.url || attachment.path}`)}
+                            style={{ cursor: 'pointer' }}
+                            title="Click to view full size"
+                          />
+                        ) : (
+                          <a 
+                            href={`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}${attachment.url || attachment.path}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="attachment-file"
+                          >
+                            <i className="fas fa-file-pdf"></i>
+                            <span>{attachment.originalName || attachment.filename}</span>
+                          </a>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="modal-actions">
+              {selectedLeave.status === "pending" && (
+                <>
+                  <button
+                    className="btn btn-success"
+                    onClick={() => {
+                      setShowViewModal(false);
+                      handleApprove(selectedLeave._id);
+                    }}
+                  >
+                    <i className="fas fa-check"></i> Approve
+                  </button>
+                  <button
+                    className="btn btn-danger"
+                    onClick={() => {
+                      setShowViewModal(false);
+                      handleReject(selectedLeave);
+                    }}
+                  >
+                    <i className="fas fa-times"></i> Reject
+                  </button>
+                </>
+              )}
+              <button
+                className="btn btn-secondary"
+                onClick={() => setShowViewModal(false)}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Image Lightbox */}
+      {lightboxImage && (
+        <div className="lightbox-overlay" onClick={() => setLightboxImage(null)}>
+          <button className="lightbox-close" onClick={() => setLightboxImage(null)}>
+            <i className="fas fa-times"></i>
+          </button>
+          <img 
+            src={lightboxImage} 
+            alt="Full size attachment" 
+            className="lightbox-image"
+            onClick={(e) => e.stopPropagation()}
+          />
         </div>
       )}
     </div>

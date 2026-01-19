@@ -5,6 +5,7 @@ import jwt from "jsonwebtoken";
 import { SECURITY } from "../Config/constants.js";
 import { notifyPasswordChanged } from "../Utils/emailNotifications.js";
 import { logAuthAction } from "../Utils/auditLogger.js";
+import { createNotification } from "./notificationController.js";
 
 // Login employee (unified authentication)
 export const login = async (req, res) => {
@@ -191,6 +192,21 @@ export const changePassword = async (req, res) => {
     notifyPasswordChanged(employee).catch(err => {
       console.error("Failed to send password change notification:", err.message);
     });
+
+    // Send in-app notification to the employee
+    try {
+      await createNotification({
+        recipient: employee._id,
+        type: "password_changed",
+        title: "Password Changed",
+        message: "Your password has been changed successfully. If you did not make this change, please contact admin immediately.",
+        referenceId: employee._id,
+        referenceType: "Employee",
+        sender: req.user._id,
+      });
+    } catch (notifError) {
+      console.error("Error creating password change notification:", notifError);
+    }
 
     res.status(200).json({
       success: true,

@@ -177,8 +177,13 @@ function EmailTemplates() {
         <div className="email-templates-page">
           <div className="page-header">
             <div className="header-content">
-              <h1>📧 Email Templates</h1>
-              <p>Preview and test all system email notifications</p>
+              <div className="header-icon">
+                <i className="fas fa-envelope-open-text"></i>
+              </div>
+              <div>
+                <h1>Email Templates</h1>
+                <p>Preview and test all system email notifications</p>
+              </div>
             </div>
             <button 
               className="btn-secondary" 

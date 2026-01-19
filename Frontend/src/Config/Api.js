@@ -182,10 +182,27 @@ export const todoAPI = {
 // Leave API
 export const leaveAPI = {
   apply: (data) => api.post("/leaves/apply", data),
+  applyWithFiles: (formData) => api.post("/leaves/apply", formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  }),
+  update: (id, data) => api.put(`/leaves/${id}`, data),
+  updateWithFiles: (id, formData) => api.put(`/leaves/${id}`, formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  }),
   getMyLeaves: (params) => api.get("/leaves/my-leaves", { params }),
   getAllLeaves: (params) => api.get("/leaves/all", { params }),
   updateStatus: (id, data) => api.put(`/leaves/${id}/status`, data),
   cancel: (id) => api.delete(`/leaves/${id}`),
+};
+
+// Notification API
+export const notificationAPI = {
+  getAll: (params) => api.get("/notifications", { params }),
+  getUnreadCount: () => api.get("/notifications/unread-count"),
+  markAsRead: (id) => api.put(`/notifications/${id}/read`),
+  markAllAsRead: () => api.put("/notifications/mark-all-read"),
+  delete: (id) => api.delete(`/notifications/${id}`),
+  deleteAllRead: () => api.delete("/notifications/read"),
 };
 
 export default api;

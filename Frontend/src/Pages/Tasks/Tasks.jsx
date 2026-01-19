@@ -371,7 +371,15 @@ function Tasks() {
         <div className="tasks-page">
           {/* Page Header */}
           <div className="page-header">
-            <h1>Task Board</h1>
+            <div className="header-content">
+              <div className="header-icon">
+                <i className="fas fa-tasks"></i>
+              </div>
+              <div>
+                <h1>Task Board</h1>
+                <p>Assign and manage team tasks</p>
+              </div>
+            </div>
             {isTeamLead && (
               <button className="btn-primary" onClick={() => setShowModal(true)}>
                 + Create Task

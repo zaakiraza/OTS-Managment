@@ -207,9 +207,14 @@ function Resources() {
       <div className="main-content">
         <div className="assets-page">
           <div className="page-header">
-            <div>
-              <h1>Resources Management</h1>
-              <p>Track external resources, subscriptions, and tools</p>
+            <div className="header-content">
+              <div className="header-icon">
+                <i className="fas fa-cube"></i>
+              </div>
+              <div>
+                <h1>Resources Management</h1>
+                <p>Track external resources, subscriptions, and tools</p>
+              </div>
             </div>
             <button className="btn btn-primary" onClick={() => {
               resetForm();

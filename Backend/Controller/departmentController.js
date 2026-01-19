@@ -1,7 +1,17 @@
 import Department from "../Model/Department.js";
 import Employee from "../Model/Employee.js";
+import Role from "../Model/Role.js";
 import mongoose from "mongoose";
 import { logDepartmentAction } from "../Utils/auditLogger.js";
+import { createNotification, createBulkNotifications } from "./notificationController.js";
+
+// Helper to get superAdmin IDs
+const getSuperAdminIds = async () => {
+  const superAdminRole = await Role.findOne({ name: "superAdmin" });
+  if (!superAdminRole) return [];
+  const admins = await Employee.find({ role: superAdminRole._id, isActive: true }).select("_id");
+  return admins.map((a) => a._id);
+};
 
 // Create department
 export const createDepartment = async (req, res) => {
@@ -87,6 +97,24 @@ export const createDepartment = async (req, res) => {
     await logDepartmentAction(req, "CREATE", populatedDept, {
       after: { name: populatedDept.name, code: populatedDept.code }
     });
+
+    // Notify superAdmin about new department
+    try {
+      const superAdminIds = await getSuperAdminIds();
+      if (superAdminIds.length > 0) {
+        await createBulkNotifications({
+          recipients: superAdminIds,
+          type: "general",
+          title: "New Department Created",
+          message: `${req.user.name} created a new department: ${populatedDept.name} (${populatedDept.code})`,
+          referenceId: populatedDept._id,
+          referenceType: "Employee",
+          sender: req.user._id,
+        });
+      }
+    } catch (notifError) {
+      console.error("Error creating department notification:", notifError);
+    }
 
     res.status(201).json({
       success: true,
@@ -392,6 +420,24 @@ export const updateDepartment = async (req, res) => {
       before: { name: currentDept.name, code: currentDept.code },
       after: { name: department.name, code: department.code }
     });
+
+    // Notify superAdmin about department update
+    try {
+      const superAdminIds = await getSuperAdminIds();
+      if (superAdminIds.length > 0 && req.user.role?.name !== "superAdmin") {
+        await createBulkNotifications({
+          recipients: superAdminIds,
+          type: "general",
+          title: "Department Updated",
+          message: `${req.user.name} updated department: ${department.name}`,
+          referenceId: department._id,
+          referenceType: "Employee",
+          sender: req.user._id,
+        });
+      }
+    } catch (notifError) {
+      console.error("Error creating department update notification:", notifError);
+    }
 
     res.status(200).json({
       success: true,

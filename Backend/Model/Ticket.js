@@ -58,12 +58,8 @@ const ticketSchema = new mongoose.Schema(
     ],
     attachments: [
       {
-        filename: String,
-        originalName: String,
-        mimetype: String,
-        size: Number,
-        path: String,
         url: String,
+        originalName: String,
         uploadedBy: {
           type: mongoose.Schema.Types.ObjectId,
           ref: "Employee",

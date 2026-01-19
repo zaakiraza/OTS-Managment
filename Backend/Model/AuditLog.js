@@ -39,6 +39,10 @@ const auditLogSchema = new mongoose.Schema(
         "IMPORT",
         "UPLOAD",
         "DOWNLOAD",
+        "LEAVE_APPLIED",
+        "LEAVE_APPROVED",
+        "LEAVE_REJECTED",
+        "LEAVE_CANCELLED",
       ],
     },
 
@@ -57,6 +61,7 @@ const auditLogSchema = new mongoose.Schema(
         "Role",
         "Resource",
         "System",
+        "Leave",
       ],
     },
 

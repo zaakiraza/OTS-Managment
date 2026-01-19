@@ -6,6 +6,15 @@ import bcrypt from "bcrypt";
 import ExcelJS from "exceljs";
 import { notifyPasswordChanged, notifyEmployeeCreated } from "../Utils/emailNotifications.js";
 import { logEmployeeAction } from "../Utils/auditLogger.js";
+import { createNotification, createBulkNotifications } from "./notificationController.js";
+
+// Helper to get superAdmin IDs
+const getSuperAdminIds = async () => {
+  const superAdminRole = await Role.findOne({ name: "superAdmin" });
+  if (!superAdminRole) return [];
+  const admins = await Employee.find({ role: superAdminRole._id, isActive: true }).select("_id");
+  return admins.map((a) => a._id);
+};
 
 // Create employee
 export const createEmployee = async (req, res) => {
@@ -273,6 +282,24 @@ export const createEmployee = async (req, res) => {
     await logEmployeeAction(req, "CREATE", populatedEmployee, {
       after: { name: populatedEmployee.name, employeeId: populatedEmployee.employeeId, department: populatedEmployee.department?.name }
     });
+
+    // Notify superAdmin about new employee
+    try {
+      const superAdminIds = await getSuperAdminIds();
+      if (superAdminIds.length > 0 && req.user.role?.name !== "superAdmin") {
+        await createBulkNotifications({
+          recipients: superAdminIds,
+          type: "general",
+          title: "New Employee Created",
+          message: `${req.user.name} created a new employee: ${populatedEmployee.name} (${populatedEmployee.employeeId})`,
+          referenceId: populatedEmployee._id,
+          referenceType: "Employee",
+          sender: req.user._id,
+        });
+      }
+    } catch (notifError) {
+      console.error("Error creating employee notification:", notifError);
+    }
 
     res.status(201).json({
       success: true,
@@ -687,6 +714,36 @@ export const updateEmployee = async (req, res) => {
       changes.passwordChanged = true;
     }
     await logEmployeeAction(req, "UPDATE", employee, changes);
+
+    // Notify the employee and superAdmin about the update
+    try {
+      const recipients = [];
+      
+      // Notify the employee if not updating self
+      if (employee._id.toString() !== req.user._id.toString()) {
+        recipients.push(employee._id);
+      }
+      
+      // Notify superAdmin if requester is not superAdmin
+      if (req.user.role?.name !== "superAdmin") {
+        const superAdminIds = await getSuperAdminIds();
+        recipients.push(...superAdminIds);
+      }
+      
+      if (recipients.length > 0) {
+        await createBulkNotifications({
+          recipients,
+          type: "general",
+          title: "Employee Profile Updated",
+          message: `${req.user.name} updated ${employee.name}'s profile${passwordChanged ? " (password changed)" : ""}`,
+          referenceId: employee._id,
+          referenceType: "Employee",
+          sender: req.user._id,
+        });
+      }
+    } catch (notifError) {
+      console.error("Error creating employee update notification:", notifError);
+    }
 
     res.status(200).json({
       success: true,

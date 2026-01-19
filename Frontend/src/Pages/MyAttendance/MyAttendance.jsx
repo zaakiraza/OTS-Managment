@@ -1,12 +1,23 @@
 import { useState, useEffect } from "react";
 import SideBar from "../../Components/SideBar/SideBar";
 import { attendanceAPI, leaveAPI } from "../../Config/Api";
+import { useToast } from "../../Components/Common/Toast/Toast";
 import "../Attendance/Attendance.css";
 import "./MyAttendance.css";
 
 function MyAttendance() {
+  const toast = useToast();
   const [attendance, setAttendance] = useState([]);
   const [leaves, setLeaves] = useState([]);
+  
+  const leaveTypes = [
+    { value: "sick", label: "Sick Leave" },
+    { value: "casual", label: "Casual Leave" },
+    { value: "annual", label: "Annual Leave" },
+    { value: "unpaid", label: "Unpaid Leave" },
+    { value: "emergency", label: "Emergency Leave" },
+    { value: "other", label: "Other" },
+  ];
   const [stats, setStats] = useState({
     totalDays: 0,
     present: 0,
@@ -27,6 +38,11 @@ function MyAttendance() {
     isSingleDate: true,
   });
   const [activeTab, setActiveTab] = useState("attendance");
+  const [attachments, setAttachments] = useState([]);
+  const [compressedImages, setCompressedImages] = useState([]);
+  const [editingLeave, setEditingLeave] = useState(null);
+  const [existingAttachments, setExistingAttachments] = useState([]);
+  const [submitting, setSubmitting] = useState(false);
 
   const user = (() => {
     try {
@@ -83,8 +99,40 @@ function MyAttendance() {
     }
   };
 
+  const handleEditLeave = (leave) => {
+    const isSingleDate = leave.totalDays === 1;
+    setEditingLeave(leave);
+    setLeaveForm({
+      startDate: new Date(leave.startDate).toISOString().split('T')[0],
+      endDate: new Date(leave.endDate).toISOString().split('T')[0],
+      leaveType: leave.leaveType,
+      reason: leave.reason,
+      isSingleDate: isSingleDate,
+    });
+    setExistingAttachments(leave.attachments || []);
+    setAttachments([]);
+    setCompressedImages([]);
+    setShowLeaveModal(true);
+  };
+
+  const resetLeaveForm = () => {
+    setShowLeaveModal(false);
+    setEditingLeave(null);
+    setLeaveForm({
+      startDate: "",
+      endDate: "",
+      leaveType: "sick",
+      reason: "",
+      isSingleDate: true,
+    });
+    setAttachments([]);
+    setCompressedImages([]);
+    setExistingAttachments([]);
+  };
+
   const handleApplyLeave = async (e) => {
     e.preventDefault();
+    setSubmitting(true);
     
     try {
       const startDate = new Date(leaveForm.startDate);
@@ -99,28 +147,64 @@ function MyAttendance() {
       const submitData = {
         startDate: leaveForm.startDate,
         endDate: leaveForm.isSingleDate ? leaveForm.startDate : leaveForm.endDate,
-        leaveType: "sick",
+        leaveType: leaveForm.leaveType,
         reason: leaveForm.reason,
         totalDays: totalDays,
       };
+
+      let response;
+      const isEditing = !!editingLeave;
       
-      const response = await leaveAPI.apply(submitData);
+      // Check if we have files to upload or existing attachments to keep
+      if (attachments.length > 0 || compressedImages.length > 0 || (isEditing && existingAttachments.length > 0)) {
+        const formData = new FormData();
+        
+        // Add form fields
+        Object.keys(submitData).forEach((key) => {
+          formData.append(key, submitData[key]);
+        });
+        
+        // Add existing attachments (for edit mode)
+        if (isEditing && existingAttachments.length > 0) {
+          formData.append("existingAttachments", JSON.stringify(existingAttachments));
+        }
+        
+        // Add compressed images as base64
+        if (compressedImages.length > 0) {
+          formData.append("compressedImages", JSON.stringify(compressedImages.map((img) => ({
+            dataUrl: img.dataUrl,
+            name: img.name,
+          }))));
+        }
+        
+        // Add file attachments
+        attachments.forEach((file) => {
+          formData.append("attachments", file);
+        });
+        
+        if (isEditing) {
+          response = await leaveAPI.updateWithFiles(editingLeave._id, formData);
+        } else {
+          response = await leaveAPI.applyWithFiles(formData);
+        }
+      } else {
+        if (isEditing) {
+          response = await leaveAPI.update(editingLeave._id, submitData);
+        } else {
+          response = await leaveAPI.apply(submitData);
+        }
+      }
       
       if (response.data.success) {
-        alert("Application submitted successfully!");
-        setShowLeaveModal(false);
-        setLeaveForm({
-          startDate: "",
-          endDate: "",
-          leaveType: "sick",
-          reason: "",
-          isSingleDate: true,
-        });
+        toast.success(isEditing ? "Leave request updated successfully!" : "Application submitted successfully!");
+        resetLeaveForm();
         fetchMyLeaves();
         fetchMyAttendance();
       }
     } catch (error) {
-      alert(error.response?.data?.message || "Error submitting application");
+      toast.error(error.response?.data?.message || "Error submitting application");
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -131,12 +215,93 @@ function MyAttendance() {
       const response = await leaveAPI.cancel(id);
       
       if (response.data.success) {
-        alert("Leave request cancelled successfully!");
+        toast.success("Leave request cancelled successfully!");
         fetchMyLeaves();
       }
     } catch (error) {
-      alert(error.response?.data?.message || "Error cancelling leave");
+      toast.error(error.response?.data?.message || "Error cancelling leave");
     }
+  };
+
+  // File handling functions
+  const compressImage = (file) => {
+    return new Promise((resolve) => {
+      if (!file.type.startsWith("image/")) {
+        resolve({ file, isCompressed: false });
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const img = new Image();
+        img.src = event.target.result;
+        img.onload = () => {
+          const canvas = document.createElement("canvas");
+          const MAX_WIDTH = 1200;
+          const MAX_HEIGHT = 1200;
+          let width = img.width;
+          let height = img.height;
+
+          if (width > height) {
+            if (width > MAX_WIDTH) {
+              height *= MAX_WIDTH / width;
+              width = MAX_WIDTH;
+            }
+          } else {
+            if (height > MAX_HEIGHT) {
+              width *= MAX_HEIGHT / height;
+              height = MAX_HEIGHT;
+            }
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext("2d");
+          ctx.drawImage(img, 0, 0, width, height);
+          
+          const dataUrl = canvas.toDataURL("image/jpeg", 0.7);
+          resolve({
+            dataUrl,
+            name: file.name,
+            isCompressed: true,
+          });
+        };
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleFileChange = async (e) => {
+    const files = Array.from(e.target.files);
+    const maxFiles = 5;
+    const currentTotal = attachments.length + compressedImages.length;
+    
+    if (currentTotal + files.length > maxFiles) {
+      alert(`Maximum ${maxFiles} files allowed`);
+      return;
+    }
+
+    for (const file of files) {
+      const result = await compressImage(file);
+      if (result.isCompressed) {
+        setCompressedImages((prev) => [...prev, result]);
+      } else {
+        setAttachments((prev) => [...prev, file]);
+      }
+    }
+    e.target.value = "";
+  };
+
+  const removeAttachment = (index) => {
+    setAttachments((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const removeCompressedImage = (index) => {
+    setCompressedImages((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const removeExistingAttachment = (index) => {
+    setExistingAttachments((prev) => prev.filter((_, i) => i !== index));
   };
 
   const calculateStats = (records) => {
@@ -206,9 +371,14 @@ function MyAttendance() {
       <div className="main-content">
         <div className="attendance-page">
           <div className="page-header">
-            <div>
-              <h1>My Attendance</h1>
-              <p>View your attendance records and submit absence applications</p>
+            <div className="header-content">
+              <div className="header-icon">
+                <i className="fas fa-user-clock"></i>
+              </div>
+              <div>
+                <h1>My Attendance</h1>
+                <p>View your attendance records and submit absence applications</p>
+              </div>
             </div>
             <button 
               className="btn btn-primary"
@@ -464,22 +634,35 @@ function MyAttendance() {
                             </td>
                             <td>{new Date(leave.createdAt).toLocaleDateString()}</td>
                             <td>
-                              {leave.status === "pending" && (
-                                <button
-                                  className="btn btn-danger btn-sm"
-                                  onClick={() => handleCancelLeave(leave._id)}
-                                >
-                                  <i className="fas fa-times"></i> Cancel
-                                </button>
-                              )}
-                              {leave.status === "rejected" && leave.rejectionReason && (
-                                <button
-                                  className="btn btn-secondary btn-sm"
-                                  onClick={() => alert(`Rejection Reason: ${leave.rejectionReason}`)}
-                                >
-                                  <i className="fas fa-info-circle"></i> View Reason
-                                </button>
-                              )}
+                              <div className="action-buttons">
+                                {leave.status === "pending" && (
+                                  <>
+                                    <button
+                                      className="btn btn-primary btn-sm"
+                                      onClick={() => handleEditLeave(leave)}
+                                      title="Edit"
+                                    >
+                                      <i className="fas fa-edit"></i>
+                                    </button>
+                                    <button
+                                      className="btn btn-danger btn-sm"
+                                      onClick={() => handleCancelLeave(leave._id)}
+                                      title="Cancel"
+                                    >
+                                      <i className="fas fa-times"></i>
+                                    </button>
+                                  </>
+                                )}
+                                {leave.status === "rejected" && leave.rejectionReason && (
+                                  <button
+                                    className="btn btn-secondary btn-sm"
+                                    onClick={() => toast.info(`Rejection Reason: ${leave.rejectionReason}`)}
+                                    title="View Reason"
+                                  >
+                                    <i className="fas fa-info-circle"></i>
+                                  </button>
+                                )}
+                              </div>
                             </td>
                           </tr>
                         );
@@ -495,13 +678,13 @@ function MyAttendance() {
 
       {/* Leave Application Modal */}
       {showLeaveModal && (
-        <div className="modal-overlay" onClick={() => setShowLeaveModal(false)}>
+        <div className="modal-overlay" onClick={() => resetLeaveForm()}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h2>Apply for Absence</h2>
+              <h2>{editingLeave ? "Edit Absence Request" : "Apply for Absence"}</h2>
               <button
                 className="close-btn"
-                onClick={() => setShowLeaveModal(false)}
+                onClick={() => resetLeaveForm()}
               >
                 <i className="fas fa-times"></i>
               </button>
@@ -557,6 +740,23 @@ function MyAttendance() {
                   />
                 </div>
               )}
+
+              <div className="form-group">
+                <label>Leave Type *</label>
+                <select
+                  required
+                  value={leaveForm.leaveType}
+                  onChange={(e) =>
+                    setLeaveForm({ ...leaveForm, leaveType: e.target.value })
+                  }
+                >
+                  {leaveTypes.map((type) => (
+                    <option key={type.value} value={type.value}>
+                      {type.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
               
               <div className="form-group">
                 <label>Reason *</label>
@@ -570,16 +770,95 @@ function MyAttendance() {
                   }
                 ></textarea>
               </div>
+
+              {/* File Upload Section */}
+              <div className="form-group">
+                <label>Supporting Documents (Optional)</label>
+                <div className="file-upload-area">
+                  <input
+                    type="file"
+                    id="leave-attachments"
+                    multiple
+                    accept=".jpg,.jpeg,.png,.gif,.pdf,.doc,.docx,.xls,.xlsx,.txt"
+                    onChange={handleFileChange}
+                  />
+                  <label htmlFor="leave-attachments" className="file-upload-label">
+                    <i className="fas fa-cloud-upload-alt"></i>
+                    <span>Click to upload files</span>
+                    <small>Max 5 files • Images, PDFs, Documents</small>
+                  </label>
+                </div>
+
+                {/* Existing Attachments (Edit Mode) */}
+                {existingAttachments.length > 0 && (
+                  <div className="attachments-section">
+                    <span className="attachments-label">Existing Files:</span>
+                    <div className="attachments-list">
+                      {existingAttachments.map((attachment, index) => (
+                        <div key={`existing-${index}`} className="attachment-item existing">
+                          <i className={`fas ${attachment.mimeType?.startsWith("image/") || attachment.path?.startsWith("data:image") ? "fa-image" : "fa-file"}`}></i>
+                          <span className="attachment-name">{attachment.originalName || attachment.filename}</span>
+                          <button type="button" className="remove-attachment" onClick={() => removeExistingAttachment(index)}>
+                            <i className="fas fa-times"></i>
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Compressed Images Preview */}
+                {compressedImages.length > 0 && (
+                  <div className="attachments-section">
+                    <span className="attachments-label">Images:</span>
+                    <div className="attachments-list images-preview">
+                      {compressedImages.map((img, index) => (
+                        <div key={`compressed-${index}`} className="attachment-item image-preview-item">
+                          <img src={img.dataUrl} alt={img.name} className="attachment-thumbnail" />
+                          <span className="attachment-name">{img.name}</span>
+                          <button type="button" className="remove-attachment" onClick={() => removeCompressedImage(index)}>
+                            <i className="fas fa-times"></i>
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Non-Image Files */}
+                {attachments.length > 0 && (
+                  <div className="attachments-section">
+                    <span className="attachments-label">Documents:</span>
+                    <div className="attachments-list">
+                      {attachments.map((file, index) => (
+                        <div key={`file-${index}`} className="attachment-item">
+                          <i className="fas fa-file"></i>
+                          <span className="attachment-name">{file.name}</span>
+                          <span className="attachment-size">({(file.size / 1024).toFixed(1)} KB)</span>
+                          <button type="button" className="remove-attachment" onClick={() => removeAttachment(index)}>
+                            <i className="fas fa-times"></i>
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
               <div className="modal-actions">
                 <button
                   type="button"
                   className="btn btn-secondary"
-                  onClick={() => setShowLeaveModal(false)}
+                  onClick={() => resetLeaveForm()}
                 >
                   Cancel
                 </button>
-                <button type="submit" className="btn btn-primary">
-                  Submit Application
+                <button type="submit" className="btn btn-primary" disabled={submitting}>
+                  {submitting ? (
+                    <><i className="fas fa-spinner fa-spin"></i> Submitting...</>
+                  ) : (
+                    editingLeave ? "Update Request" : "Submit Application"
+                  )}
                 </button>
               </div>
             </form>

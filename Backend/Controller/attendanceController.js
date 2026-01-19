@@ -12,6 +12,15 @@ import {
   getDayRangeUTC,
   TIMEZONE 
 } from "../Utils/timezone.js";
+import { createNotification, createBulkNotifications } from "./notificationController.js";
+
+// Helper to get superAdmin IDs
+const getSuperAdminIds = async () => {
+  const superAdminRole = await Role.findOne({ name: "superAdmin" });
+  if (!superAdminRole) return [];
+  const admins = await Employee.find({ role: superAdminRole._id, isActive: true }).select("_id");
+  return admins.map((a) => a._id);
+};
 
 // Biometric Device Check-in (ZKTeco SDK Integration)
 export const deviceCheckIn = async (req, res) => {
@@ -499,6 +508,38 @@ export const updateAttendance = async (req, res) => {
       after: { checkIn: populatedAttendance.checkIn, checkOut: populatedAttendance.checkOut, status: populatedAttendance.status }
     }, `Attendance updated for ${populatedAttendance.employee?.name} (${populatedAttendance.userId})`);
 
+    // Notify the employee and superAdmin about attendance update
+    try {
+      const recipients = [];
+      const employeeId = populatedAttendance.employee?._id;
+      
+      // Notify the employee
+      if (employeeId && employeeId.toString() !== req.user._id.toString()) {
+        recipients.push(employeeId);
+      }
+      
+      // Notify superAdmin if requester is not superAdmin
+      if (req.user.role?.name !== "superAdmin") {
+        const superAdminIds = await getSuperAdminIds();
+        recipients.push(...superAdminIds);
+      }
+      
+      if (recipients.length > 0) {
+        const dateStr = new Date(populatedAttendance.date).toLocaleDateString();
+        await createBulkNotifications({
+          recipients,
+          type: "attendance_updated",
+          title: "Attendance Updated",
+          message: `${req.user.name} updated attendance for ${populatedAttendance.employee?.name} on ${dateStr}`,
+          referenceId: populatedAttendance._id,
+          referenceType: "Attendance",
+          sender: req.user._id,
+        });
+      }
+    } catch (notifError) {
+      console.error("Error creating attendance update notification:", notifError);
+    }
+
     res.status(200).json({
       success: true,
       message: "Attendance updated successfully",
@@ -652,6 +693,37 @@ export const createManualAttendance = async (req, res) => {
     await logAttendanceAction(req, "CREATE", populatedAttendance, {
       after: { userId, date: attendanceDate, checkIn: checkInDate, checkOut: checkOutDate, isManualEntry: true }
     }, `Manual attendance created for ${employee.name} (${userId})`);
+
+    // Notify the employee and superAdmin about manual attendance
+    try {
+      const recipients = [];
+      
+      // Notify the employee
+      if (employee._id.toString() !== req.user._id.toString()) {
+        recipients.push(employee._id);
+      }
+      
+      // Notify superAdmin if requester is not superAdmin
+      if (req.user.role?.name !== "superAdmin") {
+        const superAdminIds = await getSuperAdminIds();
+        recipients.push(...superAdminIds);
+      }
+      
+      if (recipients.length > 0) {
+        const dateStr = attendanceDate.toLocaleDateString();
+        await createBulkNotifications({
+          recipients,
+          type: "attendance_marked",
+          title: "Attendance Marked",
+          message: `${req.user.name} manually marked attendance for ${employee.name} on ${dateStr}`,
+          referenceId: populatedAttendance._id,
+          referenceType: "Attendance",
+          sender: req.user._id,
+        });
+      }
+    } catch (notifError) {
+      console.error("Error creating manual attendance notification:", notifError);
+    }
 
     res.status(201).json({
       success: true,

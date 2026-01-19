@@ -2,12 +2,14 @@ import { NavLink } from "react-router-dom";
 import { useState } from "react";
 import ChangePassword from "../ChangePassword/ChangePassword";
 import { getStoredUser } from "../../Utils/storage";
+import { useNotifications } from "../../Context/NotificationContext";
 import "./SideBar.css";
 
 function SideBar() {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
   const user = getStoredUser();
+  const { unreadCount } = useNotifications();
   const isSuperAdmin = user?.role?.name === "superAdmin";
   const isAttendanceDept = user?.role?.name === "attendanceDepartment";
   const isAssetManager = user?.role?.name === "ITAssetManager";
@@ -44,6 +46,19 @@ function SideBar() {
       </div>
 
       <nav className="sidebar-nav">
+        {/* Notifications - Top of List */}
+        <NavLink to="/notifications" className="nav-item notification-nav-item">
+          <span className="nav-icon">
+            <i className="fas fa-bell"></i>
+            {unreadCount > 0 && (
+              <span className="notification-badge">
+                {unreadCount > 99 ? "99+" : unreadCount}
+              </span>
+            )}
+          </span>
+          {!isCollapsed && <span className="nav-text">Notifications</span>}
+        </NavLink>
+
         {/* SuperAdmin Menu */}
         {isSuperAdmin && (
           <>
@@ -281,6 +296,7 @@ function SideBar() {
 
         {/* Common Menu Items (All Users) */}
         <div className="nav-divider"></div>
+
         <NavLink to="/feedback" className="nav-item">
           <span className="nav-icon"><i className="fas fa-comment-dots"></i></span>
           {!isCollapsed && <span className="nav-text">Feedback</span>}

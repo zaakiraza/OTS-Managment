@@ -3,6 +3,7 @@ import Employee from "../Model/Employee.js";
 import { notifyTaskAssigned, notifyTaskStatusChange } from "../Utils/emailNotifications.js";
 import { logTaskAction } from "../Utils/auditLogger.js";
 import { getFileInfo } from "../Middleware/fileUpload.js";
+import { createNotification, createBulkNotifications } from "./notificationController.js";
 
 // Get all tasks (filtered by department and role)
 export const getAllTasks = async (req, res) => {
@@ -163,10 +164,15 @@ export const createTask = async (req, res) => {
 
     // Handle file attachments if uploaded
     if (req.files && req.files.length > 0) {
-      taskData.attachments = req.files.map((file) => ({
-        ...getFileInfo(file),
-        uploadedBy: req.user._id,
-      }));
+      taskData.attachments = req.files.map((file) => {
+        const fileInfo = getFileInfo(file);
+        return {
+          url: fileInfo.path,
+          originalName: fileInfo.originalName,
+          uploadedBy: req.user._id,
+          uploadedAt: new Date(),
+        };
+      });
     }
 
     const task = await Task.create(taskData);
@@ -183,6 +189,24 @@ export const createTask = async (req, res) => {
           console.error("Email notification failed:", err)
         );
       }
+    }
+
+    // Send in-app notifications to assigned employees
+    try {
+      await createBulkNotifications({
+        recipients: assignees,
+        type: "task_assigned",
+        title: "New Task Assigned",
+        message: `${req.user.name} assigned you a task: ${populatedTask.title}`,
+        data: {
+          referenceId: populatedTask._id,
+          referenceType: "Task",
+          extra: { priority: populatedTask.priority, dueDate: populatedTask.dueDate },
+        },
+        sender: req.user._id,
+      });
+    } catch (notifError) {
+      console.error("Error creating task notification:", notifError);
     }
 
     // Log the action
@@ -234,6 +258,26 @@ export const updateTaskStatus = async (req, res) => {
       .populate("assignedTo", "name employeeId email")
       .populate("assignedBy", "name email")
       .populate("department", "name");
+
+    // Notify task creator about status change
+    try {
+      if (updatedTask.assignedBy && updatedTask.assignedBy._id.toString() !== req.user._id.toString()) {
+        await createNotification({
+          recipient: updatedTask.assignedBy._id,
+          type: "task_status_changed",
+          title: "Task Status Updated",
+          message: `${req.user.name} changed task "${updatedTask.title}" status to ${status}`,
+          data: {
+            referenceId: updatedTask._id,
+            referenceType: "Task",
+            extra: { status },
+          },
+          sender: req.user._id,
+        });
+      }
+    } catch (notifError) {
+      console.error("Error creating task status notification:", notifError);
+    }
 
     res.status(200).json({
       success: true,
@@ -316,6 +360,39 @@ export const addComment = async (req, res) => {
       .populate("assignedBy", "name email")
       .populate("department", "name")
       .populate("comments.employee", "name employeeId");
+
+    // Notify task creator (assignedBy) and all assigned employees about new comment
+    try {
+      const recipientsToNotify = new Set();
+      
+      // Add task creator (assignedBy) if not the commenter
+      if (task.assignedBy && task.assignedBy.toString() !== req.user._id.toString()) {
+        recipientsToNotify.add(task.assignedBy.toString());
+      }
+      
+      // Add all assigned employees if not the commenter
+      if (task.assignedTo && task.assignedTo.length > 0) {
+        task.assignedTo.forEach(employeeId => {
+          if (employeeId.toString() !== req.user._id.toString()) {
+            recipientsToNotify.add(employeeId.toString());
+          }
+        });
+      }
+      
+      if (recipientsToNotify.size > 0) {
+        await createBulkNotifications({
+          recipients: Array.from(recipientsToNotify),
+          type: "task_comment",
+          title: "New Comment on Task",
+          message: `${req.user.name} commented on task: ${task.title}`,
+          referenceId: task._id,
+          referenceType: "Task",
+          sender: req.user._id,
+        });
+      }
+    } catch (notifError) {
+      console.error("Error creating task comment notification:", notifError);
+    }
 
     res.status(200).json({
       success: true,

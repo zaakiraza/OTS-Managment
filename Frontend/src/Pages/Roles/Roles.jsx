@@ -119,9 +119,14 @@ function Roles() {
       <div className="main-content">
         <div className="page-container">
           <div className="page-header">
-            <div>
-              <h1>Roles Management</h1>
-              <p>Manage system roles and permissions</p>
+            <div className="header-content">
+              <div className="header-icon">
+                <i className="fas fa-user-shield"></i>
+              </div>
+              <div>
+                <h1>Roles Management</h1>
+                <p>Manage system roles and permissions</p>
+              </div>
             </div>
             <button className="btn-primary" onClick={() => setShowModal(true)}>
               <i className="fas fa-plus"></i> Add New Role

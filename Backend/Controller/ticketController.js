@@ -1,6 +1,7 @@
 import Ticket from "../Model/Ticket.js";
 import Employee from "../Model/Employee.js";
 import Department from "../Model/Department.js";
+import Role from "../Model/Role.js";
 import { 
   notifyTicketCreatedAgainst, 
   notifyTicketResolved, 
@@ -8,6 +9,14 @@ import {
 } from "../Utils/emailNotifications.js";
 import { logTicketAction } from "../Utils/auditLogger.js";
 import { getFileInfo } from "../Middleware/fileUpload.js";
+import { uploadBase64ToS3 } from "../Config/s3.js";
+import { createNotification, createBulkNotifications } from "./notificationController.js";
+
+// Helper to get role IDs by name
+const getRoleIdsByName = async (names) => {
+  const roles = await Role.find({ name: { $in: names } }).select("_id");
+  return roles.map((r) => r._id);
+};
 
 // Get all tickets
 export const getAllTickets = async (req, res) => {
@@ -88,29 +97,42 @@ export const createTicket = async (req, res) => {
 
     // Handle file attachments if uploaded (multipart/form-data)
     if (req.files && req.files.length > 0) {
-      const fileAttachments = req.files.map((file) => ({
-        ...getFileInfo(file),
-        uploadedBy: req.user._id,
-      }));
+      const fileAttachments = req.files.map((file) => {
+        const fileInfo = getFileInfo(file);
+        return {
+          url: fileInfo.path,
+          originalName: fileInfo.originalName,
+          uploadedBy: req.user._id,
+          uploadedAt: new Date(),
+        };
+      });
       ticketData.attachments.push(...fileAttachments);
     }
 
-    // Handle compressed images (base64 data URLs)
+    // Handle compressed images (base64 data URLs) - upload to S3
     if (req.body.compressedImages) {
       const compressedImages = typeof req.body.compressedImages === "string" 
         ? JSON.parse(req.body.compressedImages) 
         : req.body.compressedImages;
       
       if (Array.isArray(compressedImages)) {
-        const imageAttachments = compressedImages.map((img) => ({
-          filename: img.name || `image_${Date.now()}.jpg`,
-          originalName: img.name || `image_${Date.now()}.jpg`,
-          mimeType: "image/jpeg",
-          size: Math.round((img.dataUrl?.length || 0) * 0.75),
-          path: img.dataUrl, // Store base64 data URL as path
-          uploadedBy: req.user._id,
-        }));
-        ticketData.attachments.push(...imageAttachments);
+        for (const img of compressedImages) {
+          try {
+            const s3Result = await uploadBase64ToS3(
+              img.dataUrl,
+              "tickets",
+              img.name || `image_${Date.now()}.jpg`
+            );
+            ticketData.attachments.push({
+              url: s3Result.path,
+              originalName: s3Result.originalName,
+              uploadedBy: req.user._id,
+              uploadedAt: new Date(),
+            });
+          } catch (uploadError) {
+            console.error("Error uploading compressed image to S3:", uploadError);
+          }
+        }
       }
     }
 
@@ -130,6 +152,43 @@ export const createTicket = async (req, res) => {
         populatedTicket,
         req.user
       ).catch((err) => console.error("Email notification failed:", err));
+    }
+
+    // Send in-app notification to admins
+    try {
+      const adminRoleIds = await getRoleIdsByName(["superAdmin", "attendanceDepartment"]);
+      const admins = await Employee.find({ role: { $in: adminRoleIds }, isActive: true }).select("_id");
+      
+      if (admins.length > 0) {
+        await createBulkNotifications({
+          recipients: admins.map((a) => a._id),
+          type: "ticket_created",
+          title: "New Ticket Raised",
+          message: `${req.user.name} raised a new ${populatedTicket.category} ticket: ${populatedTicket.subject}`,
+          data: {
+            referenceId: populatedTicket._id,
+            referenceType: "Ticket",
+          },
+          sender: req.user._id,
+        });
+      }
+
+      // Notify person reported against
+      if (populatedTicket.reportedAgainst) {
+        await createNotification({
+          recipient: populatedTicket.reportedAgainst._id,
+          type: "ticket_created",
+          title: "Ticket Filed Against You",
+          message: `A ${populatedTicket.category} ticket has been filed regarding you`,
+          data: {
+            referenceId: populatedTicket._id,
+            referenceType: "Ticket",
+          },
+          sender: req.user._id,
+        });
+      }
+    } catch (notifError) {
+      console.error("Error creating notification:", notifError);
     }
 
     // Log the action
@@ -192,29 +251,42 @@ export const updateTicket = async (req, res) => {
 
     // Add new file attachments if uploaded (multipart/form-data)
     if (req.files && req.files.length > 0) {
-      const fileAttachments = req.files.map((file) => ({
-        ...getFileInfo(file),
-        uploadedBy: req.user._id,
-      }));
+      const fileAttachments = req.files.map((file) => {
+        const fileInfo = getFileInfo(file);
+        return {
+          url: fileInfo.path,
+          originalName: fileInfo.originalName,
+          uploadedBy: req.user._id,
+          uploadedAt: new Date(),
+        };
+      });
       updatedAttachments.push(...fileAttachments);
     }
 
-    // Handle compressed images (base64 data URLs)
+    // Handle compressed images (base64 data URLs) - upload to S3
     if (req.body.compressedImages) {
       const compressedImages = typeof req.body.compressedImages === "string"
         ? JSON.parse(req.body.compressedImages)
         : req.body.compressedImages;
       
       if (Array.isArray(compressedImages)) {
-        const imageAttachments = compressedImages.map((img) => ({
-          filename: img.name || `image_${Date.now()}.jpg`,
-          originalName: img.name || `image_${Date.now()}.jpg`,
-          mimeType: "image/jpeg",
-          size: Math.round((img.dataUrl?.length || 0) * 0.75),
-          path: img.dataUrl, // Store base64 data URL as path
-          uploadedBy: req.user._id,
-        }));
-        updatedAttachments.push(...imageAttachments);
+        for (const img of compressedImages) {
+          try {
+            const s3Result = await uploadBase64ToS3(
+              img.dataUrl,
+              "tickets",
+              img.name || `image_${Date.now()}.jpg`
+            );
+            updatedAttachments.push({
+              url: s3Result.path,
+              originalName: s3Result.originalName,
+              uploadedBy: req.user._id,
+              uploadedAt: new Date(),
+            });
+          } catch (uploadError) {
+            console.error("Error uploading compressed image to S3:", uploadError);
+          }
+        }
       }
     }
 
@@ -317,6 +389,33 @@ export const addComment = async (req, res) => {
       .populate("reportedAgainst", "name employeeId department")
       .populate("assignedTo", "name email")
       .populate("comments.employee", "name employeeId");
+
+    // Notify ticket creator and reported against about new comment
+    try {
+      const notifyIds = new Set();
+      if (populatedTicket.reportedBy && populatedTicket.reportedBy._id.toString() !== req.user._id.toString()) {
+        notifyIds.add(populatedTicket.reportedBy._id.toString());
+      }
+      if (populatedTicket.reportedAgainst && populatedTicket.reportedAgainst._id.toString() !== req.user._id.toString()) {
+        notifyIds.add(populatedTicket.reportedAgainst._id.toString());
+      }
+
+      if (notifyIds.size > 0) {
+        await createBulkNotifications({
+          recipients: Array.from(notifyIds),
+          type: "ticket_comment",
+          title: "New Comment on Ticket",
+          message: `${req.user.name} commented on ticket: ${populatedTicket.subject}`,
+          data: {
+            referenceId: populatedTicket._id,
+            referenceType: "Ticket",
+          },
+          sender: req.user._id,
+        });
+      }
+    } catch (notifError) {
+      console.error("Error creating comment notification:", notifError);
+    }
 
     res.status(200).json({
       success: true,

@@ -414,7 +414,15 @@ const Salaries = () => {
       <div className="main-content">
         <div className="salaries-page">
           <div className="page-header">
-        <h1>Salary Management</h1>
+            <div className="header-content">
+              <div className="header-icon">
+                <i className="fas fa-money-bill-wave"></i>
+              </div>
+              <div>
+                <h1>Salary Management</h1>
+                <p>Calculate and manage employee salaries</p>
+              </div>
+            </div>
         <div className="header-actions">
           <select
             value={selectedDepartment}

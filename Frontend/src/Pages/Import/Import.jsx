@@ -58,8 +58,15 @@ const Import = () => {
       <div className="main-content">
         <div className="import-container">
           <div className="page-header">
-            <h1>Import Attendance</h1>
-            <p>Upload attendance data from biometric device USB export</p>
+            <div className="header-content">
+              <div className="header-icon">
+                <i className="fas fa-file-import"></i>
+              </div>
+              <div>
+                <h1>Import Attendance</h1>
+                <p>Upload attendance data from biometric device USB export</p>
+              </div>
+            </div>
           </div>
 
           <div className="import-card">

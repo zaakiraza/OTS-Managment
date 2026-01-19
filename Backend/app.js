@@ -26,6 +26,7 @@ import feedbackRoutes from "./Routes/feedbackRoutes.js";
 import todoRoutes from "./Routes/todoRoutes.js";
 import leaveRoutes from "./Routes/leaveRoutes.js";
 import emailTemplateRoutes from "./Routes/emailTemplateRoutes.js";
+import notificationRoutes from "./Routes/notificationRoutes.js";
 import { connectToDevice, startPolling } from "./Utils/zktecoDevice.js";
 import { scheduleAbsenteeCheck } from "./Utils/markAbsentees.js";
 import logger from "./Utils/logger.js";
@@ -98,6 +99,7 @@ app.use("/api/feedback", feedbackRoutes);
 app.use("/api/todos", todoRoutes);
 app.use("/api/leaves", leaveRoutes);
 app.use("/api/email-templates", emailTemplateRoutes);
+app.use("/api/notifications", notificationRoutes);
 app.use("/iclock", iclockRoutes);
 
 // 404 Handler - catches all unmatched routes
@@ -111,17 +113,17 @@ app.listen(process.env.PORT, async () => {
   logger.info(`Server is running on port ${process.env.PORT}`);
   
   // Connect to ZKTeco biometric device and start polling
-  logger.info('Initializing ZKTeco biometric integration...');
-  const connected = await connectToDevice();
-  if (connected) {
-    startPolling();
-  } else {
-    logger.warn('ZKTeco device not connected. Will retry...');
-  }
+  // logger.info('Initializing ZKTeco biometric integration...');
+  // const connected = await connectToDevice();
+  // if (connected) {
+  //   startPolling();
+  // } else {
+  //   logger.warn('ZKTeco device not connected. Will retry...');
+  // }
   
   // Schedule daily absentee check at 11:59 PM
-  scheduleAbsenteeCheck("23:59");
-  logger.info('Daily absentee check scheduled');
+  // scheduleAbsenteeCheck("23:59");
+  // logger.info('Daily absentee check scheduled');
 });
 
 export default app;

@@ -152,7 +152,15 @@ function MyTasks() {
         <div className="tasks-page">
           {/* Page Header */}
           <div className="page-header">
-            <h1>My Tasks</h1>
+            <div className="header-content">
+              <div className="header-icon">
+                <i className="fas fa-clipboard-list"></i>
+              </div>
+              <div>
+                <h1>My Tasks</h1>
+                <p>Here Your Head will assign tasks to you.</p>
+              </div>
+            </div>
           </div>
 
           {/* Stats */}

@@ -86,6 +86,7 @@ export const globalLimiter = rateLimit({
   skip: skipTrusted,
   standardHeaders: true, // Return rate limit info in `RateLimit-*` headers
   legacyHeaders: false, // Disable `X-RateLimit-*` headers
+  validate: { trustProxy: false }, // Disable trust proxy validation (we handle it ourselves)
   message: {
     success: false,
     errorCode: ErrorCodes.RATE_LIMIT_EXCEEDED,
@@ -104,6 +105,7 @@ export const authLimiter = rateLimit({
   skip: skipTrusted,
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { trustProxy: false }, // Disable trust proxy validation
   message: {
     success: false,
     errorCode: ErrorCodes.RATE_LIMIT_EXCEEDED,
@@ -136,6 +138,7 @@ export const intensiveLimiter = rateLimit({
   skip: skipTrusted,
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { trustProxy: false }, // Disable trust proxy validation
   message: {
     success: false,
     errorCode: ErrorCodes.RATE_LIMIT_EXCEEDED,
@@ -159,6 +162,7 @@ export const createRateLimiter = (maxRequests, windowMs, message = "Too many req
     skip: skipTrusted,
     standardHeaders: true,
     legacyHeaders: false,
+    validate: { trustProxy: false }, // Disable trust proxy validation
     message: {
       success: false,
       errorCode: ErrorCodes.RATE_LIMIT_EXCEEDED,

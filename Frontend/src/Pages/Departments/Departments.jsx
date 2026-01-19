@@ -366,7 +366,15 @@ const Departments = () => {
       <div className="main-content">
         <div className="departments-page">
           <div className="page-header">
-            <h1>Departments</h1>
+            <div className="header-content">
+              <div className="header-icon">
+                <i className="fas fa-building"></i>
+              </div>
+              <div>
+                <h1>Departments</h1>
+                <p>Manage organizational structure</p>
+              </div>
+            </div>
             <div className="header-actions">
               <div className="view-toggle">
                 <button 
