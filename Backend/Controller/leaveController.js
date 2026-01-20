@@ -289,8 +289,8 @@ export const updateLeaveStatus = async (req, res) => {
       const start = new Date(leave.startDate);
       const end = new Date(leave.endDate);
 
-      // Get employee's weekly off days
-      const employeeDetails = await Employee.findById(leave.employee._id).select("workSchedule");
+      // Get employee's details including userId and weekly offs
+      const employeeDetails = await Employee.findById(leave.employee._id).select("employeeId workSchedule");
       const weeklyOffs = employeeDetails?.workSchedule?.weeklyOffs || ["Saturday", "Sunday"];
       const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
@@ -305,23 +305,30 @@ export const updateLeaveStatus = async (req, res) => {
           continue;
         }
 
-        await Attendance.findOneAndUpdate(
-          {
-            employee: leave.employee._id,
-            date: {
-              $gte: dateOnly,
-              $lt: new Date(dateOnly.getTime() + 24 * 60 * 60 * 1000),
-            },
+        // Check if attendance record already exists for this date
+        const existingAttendance = await Attendance.findOne({
+          employee: leave.employee._id,
+          date: {
+            $gte: dateOnly,
+            $lt: new Date(dateOnly.getTime() + 24 * 60 * 60 * 1000),
           },
-          {
+        });
+
+        if (existingAttendance) {
+          // Update existing record
+          existingAttendance.status = "leave";
+          existingAttendance.remarks = `Approved leave: ${leave.leaveType}`;
+          await existingAttendance.save();
+        } else {
+          // Create new record with all required fields
+          await Attendance.create({
+            employee: leave.employee._id,
+            userId: employeeDetails.employeeId,
+            date: dateOnly,
             status: "leave",
             remarks: `Approved leave: ${leave.leaveType}`,
-          },
-          {
-            upsert: true,
-            new: true,
-          }
-        );
+          });
+        }
       }
     }
 
