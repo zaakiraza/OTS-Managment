@@ -132,7 +132,7 @@ export const createDepartment = async (req, res) => {
 // Get all departments
 export const getAllDepartments = async (req, res) => {
   try {
-    const { flat, parentOnly } = req.query;
+    const { flat, parentOnly, forAssignment } = req.query;
     
     let query = { isActive: true };
     
@@ -142,8 +142,11 @@ export const getAllDepartments = async (req, res) => {
     }
     
     // Filter by creator for non-superAdmin users
+    // Skip filtering if forAssignment=true (for asset assignment, IT/admin/hr should see all depts)
     const userRole = req.user?.role?.name || req.user?.role;
-    if (userRole !== "superAdmin" && req.user?._id) {
+    const skipRoleFilter = forAssignment === 'true' && ['admin', 'hr', 'superAdmin', 'ITAssetManager'].includes(userRole);
+    
+    if (userRole !== "superAdmin" && !skipRoleFilter && req.user?._id) {
       // Get user's assigned department to include it and its sub-departments
       const userEmployee = await Employee.findById(req.user._id)
         .populate("department", "_id");

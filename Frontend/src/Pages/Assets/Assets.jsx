@@ -109,7 +109,7 @@ function Assets() {
 
   const fetchEmployees = async () => {
     try {
-      const response = await employeeAPI.getAll({ isActive: true });
+      const response = await employeeAPI.getAll({ isActive: true, forAssignment: true });
       if (response.data.success) {
         setEmployees(response.data.data);
         setFilteredEmployees(response.data.data);
@@ -121,7 +121,7 @@ function Assets() {
 
   const fetchDepartments = async () => {
     try {
-      const response = await departmentAPI.getAll();
+      const response = await departmentAPI.getAll({ forAssignment: true });
       if (response.data.success) {
         // Use flatData which includes all departments (root + sub-departments)
         setDepartments(response.data.flatData || response.data.data);
@@ -1023,42 +1023,45 @@ function Assets() {
                       </div>
                     )
                   ) : (
-                    // Show assignment options when creating new asset
-                    <div className="form-section">
-                      <h3 className="section-title"><i className="fas fa-user-plus"></i> Assignment (Optional)</h3>
-                      <div className="form-grid">
-                        <div className="form-group">
-                          <label>Filter by Department</label>
-                          <select
-                            value={formData.department}
-                            onChange={(e) => handleDepartmentChange(e.target.value)}
-                          >
-                            <option value="">All Departments</option>
-                            {departments.map((dept) => (
-                              <option key={dept._id} value={dept._id}>
-                                {"—".repeat(dept.level || 0)} {dept.name}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                        <div className="form-group">
-                          <label>Assign to Employee</label>
-                          <select
-                            value={formData.assignToEmployee}
-                            onChange={(e) =>
-                              setFormData({ ...formData, assignToEmployee: e.target.value })
-                            }
-                          >
-                            <option value="">Leave Unassigned</option>
-                            {filteredEmployees.map((emp) => (
-                              <option key={emp._id} value={emp._id}>
-                                {emp.name} ({emp.employeeId})
-                              </option>
-                            ))}
-                          </select>
+                    // Show assignment options when creating new asset AND status is "Assigned"
+                    formData.status === "Assigned" && (
+                      <div className="form-section">
+                        <h3 className="section-title"><i className="fas fa-user-plus"></i> Assignment</h3>
+                        <div className="form-grid">
+                          <div className="form-group">
+                            <label>Filter by Department</label>
+                            <select
+                              value={formData.department}
+                              onChange={(e) => handleDepartmentChange(e.target.value)}
+                            >
+                              <option value="">All Departments</option>
+                              {departments.map((dept) => (
+                                <option key={dept._id} value={dept._id}>
+                                  {"—".repeat(dept.level || 0)} {dept.name}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <div className="form-group">
+                            <label>Assign to Employee *</label>
+                            <select
+                              value={formData.assignToEmployee}
+                              onChange={(e) =>
+                                setFormData({ ...formData, assignToEmployee: e.target.value })
+                              }
+                              required
+                            >
+                              <option value="">Select Employee</option>
+                              {filteredEmployees.map((emp) => (
+                                <option key={emp._id} value={emp._id}>
+                                  {emp.name} ({emp.employeeId})
+                                </option>
+                              ))}
+                            </select>
+                          </div>
                         </div>
                       </div>
-                    </div>
+                    )
                   )}
 
                   <div className="form-section">

@@ -325,7 +325,8 @@ export const getAllEmployees = async (req, res) => {
       search,
       sortBy = "employeeId",
       sortOrder = "asc",
-      noPagination // If true, returns all results (for dropdowns)
+      noPagination, // If true, returns all results (for dropdowns)
+      forAssignment // If true, ITAssetManager can see all employees for asset assignment
     } = req.query;
     
     const filter = {};
@@ -353,8 +354,11 @@ export const getAllEmployees = async (req, res) => {
       filter.role = { $ne: superAdminRole._id };
     }
 
+    // Skip department filtering for ITAssetManager when forAssignment=true (asset assignment)
+    const skipDeptFilter = forAssignment === 'true' && requestingUserRole === 'ITAssetManager';
+
     // For attendanceDepartment role, show employees from departments they created or manage
-    if (requestingUserRole === "attendanceDepartment") {
+    if (requestingUserRole === "attendanceDepartment" && !skipDeptFilter) {
       const currentEmployee = await Employee.findById(req.user._id)
         .populate("department", "_id");
       
@@ -407,7 +411,7 @@ export const getAllEmployees = async (req, res) => {
     }
 
     // For teamLead role, only show employees from departments they lead
-    if (requestingUserRole === "teamLead") {
+    if (requestingUserRole === "teamLead" && !skipDeptFilter) {
       const currentEmployee = await Employee.findById(req.user._id)
         .populate("leadingDepartments", "_id");
       

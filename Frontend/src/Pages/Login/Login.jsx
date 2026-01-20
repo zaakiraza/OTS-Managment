@@ -2,11 +2,13 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { authAPI } from "../../Config/Api";
 import { useToast } from "../../Components/Common/Toast/Toast";
+import { useNotifications } from "../../Context/NotificationContext";
 import "./Login.css";
 
 function Login() {
   const navigate = useNavigate();
   const toast = useToast();
+  const { initializeNotifications } = useNotifications();
   const [formData, setFormData] = useState({
     email: "",
     password: "",
@@ -39,6 +41,9 @@ function Login() {
         // Store token and user data
         localStorage.setItem("token", response.data.token);
         localStorage.setItem("user", JSON.stringify(response.data.data));
+
+        // Initialize notifications immediately after login
+        await initializeNotifications();
 
         toast.success("Login successful!");
 

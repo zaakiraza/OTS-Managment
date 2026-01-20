@@ -98,6 +98,19 @@ export const NotificationProvider = ({ children }) => {
     }
   }, []);
 
+  // Initialize notifications after login
+  const initializeNotifications = useCallback(async () => {
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) return;
+
+      // Fetch unread count and notifications immediately
+      await Promise.all([fetchUnreadCount(), fetchNotifications()]);
+    } catch (error) {
+      console.error("Error initializing notifications:", error);
+    }
+  }, [fetchUnreadCount, fetchNotifications]);
+
   // Poll for new notifications every 30 seconds
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -130,6 +143,7 @@ export const NotificationProvider = ({ children }) => {
         markAllAsRead,
         deleteNotification,
         deleteAllRead,
+        initializeNotifications,
       }}
     >
       {children}

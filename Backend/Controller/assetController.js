@@ -3,6 +3,7 @@ import AssetAssignment from "../Model/AssetAssignment.js";
 import Employee from "../Model/Employee.js";
 import { logAssetAction, logImportAction } from "../Utils/auditLogger.js";
 import { createNotification } from "./notificationController.js";
+import { uploadBase64ToS3 } from "../Config/s3.js";
 
 // Get all assets
 export const getAllAssets = async (req, res) => {
@@ -82,8 +83,33 @@ export const createAsset = async (req, res) => {
       floor: req.body.location.floor || "",
     } : undefined;
 
+    // Handle image upload to S3
+    let imageUrls = [];
+    if (req.body.images && req.body.images.length > 0) {
+      for (const image of req.body.images) {
+        // Check if it's base64 data
+        if (image && image.startsWith('data:image')) {
+          try {
+            const uploadResult = await uploadBase64ToS3(
+              image,
+              'assets',
+              `asset-${Date.now()}.jpg`
+            );
+            imageUrls.push(uploadResult.path);
+          } catch (uploadError) {
+            console.error("Error uploading image to S3:", uploadError);
+            // Continue without the image if upload fails
+          }
+        } else if (image && image.startsWith('http')) {
+          // Already a URL, keep it
+          imageUrls.push(image);
+        }
+      }
+    }
+
     const assetData = {
       ...req.body,
+      images: imageUrls,
       location: locationData,
       createdBy: req.user._id,
     };
@@ -191,6 +217,30 @@ export const updateAsset = async (req, res) => {
         success: false,
         message: "Asset not found",
       });
+    }
+
+    // Handle image upload to S3
+    let imageUrls = [];
+    if (req.body.images && req.body.images.length > 0) {
+      for (const image of req.body.images) {
+        // Check if it's base64 data
+        if (image && image.startsWith('data:image')) {
+          try {
+            const uploadResult = await uploadBase64ToS3(
+              image,
+              'assets',
+              `asset-${Date.now()}.jpg`
+            );
+            imageUrls.push(uploadResult.path);
+          } catch (uploadError) {
+            console.error("Error uploading image to S3:", uploadError);
+          }
+        } else if (image && image.startsWith('http')) {
+          // Already a URL, keep it
+          imageUrls.push(image);
+        }
+      }
+      req.body.images = imageUrls;
     }
 
     const updatedAsset = await Asset.findByIdAndUpdate(
