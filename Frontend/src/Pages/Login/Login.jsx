@@ -62,7 +62,7 @@ function Login() {
         navigate(redirectPath);
       } else {
         // If response is not successful, treat as error
-        hidsetError(response.data?.message || "Login failed. Please try again.");
+        setError(response.data?.message || "Login failed. Please try again.");
         toast.error(
           response.data?.message || "Login failed. Please try again."
         );
