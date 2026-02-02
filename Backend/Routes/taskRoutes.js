@@ -23,18 +23,18 @@ router.use(verifyToken);
 router.get("/my-tasks", getMyTasks);
 router.patch("/:id/status", updateTaskStatus);
 
-// Team leads and above can create and manage tasks
-router.post("/", hasRole("superAdmin", "teamLead"), taskAttachmentUpload, handleUploadError, createTask);
-router.get("/", hasRole("superAdmin", "teamLead"), getAllTasks);
-router.get("/stats", hasRole("superAdmin", "teamLead"), getTaskStats);
-router.get("/report", hasRole("superAdmin", "teamLead"), getTaskReport);
+// Team leads, attendance department, and above can create and manage tasks
+router.post("/", hasRole("superAdmin", "teamLead", "attendanceDepartment"), taskAttachmentUpload, handleUploadError, createTask);
+router.get("/", hasRole("superAdmin", "teamLead", "attendanceDepartment"), getAllTasks);
+router.get("/stats", hasRole("superAdmin", "teamLead", "attendanceDepartment"), getTaskStats);
+router.get("/report", hasRole("superAdmin", "teamLead", "attendanceDepartment"), getTaskReport);
 router.get("/:id", getTaskById);
 
 // Authenticated users can add comments
 router.post("/:id/comment", addComment);
 
-// Team leads and above can update and delete tasks
-router.put("/:id", hasRole("superAdmin", "teamLead"), taskAttachmentUpload, handleUploadError, updateTask);
-router.delete("/:id", hasRole("superAdmin", "teamLead"), deleteTask);
+// Team leads, attendance department, and above can update and delete tasks
+router.put("/:id", hasRole("superAdmin", "teamLead", "attendanceDepartment"), taskAttachmentUpload, handleUploadError, updateTask);
+router.delete("/:id", hasRole("superAdmin", "teamLead", "attendanceDepartment"), deleteTask);
 
 export default router;

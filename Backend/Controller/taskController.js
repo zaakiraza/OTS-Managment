@@ -242,7 +242,7 @@ export const updateTaskStatus = async (req, res) => {
     const employeeId = req.user._id.toString();
     const isAssigned = task.assignedTo.some(id => id.toString() === employeeId);
     const roleName = req.user.role?.name || req.user.role;
-    const isTeamLeadOrAbove = ["superAdmin", "teamLead"].includes(roleName);
+    const isTeamLeadOrAbove = ["superAdmin", "teamLead", "attendanceDepartment"].includes(roleName);
 
     if (!isAssigned && !isTeamLeadOrAbove) {
       return res.status(403).json({

@@ -793,16 +793,37 @@ function Tasks() {
                     {selectedTask.description && (
                       <p className="task-detail-desc">{selectedTask.description}</p>
                     )}
-                    {isTeamLead && (
-                      <button
-                        className="btn-edit-task"
-                        onClick={() => {
-                          setShowDetailModal(false);
-                          handleEditTask(selectedTask);
-                        }}
-                      >
-                        <i className="fas fa-edit"></i> Edit Task
-                      </button>
+                    {canCreateTasks && (
+                      <div style={{ display: "flex", gap: "10px" }}>
+                        <button
+                          className="btn-edit-task"
+                          onClick={() => {
+                            setShowDetailModal(false);
+                            handleEditTask(selectedTask);
+                          }}
+                        >
+                          <i className="fas fa-edit"></i> Edit Task
+                        </button>
+                        <button
+                          className="btn-delete-task"
+                          onClick={() => {
+                            setShowDetailModal(false);
+                            handleDeleteTask(selectedTask._id);
+                          }}
+                          style={{
+                            background: "#ef4444",
+                            color: "white",
+                            border: "none",
+                            padding: "8px 16px",
+                            borderRadius: "6px",
+                            cursor: "pointer",
+                            fontSize: "14px",
+                            fontWeight: "600",
+                          }}
+                        >
+                          <i className="fas fa-trash"></i> Delete Task
+                        </button>
+                      </div>
                     )}
                   </div>
 
