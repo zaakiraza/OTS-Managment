@@ -40,6 +40,8 @@ function Tasks() {
   })();
   const isSuperAdmin = user?.role?.name === "superAdmin";
   const isTeamLead = ["superAdmin", "teamLead"].includes(user?.role?.name);
+  const canViewTasks = ["superAdmin", "teamLead", "attendanceDepartment"].includes(user?.role?.name);
+  const canCreateTasks = ["superAdmin", "teamLead", "attendanceDepartment"].includes(user?.role?.name);
   
   // Get departments the team lead is leading
   const userLeadingDepts = user?.leadingDepartments || [];
@@ -48,7 +50,7 @@ function Tasks() {
   const priorities = ["Low", "Medium", "High", "Critical"];
 
   useEffect(() => {
-    if (isTeamLead) {
+    if (canViewTasks) {
       fetchTasks();
       fetchStats();
       fetchEmployees();
@@ -380,14 +382,14 @@ function Tasks() {
                 <p>Assign and manage team tasks</p>
               </div>
             </div>
-            {isTeamLead && (
+            {canCreateTasks && (
               <button className="btn-primary" onClick={() => setShowModal(true)}>
                 + Create Task
               </button>
             )}
           </div>
 
-          {isTeamLead && (
+          {canViewTasks && (
             <>
               {/* Stats */}
               <div className="stats-container">

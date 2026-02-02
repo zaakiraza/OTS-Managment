@@ -197,7 +197,7 @@ function App() {
         <Route
           path="/tasks"
           element={
-            <ProtectedRoute allowedRoles={["superAdmin", "teamLead"]}>
+            <ProtectedRoute allowedRoles={["superAdmin", "attendanceDepartment", "teamLead"]}>
               <Tasks />
             </ProtectedRoute>
           }

@@ -526,23 +526,31 @@ const Departments = () => {
                 >
                   <option value="">Select Team Lead</option>
                   {editMode ? (
-                    employees
-                      .filter(emp => {
-                        const dept = departments.find(d => d._id === editId);
-                        return emp.department?._id === dept?._id;
-                      })
-                      .map((emp) => (
+                    (() => {
+                      const dept = departments.find(d => d._id === editId);
+                      const deptEmployees = employees.filter(emp => {
+                        if (!dept) return false;
+                        const empDeptId = emp.department?._id || emp.department;
+                        const deptId = dept._id;
+                        return empDeptId === deptId || String(empDeptId) === String(deptId);
+                      });
+                      
+                      // If no employees in department, show all employees
+                      const listToShow = deptEmployees.length > 0 ? deptEmployees : employees;
+                      
+                      return listToShow.map((emp) => (
                         <option key={emp._id} value={emp._id}>
                           {emp.name} ({emp.employeeId}) - {emp.position}
                         </option>
-                      ))
+                      ));
+                    })()
                   ) : (
                     <option value="" disabled>Create department first</option>
                   )}
                 </select>
                 <small className={editMode ? "helper-text" : "helper-text warning"}>
                   {editMode 
-                    ? <><i className="fas fa-info-circle"></i> Only employees from this department are shown</> 
+                    ? <><i className="fas fa-info-circle"></i> Team leads from this department are prioritized</> 
                     : <><i className="fas fa-exclamation-triangle"></i> Create department first, then edit to assign team lead</>}
                 </small>
               </div>
