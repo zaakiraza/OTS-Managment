@@ -11,6 +11,15 @@ import { s3Client, S3_BUCKET_NAME, getS3Url, deleteFromS3, getKeyFromUrl } from 
 // Allowed file types
 const ALLOWED_TYPES = {
   images: ["image/jpeg", "image/png", "image/gif", "image/webp"],
+  videos: [
+    "video/mp4",
+    "video/quicktime", // .mov
+    "video/x-msvideo", // .avi
+    "video/x-matroska", // .mkv
+    "video/x-ms-wmv", // .wmv
+    "video/x-flv", // .flv
+    "video/webm",
+  ],
   documents: [
     "application/pdf",
     "application/msword",
@@ -20,15 +29,16 @@ const ALLOWED_TYPES = {
     "text/plain",
     "text/csv",
   ],
-  all: [], // Will be populated with images + documents
+  all: [], // Will be populated with images + videos + documents
 };
-ALLOWED_TYPES.all = [...ALLOWED_TYPES.images, ...ALLOWED_TYPES.documents];
+ALLOWED_TYPES.all = [...ALLOWED_TYPES.images, ...ALLOWED_TYPES.videos, ...ALLOWED_TYPES.documents];
 
 // File size limits (in bytes)
 const FILE_SIZE_LIMITS = {
   image: 5 * 1024 * 1024, // 5MB
+  video: 50 * 1024 * 1024, // 50MB
   document: 10 * 1024 * 1024, // 10MB
-  default: 10 * 1024 * 1024, // 10MB
+  default: 50 * 1024 * 1024, // 50MB
 };
 
 /**

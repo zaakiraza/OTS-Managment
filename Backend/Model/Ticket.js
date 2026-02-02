@@ -43,6 +43,10 @@ const ticketSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "Employee",
     },
+    visibleToDepartments: [{
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Department",
+    }],
     comments: [
       {
         employee: {

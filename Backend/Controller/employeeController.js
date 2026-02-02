@@ -704,7 +704,7 @@ export const updateEmployee = async (req, res) => {
 
     // Send email notification if password was changed
     if (passwordChanged && employee.email) {
-      notifyPasswordChanged(employee).catch(err => {
+      notifyPasswordChanged(employee.email, employee).catch(err => {
         console.error("Failed to send password change notification:", err.message);
       });
     }

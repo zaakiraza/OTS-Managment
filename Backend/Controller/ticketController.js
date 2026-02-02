@@ -40,12 +40,52 @@ export const getAllTickets = async (req, res) => {
       .populate("assignedTo", "name email")
       .populate("resolvedBy", "name email")
       .populate("comments.employee", "name employeeId")
+      .populate("visibleToDepartments", "name")
       .sort({ createdAt: -1 });
+
+    // Filter tickets based on visibility rules
+    const currentUser = req.user;
+    const currentUserDeptId = currentUser.department?._id?.toString() || currentUser.department?.toString();
+    const currentUserId = currentUser._id.toString();
+    const isSuperAdmin = currentUser.role?.name === "superAdmin";
+    
+    const visibleTickets = tickets.filter(ticket => {
+      // Creator can always see their own ticket
+      if (ticket.reportedBy && ticket.reportedBy._id.toString() === currentUserId) {
+        return true;
+      }
+      
+      // Person reported against can see the ticket
+      if (ticket.reportedAgainst && ticket.reportedAgainst._id.toString() === currentUserId) {
+        return true;
+      }
+      
+      // SuperAdmin can see all tickets
+      if (isSuperAdmin) {
+        return true;
+      }
+      
+      // If visibleToDepartments is empty or null, ticket is public (visible to all)
+      if (!ticket.visibleToDepartments || ticket.visibleToDepartments.length === 0) {
+        return true;
+      }
+      
+      // For restricted tickets, check if user's department is in the visible departments list
+      if (currentUserDeptId) {
+        const isVisible = ticket.visibleToDepartments.some(
+          dept => dept._id.toString() === currentUserDeptId
+        );
+        return isVisible;
+      }
+      
+      // If user has no department and ticket is restricted, they can't see it
+      return false;
+    });
 
     res.status(200).json({
       success: true,
-      count: tickets.length,
-      data: tickets,
+      count: visibleTickets.length,
+      data: visibleTickets,
     });
   } catch (error) {
     res.status(500).json({
@@ -63,7 +103,8 @@ export const getTicketById = async (req, res) => {
       .populate("reportedAgainst", "name employeeId department position")
       .populate("assignedTo", "name email")
       .populate("resolvedBy", "name email")
-      .populate("comments.employee", "name employeeId");
+      .populate("comments.employee", "name employeeId")
+      .populate("visibleToDepartments", "name");
 
     if (!ticket) {
       return res.status(404).json({
@@ -143,7 +184,8 @@ export const createTicket = async (req, res) => {
 
     const populatedTicket = await Ticket.findById(ticket._id)
       .populate("reportedBy", "name email role")
-      .populate("reportedAgainst", "name employeeId department email");
+      .populate("reportedAgainst", "name employeeId department email")
+      .populate("visibleToDepartments", "name");
 
     // Send email notification to reported against person
     if (populatedTicket.reportedAgainst && populatedTicket.reportedAgainst.email) {
@@ -186,6 +228,39 @@ export const createTicket = async (req, res) => {
           },
           sender: req.user._id,
         });
+      }
+
+      // Notify members of selected departments if visibility is restricted
+      if (populatedTicket.visibleToDepartments && populatedTicket.visibleToDepartments.length > 0) {
+        const deptIds = populatedTicket.visibleToDepartments.map(d => d._id);
+        
+        // Build exclusion list: creator, reported against, and admins (they already got notified)
+        const excludeIds = [req.user._id];
+        if (populatedTicket.reportedAgainst?._id) {
+          excludeIds.push(populatedTicket.reportedAgainst._id);
+        }
+        const adminIds = admins.map(a => a._id);
+        excludeIds.push(...adminIds);
+        
+        const deptMembers = await Employee.find({ 
+          department: { $in: deptIds }, 
+          isActive: true,
+          _id: { $nin: excludeIds } // Exclude creator, reported against, and admins
+        }).select("_id");
+        
+        if (deptMembers.length > 0) {
+          await createBulkNotifications({
+            recipients: deptMembers.map((m) => m._id),
+            type: "ticket_created",
+            title: "New Ticket in Your Department",
+            message: `${req.user.name} raised a new ${populatedTicket.category} ticket`,
+            data: {
+              referenceId: populatedTicket._id,
+              referenceType: "Ticket",
+            },
+            sender: req.user._id,
+          });
+        }
       }
     } catch (notifError) {
       console.error("Error creating notification:", notifError);
@@ -324,7 +399,8 @@ export const updateTicket = async (req, res) => {
       .populate("reportedBy", "name email role")
       .populate("reportedAgainst", "name employeeId department")
       .populate("assignedTo", "name email")
-      .populate("resolvedBy", "name email");
+      .populate("resolvedBy", "name email")
+      .populate("visibleToDepartments", "name");
 
     // Send notification if ticket was resolved
     if ((req.body.status === "Resolved" || req.body.status === "Closed") && 
