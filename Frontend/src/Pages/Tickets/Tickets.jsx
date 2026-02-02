@@ -28,10 +28,13 @@ function Tickets() {
     description: "",
     department: "",
     reportedAgainst: "",
+    visibleToDepartments: [],
   });
   const [attachments, setAttachments] = useState([]);
   const [compressedImages, setCompressedImages] = useState([]);
   const [existingAttachments, setExistingAttachments] = useState([]);
+  const [previewAttachment, setPreviewAttachment] = useState(null);
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
 
   const user = (() => {
     try {
@@ -342,6 +345,7 @@ function Tickets() {
       reportedAgainst: ticket.reportedAgainst?._id || "",
       status: ticket.status,
       assignedTo: ticket.assignedTo?._id || "",
+      visibleToDepartments: ticket.visibleToDepartments?.map(d => d._id || d) || [],
     });
     // Load existing attachments for display
     setExistingAttachments(ticket.attachments || []);
@@ -383,6 +387,7 @@ function Tickets() {
       description: "",
       department: "",
       reportedAgainst: "",
+      visibleToDepartments: [],
     });
     setFilteredEmployees(employees);
     setSelectedTicket(null);
@@ -706,19 +711,78 @@ function Tickets() {
                     )}
 
                     <div className="form-section">
+                      <h4 className="section-title"><i className="fas fa-eye"></i> Visibility Settings</h4>
+                      <div className="form-group">
+                        <label><i className="fas fa-building"></i> Visible to Departments</label>
+                        <div className="checkbox-group">
+                          <div className="checkbox-item">
+                            <input
+                              type="checkbox"
+                              id="all-departments"
+                              checked={formData.visibleToDepartments.length === 0}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setFormData({ ...formData, visibleToDepartments: [] });
+                                } else {
+                                  // When unchecking "All Departments", select the first department
+                                  if (departments.length > 0) {
+                                    setFormData({ ...formData, visibleToDepartments: [departments[0]._id] });
+                                  }
+                                }
+                              }}
+                            />
+                            <label htmlFor="all-departments">All Departments (Public Ticket)</label>
+                          </div>
+                          {departments.map((dept) => (
+                            <div key={dept._id} className="checkbox-item">
+                              <input
+                                type="checkbox"
+                                id={`dept-${dept._id}`}
+                                checked={formData.visibleToDepartments.includes(dept._id)}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setFormData({
+                                      ...formData,
+                                      visibleToDepartments: [...formData.visibleToDepartments, dept._id]
+                                    });
+                                  } else {
+                                    const newDepts = formData.visibleToDepartments.filter(id => id !== dept._id);
+                                    // If unchecking the last department, make it public (all departments)
+                                    setFormData({
+                                      ...formData,
+                                      visibleToDepartments: newDepts.length === 0 ? [] : newDepts
+                                    });
+                                  }
+                                }}
+                                disabled={formData.visibleToDepartments.length === 0}
+                              />
+                              <label htmlFor={`dept-${dept._id}`}>
+                                {"—".repeat(dept.level || 0)} {dept.name}
+                              </label>
+                            </div>
+                          ))}
+                        </div>
+                        <small className="form-help">
+                          <i className="fas fa-info-circle"></i> 
+                          Check "All Departments" for public visibility, or select specific departments to restrict access.
+                        </small>
+                      </div>
+                    </div>
+
+                    <div className="form-section">
                         <h4 className="section-title"><i className="fas fa-paperclip"></i> Attachments</h4>
                         <div className="file-upload-area">
                           <input
                             type="file"
                             id="ticket-attachments"
                             multiple
-                            accept=".jpg,.jpeg,.png,.gif,.pdf,.doc,.docx,.xls,.xlsx,.txt,.csv"
+                            accept=".jpg,.jpeg,.png,.gif,.pdf,.doc,.docx,.xls,.xlsx,.txt,.csv,.mp4,.mov,.avi,.mkv,.wmv,.flv,.webm"
                             onChange={handleFileChange}
                           />
                           <label htmlFor="ticket-attachments" className="file-upload-label">
                             <i className="fas fa-cloud-upload-alt"></i>
                             <span>Click to upload files</span>
-                            <small>Max 5 files • Images auto-compressed</small>
+                            <small>Max 5 files • Images & Videos supported</small>
                           </label>
                         </div>
 
@@ -914,6 +978,34 @@ function Tickets() {
                     </div>
                   </div>
 
+                  {/* Visibility */}
+                  <div className="details-section">
+                    <h4 className="section-title"><i className="fas fa-eye"></i> Visibility</h4>
+                    <div className="visibility-info">
+                      {!selectedTicket.visibleToDepartments || selectedTicket.visibleToDepartments.length === 0 ? (
+                        <div className="visibility-badge public">
+                          <i className="fas fa-globe"></i>
+                          <span>Public - Visible to all employees</span>
+                        </div>
+                      ) : (
+                        <div className="visibility-departments">
+                          <div className="visibility-badge restricted">
+                            <i className="fas fa-lock"></i>
+                            <span>Restricted to specific departments</span>
+                          </div>
+                          <div className="department-tags">
+                            {selectedTicket.visibleToDepartments.map((dept, idx) => (
+                              <span key={idx} className="department-tag">
+                                <i className="fas fa-building"></i>
+                                {dept.name || dept}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
                   {/* Description */}
                   <div className="details-section">
                     <h4 className="section-title"><i className="fas fa-align-left"></i> Description</h4>
@@ -927,23 +1019,54 @@ function Tickets() {
                     <div className="details-section">
                       <h4 className="section-title"><i className="fas fa-paperclip"></i> Attachments ({selectedTicket.attachments.length})</h4>
                       <div className="view-attachments-grid">
-                        {selectedTicket.attachments.map((attachment, index) => (
-                          <div key={index} className="view-attachment-item">
-                            {attachment.mimeType?.startsWith("image/") || attachment.path?.startsWith("data:image/") ? (
-                              <div className="view-attachment-image">
-                                <img 
-                                  src={attachment.path?.startsWith("data:") ? attachment.path : `/uploads/${attachment.filename}`} 
-                                  alt={attachment.originalName || attachment.filename}
-                                />
-                              </div>
-                            ) : (
-                              <div className="view-attachment-file">
-                                <i className="fas fa-file"></i>
-                              </div>
-                            )}
-                            <span className="view-attachment-name">{attachment.originalName || attachment.filename}</span>
-                          </div>
-                        ))}
+                        {selectedTicket.attachments.map((attachment, index) => {
+                          const fileUrl = attachment.url || attachment.path || `/uploads/${attachment.filename}`;
+                          const fileName = (attachment.originalName || attachment.filename || '').toLowerCase();
+                          
+                          // Improved detection logic
+                          const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.svg'];
+                          const videoExtensions = ['.mp4', '.mov', '.avi', '.mkv', '.wmv', '.flv', '.webm'];
+                          
+                          const isImage = 
+                            attachment.mimeType?.startsWith("image/") || 
+                            attachment.path?.startsWith("data:image/") ||
+                            fileUrl.includes('/image') ||
+                            imageExtensions.some(ext => fileName.endsWith(ext));
+                          
+                          const isVideo = 
+                            attachment.mimeType?.startsWith("video/") ||
+                            fileUrl.includes('/video') ||
+                            videoExtensions.some(ext => fileName.endsWith(ext));
+                          
+                          return (
+                            <div 
+                              key={index} 
+                              className="view-attachment-item"
+                              onClick={() => {
+                                setPreviewAttachment({ ...attachment, url: fileUrl, isImage, isVideo });
+                                setShowPreviewModal(true);
+                              }}
+                            >
+                              {isImage ? (
+                                <div className="view-attachment-image">
+                                  <img 
+                                    src={fileUrl} 
+                                    alt={attachment.originalName || attachment.filename}
+                                  />
+                                </div>
+                              ) : isVideo ? (
+                                <div className="view-attachment-file video">
+                                  <i className="fas fa-video"></i>
+                                </div>
+                              ) : (
+                                <div className="view-attachment-file">
+                                  <i className="fas fa-file"></i>
+                                </div>
+                              )}
+                              <span className="view-attachment-name">{attachment.originalName || attachment.filename}</span>
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   )}
@@ -989,6 +1112,64 @@ function Tickets() {
                       </button>
                     </div>
                   </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Attachment Preview Modal */}
+          {showPreviewModal && previewAttachment && (
+            <div className="modal-overlay preview-overlay" onClick={() => setShowPreviewModal(false)}>
+              <div className="preview-modal-content" onClick={(e) => e.stopPropagation()}>
+                <div className="preview-modal-header">
+                  <span className="preview-filename">
+                    <i className={`fas ${previewAttachment.isImage ? 'fa-image' : previewAttachment.isVideo ? 'fa-video' : 'fa-file'}`}></i>
+                    {previewAttachment.originalName || previewAttachment.filename}
+                  </span>
+                  <div className="preview-actions">
+                    <a 
+                      href={previewAttachment.url} 
+                      download={previewAttachment.originalName || previewAttachment.filename}
+                      className="preview-download-btn"
+                      title="Download"
+                    >
+                      <i className="fas fa-download"></i>
+                    </a>
+                    <button className="close-btn" onClick={() => setShowPreviewModal(false)}>
+                      <i className="fas fa-times"></i>
+                    </button>
+                  </div>
+                </div>
+                <div className="preview-modal-body">
+                  {previewAttachment.isImage ? (
+                    <img 
+                      src={previewAttachment.url} 
+                      alt={previewAttachment.originalName || previewAttachment.filename}
+                      className="preview-image"
+                    />
+                  ) : previewAttachment.isVideo ? (
+                    <video 
+                      src={previewAttachment.url} 
+                      controls 
+                      className="preview-video"
+                      autoPlay
+                    >
+                      Your browser does not support the video tag.
+                    </video>
+                  ) : (
+                    <div className="preview-file-info">
+                      <i className="fas fa-file-alt"></i>
+                      <p>Preview not available for this file type</p>
+                      <a 
+                        href={previewAttachment.url} 
+                        download={previewAttachment.originalName || previewAttachment.filename}
+                        className="download-link-btn"
+                      >
+                        <i className="fas fa-download"></i>
+                        Download File
+                      </a>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

@@ -63,9 +63,7 @@ function Login() {
       } else {
         // If response is not successful, treat as error
         setError(response.data?.message || "Login failed. Please try again.");
-        toast.error(
-          response.data?.message || "Login failed. Please try again."
-        );
+        toast.error(response.data?.message || "Login failed. Please try again.");
         setLoading(false);
       }
     } catch (err) {
@@ -115,19 +113,14 @@ function Login() {
         <div className="login-header">
           <div className="logo-container">
             <div className="logo-circle">
-              <i className="fas fa-building"></i>
+              <i className="fas fa-user-shield"></i>
             </div>
           </div>
           <h1>Welcome Back</h1>
           <p>Sign in to your account</p>
         </div>
 
-        <form
-          onSubmit={(e) => {
-            handleSubmit(e);
-          }}
-          className="login-form"
-        >
+        <form onSubmit={handleSubmit} className="login-form">
           {error && (
             <div className="error-message">
               <i className="fas fa-exclamation-circle"></i>
@@ -197,127 +190,6 @@ function Login() {
             )}
           </button>
         </form>
-
-        {/* <div className="test-credentials">
-          <div className="credentials-header">
-            <h3><i className="fas fa-key"></i> Test Credentials</h3>
-            <p>Click any credential to auto-fill</p>
-          </div>
-
-          <div className="credentials-grid">
-            <div
-              className="credential-card admin"
-              onClick={() =>
-                setFormData({
-                  email: "USR0001",
-                  password: "12345678",
-                })
-              }
-            >
-              <div className="credential-badge">Super Admin</div>
-              <div className="credential-info">
-                <p className="credential-email">USR0001</p>
-                <p className="credential-password">12345678</p>
-              </div>
-            </div>
-
-            <div
-              className="credential-card attendance"
-              onClick={() =>
-                setFormData({
-                  email: "SCH0001",
-                  password: "12345678",
-                })
-              }
-            >
-              <div className="credential-badge">Attendance Dept</div>
-              <div className="credential-info">
-                <p className="credential-email">SCH0001</p>
-                <p className="credential-password">12345678</p>
-              </div>
-            </div>
-
-            <div
-              className="credential-card asset"
-              onClick={() =>
-                setFormData({
-                  email: "IT0001",
-                  password: "12345678",
-                })
-              }
-            >
-              <div className="credential-badge">IT Manager</div>
-              <div className="credential-info">
-                <p className="credential-email">IT0001</p>
-                <p className="credential-password">12345678</p>
-              </div>
-            </div>
-
-            <div
-              className="credential-card attendance"
-              onClick={() =>
-                setFormData({
-                  email: "WRK0001",
-                  password: "12345678",
-                })
-              }
-            >
-              <div className="credential-badge">Team Lead1</div>
-              <div className="credential-info">
-                <p className="credential-email">WRK0001</p>
-                <p className="credential-password">12345678</p>
-              </div>
-            </div>
-
-            <div
-              className="credential-card attendance"
-              onClick={() =>
-                setFormData({
-                  email: "WEB0002",
-                  password: "12345678",
-                })
-              }
-            >
-              <div className="credential-badge">Team lead 2</div>
-              <div className="credential-info">
-                <p className="credential-email">WEB0002</p>
-                <p className="credential-password">12345678</p>
-              </div>
-            </div>
-
-            <div
-              className="credential-card attendance"
-              onClick={() =>
-                setFormData({
-                  email: "EDT0001",
-                  password: "12345678",
-                })
-              }
-            >
-              <div className="credential-badge">Employee 1</div>
-              <div className="credential-info">
-                <p className="credential-email">EDT0001</p>
-                <p className="credential-password">12345678</p>
-              </div>
-            </div>
-
-            <div
-              className="credential-card attendance"
-              onClick={() =>
-                setFormData({
-                  email: "WEB0001",
-                  password: "12345678",
-                })
-              }
-            >
-              <div className="credential-badge">Employee 2</div>
-              <div className="credential-info">
-                <p className="credential-email">WEB0001</p>
-                <p className="credential-password">12345678</p>
-              </div>
-            </div>
-          </div>
-        </div> */}
       </div>
     </div>
   );

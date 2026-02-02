@@ -1,6 +1,7 @@
 import axios from "axios";
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5003/api";
+// const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5003/api";
+const API_BASE_URL = "https://edu.offtheschool.io/api";
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -28,9 +29,16 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      localStorage.removeItem("token");
-      localStorage.removeItem("user");
-      window.location.href = "/login";
+      // Only redirect to login if we're not already on the login page
+      // and if we have a token (meaning we were previously authenticated)
+      const currentPath = window.location.pathname;
+      const hasToken = localStorage.getItem("token");
+      
+      if (currentPath !== "/login" && hasToken) {
+        localStorage.removeItem("token");
+        localStorage.removeItem("user");
+        window.location.href = "/login";
+      }
     }
     return Promise.reject(error);
   }
