@@ -465,7 +465,24 @@ const notifyTicketComment = async (userEmail, commentData) => {
 };
 
 // Notification: Password Changed
-const notifyPasswordChanged = async (userEmail, userData) => {
+const notifyPasswordChanged = async (userEmail, userData, newPassword = null) => {
+  // Build password display section if new password is provided
+  const passwordSection = newPassword ? `
+    <div style="background: linear-gradient(135deg, rgba(34, 197, 94, 0.1) 0%, rgba(16, 185, 129, 0.1) 100%); border-left: 4px solid #22c55e; border-radius: 8px; padding: 20px; margin-bottom: 25px;">
+      <p style="margin: 0 0 12px 0; color: #166534; font-size: 14px; font-weight: 600;">
+        ✓ Your New Password
+      </p>
+      <div style="background-color: #f0fdf4; border: 1px solid #dcfce7; border-radius: 6px; padding: 12px; font-family: 'Courier New', monospace; word-break: break-all; margin-bottom: 12px;">
+        <p style="margin: 0; color: #15803d; font-size: 16px; font-weight: 600; text-align: center;">
+          ${newPassword}
+        </p>
+      </div>
+      <p style="margin: 0; color: #166534; font-size: 13px; line-height: 1.6;">
+        Save this password in a secure location. You can change it anytime by logging in and visiting your account settings.
+      </p>
+    </div>
+  ` : '';
+
   const content = `
     <div style="text-align: center; margin-bottom: 25px;">
       <div style="display: inline-block; background: linear-gradient(135deg, #F49040 0%, #EE8939 100%); color: #ffffff; padding: 8px 16px; border-radius: 20px; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">
@@ -492,6 +509,8 @@ const notifyPasswordChanged = async (userEmail, userData) => {
     )}.
       </p>
     </div>
+
+    ${passwordSection}
 
     <div style="background-color: #fef3c7; border-left: 4px solid #f59e0b; border-radius: 8px; padding: 20px; margin-bottom: 25px;">
       <p style="margin: 0 0 12px 0; color: #92400e; font-size: 14px; font-weight: 600;">

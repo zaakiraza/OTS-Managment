@@ -169,12 +169,44 @@
   background: white;
   border-radius: 16px;
   box-shadow: 0 4px 20px rgba(9, 54, 53, 0.08);
-  overflow: hidden;
+  overflow: auto;
   border: 1px solid rgba(206, 212, 211, 0.5);
 }
 
+/* Actual attendance table wrapper used in JSX */
+.table-container {
+  overflow-x: auto;
+}
+
+.table-container .data-table {
+  width: max-content;
+  min-width: 100%;
+  table-layout: auto;
+  border-collapse: collapse;
+}
+
+.table-container .data-table th,
+.table-container .data-table td {
+  white-space: nowrap;
+}
+
+/* Column width tuning for data-table */
+.table-container .data-table th:nth-child(3),
+.table-container .data-table td:nth-child(3) {
+  min-width: 160px;
+}
+
+.table-container .data-table th:nth-child(4),
+.table-container .data-table td:nth-child(4),
+.table-container .data-table th:nth-child(5),
+.table-container .data-table td:nth-child(5) {
+  min-width: 140px;
+}
+
 .attendance-table-container table {
-  width: 100%;
+  width: max-content;
+  min-width: 100%;
+  table-layout: auto;
   border-collapse: collapse;
 }
 
@@ -187,6 +219,7 @@
   font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
+  white-space: nowrap;
 }
 
 .attendance-table-container td {
@@ -194,6 +227,53 @@
   border-bottom: 1px solid var(--border-light, #e5e7eb);
   color: var(--text-dark, #0D0D0D);
   font-size: 14px;
+  white-space: nowrap;
+}
+
+/* Column width tuning */
+.attendance-table-container th:nth-child(1),
+.attendance-table-container td:nth-child(1) {
+  min-width: 100px;
+}
+
+.attendance-table-container th:nth-child(2),
+.attendance-table-container td:nth-child(2) {
+  min-width: 160px;
+}
+
+
+.attendance-table-container th:nth-child(3),
+.attendance-table-container td:nth-child(3) {
+  min-width: 140px;
+}
+
+.attendance-table-container th:nth-child(4),
+.attendance-table-container td:nth-child(4),
+.attendance-table-container th:nth-child(5),
+.attendance-table-container td:nth-child(5) {
+  min-width: 130px;
+}
+
+.attendance-table-container th:nth-child(6),
+.attendance-table-container td:nth-child(6),
+.attendance-table-container th:nth-child(7),
+.attendance-table-container td:nth-child(7) {
+  min-width: 120px;
+}
+
+.attendance-table-container th:nth-child(8),
+.attendance-table-container td:nth-child(8) {
+  min-width: 110px;
+}
+
+.attendance-table-container th:nth-child(9),
+.attendance-table-container td:nth-child(9) {
+  min-width: 140px;
+}
+
+.attendance-table-container th:nth-child(10),
+.attendance-table-container td:nth-child(10) {
+  min-width: 90px;
 }
 
 .attendance-table-container tbody tr:hover {

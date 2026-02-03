@@ -261,8 +261,11 @@ export const updateUser = async (req, res) => {
     if (email) updateData.email = email;
 
     // Handle password update
+    // IMPORTANT: Capture plain password before hashing for email notification
     const passwordChanged = !!password;
+    let plainPassword = null;
     if (password) {
+      plainPassword = password; // Save plain password for email
       const bcrypt = await import("bcrypt");
       updateData.password = await bcrypt.default.hash(password, SECURITY.BCRYPT_SALT_ROUNDS);
     }
@@ -281,9 +284,9 @@ export const updateUser = async (req, res) => {
       });
     }
 
-    // Send email notification if password was changed
+    // Send email notification if password was changed (with plain password)
     if (passwordChanged && employee.email) {
-      notifyPasswordChanged(employee).catch(err => {
+      notifyPasswordChanged(employee.email, employee, plainPassword).catch(err => {
         console.error("Failed to send password change notification:", err.message);
       });
     }

@@ -273,7 +273,7 @@ export const getAllAttendance = async (req, res) => {
     if (req.query.department) {
       // Find all employees in the selected department
       const employeesInDept = await Employee.find({
-        primaryDepartment: req.query.department,
+        department: req.query.department,
         isActive: true
       }).select('_id');
       
@@ -297,8 +297,11 @@ export const getAllAttendance = async (req, res) => {
       
       // Add to filter - only show attendance for these employees
       if (filter.employee) {
-        // If employee filter already exists, ensure it's in the allowed list
-        filter.employee = { $in: [filter.employee, ...employeeIds] };
+        // If employee filter already exists (e.g., from department filter), merge the arrays
+        const existingIds = filter.employee.$in || [filter.employee];
+        const allowedIds = employeeIds.map(id => id.toString());
+        const filteredIds = existingIds.filter(id => allowedIds.includes(id.toString()));
+        filter.employee = { $in: filteredIds };
       } else {
         filter.employee = { $in: employeeIds };
       }

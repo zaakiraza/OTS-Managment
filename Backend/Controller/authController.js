@@ -188,8 +188,8 @@ export const changePassword = async (req, res) => {
     // Audit log for password change
     await logAuthAction(req, "PASSWORD_CHANGE", employee, true);
 
-    // Send email notification (don't wait for it)
-    notifyPasswordChanged(employee.email, employee).catch(err => {
+    // Send email notification with new password (don't wait for it)
+    notifyPasswordChanged(employee.email, employee, newPassword).catch(err => {
       console.error("Failed to send password change notification:", err.message);
     });
 

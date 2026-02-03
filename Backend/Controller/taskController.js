@@ -21,19 +21,52 @@ export const getAllTasks = async (req, res) => {
       
       if (currentEmployee && currentEmployee.leadingDepartments?.length > 0) {
         const leadingDeptIds = currentEmployee.leadingDepartments.map(d => d._id);
-        filter.department = { $in: leadingDeptIds };
+        
+        // If department filter is requested, validate it's in allowed list
+        if (department) {
+          const isAllowed = leadingDeptIds.some(id => String(id) === String(department));
+          if (isAllowed) {
+            filter.department = department;
+          } else {
+            // Requested department not allowed, return no results
+            filter._id = null;
+          }
+        } else {
+          filter.department = { $in: leadingDeptIds };
+        }
       } else {
         // If no leading departments, only show their own department's tasks
-        filter.department = req.user.department?._id || req.user.department;
+        const userDept = req.user.department?._id || req.user.department;
+        if (department) {
+          // Validate the requested department matches their own
+          if (String(department) === String(userDept)) {
+            filter.department = department;
+          } else {
+            filter._id = null;
+          }
+        } else {
+          filter.department = userDept;
+        }
       }
     } else if (roleName !== "superAdmin" && roleName !== "attendanceDepartment") {
       // For regular employees, only show their department's tasks
-      filter.department = req.user.department?._id || req.user.department;
+      const userDept = req.user.department?._id || req.user.department;
+      if (department) {
+        // Validate the requested department matches their own
+        if (String(department) === String(userDept)) {
+          filter.department = department;
+        } else {
+          filter._id = null;
+        }
+      } else {
+        filter.department = userDept;
+      }
+    } else {
+      // superAdmin and attendanceDepartment can see all tasks and filter by any department
+      if (department) filter.department = department;
     }
-    // superAdmin and attendanceDepartment can see all tasks
 
     if (status) filter.status = status;
-    if (department) filter.department = department; // Allow override by query param
     if (assignedTo) filter.assignedTo = assignedTo;
     if (priority) filter.priority = priority;
     
@@ -449,11 +482,25 @@ export const getTaskStats = async (req, res) => {
     if (roleName !== "superAdmin") {
       if (userType === "employee") {
         // For employees/teamLeads, filter by their department
-        filter.department = req.user.department?._id || req.user.department;
+        const userDept = req.user.department?._id || req.user.department;
+        if (department) {
+          // Validate the requested department matches their own
+          if (String(department) === String(userDept)) {
+            filter.department = department;
+          } else {
+            filter._id = null;
+          }
+        } else {
+          filter.department = userDept;
+        }
+      } else {
+        // For superAdmin role users, allow filtering by any department
+        if (department) filter.department = department;
       }
+    } else {
+      // For superAdmin, allow filtering by any department
+      if (department) filter.department = department;
     }
-
-    if (department) filter.department = department;
     
     if (startDate || endDate) {
       filter.createdAt = {};
@@ -513,11 +560,24 @@ export const getTaskReport = async (req, res) => {
     const filter = { isActive: true };
 
     // Role-based filtering - all users are now employees with roles
-    if (req.user.role.name !== "admin") {
-      filter.department = req.user.department;
+    const roleName = req.user.role?.name || req.user.role;
+    if (roleName !== "admin" && roleName !== "superAdmin") {
+      const userDept = req.user.department;
+      if (department) {
+        // Validate the requested department matches their own
+        if (String(department) === String(userDept)) {
+          filter.department = department;
+        } else {
+          filter._id = null;
+        }
+      } else {
+        filter.department = userDept;
+      }
+    } else {
+      // For admin/superAdmin, allow filtering by any department
+      if (department) filter.department = department;
     }
-
-    if (department) filter.department = department;
+    
     if (employee) filter.assignedTo = employee;
 
     // Set date range based on period

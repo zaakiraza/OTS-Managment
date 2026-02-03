@@ -259,9 +259,12 @@ function Attendance() {
         pktHours = pktHours - 24;
       }
       
-      const hours = String(pktHours).padStart(2, '0');
+      const ampm = pktHours >= 12 ? "PM" : "AM";
+      let hours12 = pktHours % 12;
+      if (hours12 === 0) hours12 = 12;
+      
       const minutes = String(pktMinutes).padStart(2, '0');
-      return `${hours}:${minutes}`;
+      return `${hours12}:${minutes} ${ampm}`;
     } catch (error) {
       return "-";
     }

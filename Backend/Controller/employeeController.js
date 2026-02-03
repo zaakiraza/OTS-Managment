@@ -389,20 +389,30 @@ export const getAllEmployees = async (req, res) => {
       });
       
       if (allowedDeptIds.size > 0) {
-        // Show employees from allowed departments
-        const allowedDeptObjectIds = Array.from(allowedDeptIds).map(id => new mongoose.Types.ObjectId(id));
-        const deptFilter = {
-          $or: [
-            { department: { $in: allowedDeptObjectIds } },
-            { additionalDepartments: { $in: allowedDeptObjectIds } }
-          ]
-        };
-        
-        if (filter.$or) {
-          filter.$and = [{ $or: filter.$or }, deptFilter];
-          delete filter.$or;
+        // If a specific department filter was already applied, validate it's in allowed list
+        if (filter.department) {
+          const requestedDeptId = String(filter.department);
+          if (!allowedDeptIds.has(requestedDeptId)) {
+            // Requested department is not in allowed list, return no results
+            filter._id = null;
+          }
+          // else: keep the existing department filter as is
         } else {
-          filter.$or = deptFilter.$or;
+          // Show employees from allowed departments
+          const allowedDeptObjectIds = Array.from(allowedDeptIds).map(id => new mongoose.Types.ObjectId(id));
+          const deptFilter = {
+            $or: [
+              { department: { $in: allowedDeptObjectIds } },
+              { additionalDepartments: { $in: allowedDeptObjectIds } }
+            ]
+          };
+          
+          if (filter.$or) {
+            filter.$and = [{ $or: filter.$or }, deptFilter];
+            delete filter.$or;
+          } else {
+            filter.$or = deptFilter.$or;
+          }
         }
       } else {
         // If user has no accessible departments, show nothing
@@ -418,19 +428,30 @@ export const getAllEmployees = async (req, res) => {
       if (currentEmployee && currentEmployee.leadingDepartments?.length > 0) {
         const leadingDeptIds = currentEmployee.leadingDepartments.map(d => d._id);
         
-        // Use $and to combine with existing $or from search
-        const deptFilter = {
-          $or: [
-            { department: { $in: leadingDeptIds } },
-            { additionalDepartments: { $in: leadingDeptIds } }
-          ]
-        };
-        
-        if (filter.$or) {
-          filter.$and = [{ $or: filter.$or }, deptFilter];
-          delete filter.$or;
+        // If a specific department filter was already applied, validate it's in allowed list
+        if (filter.department) {
+          const requestedDeptId = String(filter.department);
+          const isAllowed = leadingDeptIds.some(id => String(id) === requestedDeptId);
+          if (!isAllowed) {
+            // Requested department is not in allowed list, return no results
+            filter._id = null;
+          }
+          // else: keep the existing department filter as is
         } else {
-          filter.$or = deptFilter.$or;
+          // Use $and to combine with existing $or from search
+          const deptFilter = {
+            $or: [
+              { department: { $in: leadingDeptIds } },
+              { additionalDepartments: { $in: leadingDeptIds } }
+            ]
+          };
+          
+          if (filter.$or) {
+            filter.$and = [{ $or: filter.$or }, deptFilter];
+            delete filter.$or;
+          } else {
+            filter.$or = deptFilter.$or;
+          }
         }
       } else {
         filter._id = req.user._id;
@@ -677,8 +698,11 @@ export const updateEmployee = async (req, res) => {
     }
     
     // Handle password: hash if provided, otherwise remove from update
+    // IMPORTANT: Capture plain password before hashing for email notification
     const passwordChanged = !!(updateData.password && updateData.password !== '');
+    let plainPassword = null;
     if (passwordChanged) {
+      plainPassword = updateData.password; // Save plain password for email
       // Hash the password before updating
       updateData.password = await bcrypt.hash(updateData.password, 10);
     } else {
@@ -702,9 +726,9 @@ export const updateEmployee = async (req, res) => {
       });
     }
 
-    // Send email notification if password was changed
+    // Send email notification if password was changed (with plain password)
     if (passwordChanged && employee.email) {
-      notifyPasswordChanged(employee.email, employee).catch(err => {
+      notifyPasswordChanged(employee.email, employee, plainPassword).catch(err => {
         console.error("Failed to send password change notification:", err.message);
       });
     }

@@ -48,11 +48,30 @@ const headerStyle = {
 };
 
 /**
+ * Convert 24-hour format to 12-hour format
+ */
+const convertTo12HourFormat = (time24) => {
+  if (!time24) return '';
+  
+  const [hours, minutes] = time24.split(':');
+  let hour = parseInt(hours);
+  const ampm = hour >= 12 ? 'PM' : 'AM';
+  
+  if (hour > 12) {
+    hour -= 12;
+  } else if (hour === 0) {
+    hour = 12;
+  }
+  
+  return `${hour}:${minutes} ${ampm}`;
+};
+
+/**
  * Export Employees to Excel or CSV
  */
 export const exportEmployees = async (req, res) => {
   try {
-    const { department, isActive = "true", format = 'xlsx' } = req.query;
+    const { department, isActive = "true", format = 'xlsx', fields } = req.query;
     const filter = { isActive: isActive === "true" };
     if (department) filter.department = department;
 
@@ -61,35 +80,75 @@ export const exportEmployees = async (req, res) => {
       .populate("role", "name")
       .populate("additionalDepartments", "name")
       .populate("leadingDepartments", "name")
+      .populate("workSchedule")
       .sort({ name: 1 });
 
-    // Prepare data rows
-    const dataRows = employees.map((emp) => ({
+    // Parse selected fields, default to all if not provided
+    let selectedFields = fields ? fields.split(',') : [
+      'employeeId', 'name', 'email', 'phone', 'cnic', 'department', 
+      'additionalDepts', 'leadingDepts', 'role', 'position', 'workSchedule', 'joinDate', 'salary', 'status'
+    ];
+
+    // Prepare data rows with all possible data
+    const fullDataRows = employees.map((emp) => ({
       employeeId: emp.employeeId,
       name: emp.name,
       email: emp.email || "",
       phone: emp.phone || "",
+      cnic: emp.cnic || "",
       department: emp.department?.name || "N/A",
       additionalDepts: emp.additionalDepartments?.map((d) => d.name).join(", ") || "",
       leadingDepts: emp.leadingDepartments?.map((d) => d.name).join(", ") || "",
       role: emp.role?.name || "N/A",
       position: emp.position || "",
+      workSchedule: emp.workSchedule 
+        ? `${convertTo12HourFormat(emp.workSchedule.checkInTime)} - ${convertTo12HourFormat(emp.workSchedule.checkOutTime)}`
+        : "N/A",
       joinDate: emp.joiningDate ? new Date(emp.joiningDate).toLocaleDateString() : "",
       salary: emp.salary?.monthlySalary || 0,
       status: emp.isActive ? "Active" : "Inactive",
     }));
 
+    // Filter to only selected fields
+    const dataRows = fullDataRows.map(row => {
+      const filtered = {};
+      selectedFields.forEach(field => {
+        if (field in row) {
+          filtered[field] = row[field];
+        }
+      });
+      return filtered;
+    });
+
+    // Define field labels
+    const fieldLabels = {
+      'employeeId': 'Employee ID',
+      'name': 'Name',
+      'email': 'Email',
+      'phone': 'Phone',
+      'cnic': 'CNIC',
+      'department': 'Department',
+      'additionalDepts': 'Additional Depts',
+      'leadingDepts': 'Leading Depts',
+      'role': 'Role',
+      'position': 'Position',
+      'workSchedule': 'Work Schedule',
+      'joinDate': 'Join Date',
+      'salary': 'Salary',
+      'status': 'Status',
+    };
+
+    // Get headers for selected fields
+    const headers = selectedFields.map(field => fieldLabels[field] || field);
+
     await logExportAction(req, "Employee", `Exported ${employees.length} employees to ${format.toUpperCase()}`);
 
     if (format === 'csv') {
       // Export as CSV
-      const headers = ["Employee ID", "Name", "Email", "Phone", "Department", "Additional Depts", "Leading Depts", "Role", "Position", "Join Date", "Salary", "Status"];
-      const rows = dataRows.map((row) => [
-        row.employeeId, row.name, row.email, row.phone, row.department,
-        row.additionalDepts, row.leadingDepts, row.role, row.position,
-        row.joinDate, row.salary, row.status
-      ]);
-      const csvContent = [headers.join(","), ...rows.map((row) => row.map((cell) => `"${cell}"`).join(","))].join("\n");
+      const rows = dataRows.map((row) => 
+        selectedFields.map(field => `"${row[field] || ''}"`)
+      );
+      const csvContent = [headers.join(","), ...rows.map((row) => row.join(","))].join("\n");
       
       setCsvHeaders(res, `employees_${new Date().toISOString().split("T")[0]}.csv`);
       res.send(csvContent);
@@ -101,20 +160,15 @@ export const exportEmployees = async (req, res) => {
 
       const worksheet = workbook.addWorksheet("Employees");
 
-      worksheet.columns = [
-        { header: "Employee ID", key: "employeeId", width: 15 },
-        { header: "Name", key: "name", width: 25 },
-        { header: "Email", key: "email", width: 30 },
-        { header: "Phone", key: "phone", width: 15 },
-        { header: "Department", key: "department", width: 20 },
-        { header: "Additional Depts", key: "additionalDepts", width: 25 },
-        { header: "Leading Depts", key: "leadingDepts", width: 25 },
-        { header: "Role", key: "role", width: 15 },
-        { header: "Position", key: "position", width: 20 },
-        { header: "Join Date", key: "joinDate", width: 15 },
-        { header: "Salary", key: "salary", width: 12 },
-        { header: "Status", key: "status", width: 10 },
-      ];
+      // Define columns dynamically based on selected fields
+      const columns = selectedFields.map(field => ({
+        header: fieldLabels[field] || field,
+        key: field,
+        width: field === 'email' || field === 'additionalDepts' || field === 'leadingDepts' ? 30 : 
+               field === 'name' || field === 'position' || field === 'workSchedule' ? 25 : 15
+      }));
+
+      worksheet.columns = columns;
 
       worksheet.getRow(1).eachCell((cell) => {
         cell.font = headerStyle.font;
@@ -124,7 +178,10 @@ export const exportEmployees = async (req, res) => {
       });
 
       dataRows.forEach((row) => worksheet.addRow(row));
-      worksheet.autoFilter = "A1:L1";
+      
+      // Set autofilter range
+      const lastColumn = String.fromCharCode(64 + selectedFields.length);
+      worksheet.autoFilter = `A1:${lastColumn}1`;
 
       setExcelHeaders(res, `employees_${new Date().toISOString().split("T")[0]}.xlsx`);
       await workbook.xlsx.write(res);
@@ -178,7 +235,7 @@ export const exportAttendance = async (req, res) => {
     }
 
     let query = Attendance.find(filter)
-      .populate("employee", "name employeeId department")
+      .populate("employee", "name employeeId biometricId department")
       .sort({ date: -1 });
 
     const attendanceRecords = await query;
@@ -197,10 +254,13 @@ export const exportAttendance = async (req, res) => {
       try {
         const date = new Date(dateTime);
         if (isNaN(date.getTime())) return "N/A";
-        const hours = String(date.getHours()).padStart(2, '0');
+        const hours24 = date.getHours();
         const minutes = String(date.getMinutes()).padStart(2, '0');
-        // Return as text with space prefix to prevent Excel auto-formatting
-        return `${hours}:${minutes}`;
+        const ampm = hours24 >= 12 ? "PM" : "AM";
+        let hours12 = hours24 % 12;
+        if (hours12 === 0) hours12 = 12;
+        // Return as text to prevent Excel auto-formatting
+        return `${hours12}:${minutes} ${ampm}`;
       } catch (e) {
         return "N/A";
       }
@@ -225,28 +285,28 @@ export const exportAttendance = async (req, res) => {
     const dataRows = filteredRecords.map((record) => ({
       date: formatDate(record.date),
       employeeId: record.employee?.employeeId || "N/A",
+      biometricId: record.employee?.biometricId || "N/A",
       name: record.employee?.name || "N/A",
       checkIn: formatTime(record.checkIn),
       checkOut: formatTime(record.checkOut),
       workingHours: record.workingHours?.toFixed(2) || "0.00",
       status: record.status || "N/A",
-      late: record.isLate ? "Yes" : "No",
     }));
 
     await logExportAction(req, "Attendance", `Exported ${filteredRecords.length} attendance records to ${format.toUpperCase()}`);
 
     if (format === 'csv') {
       // Export as CSV
-      const headers = ["Date", "Employee ID", "Employee Name", "Check In", "Check Out", "Working Hours", "Status", "Late"];
+      const headers = ["Date", "Employee ID", "Biometric ID", "Employee Name", "Check In", "Check Out", "Working Hours", "Status"];
       const rows = dataRows.map((row) => [
         row.date,
         row.employeeId,
+        row.biometricId,
         row.name,
         row.checkIn,
         row.checkOut,
         row.workingHours,
         row.status,
-        row.late,
       ]);
       const csvContent = [headers.join(","), ...rows.map((row) => row.map((cell) => `"${cell}"`).join(","))].join("\n");
       
@@ -260,12 +320,12 @@ export const exportAttendance = async (req, res) => {
       worksheet.columns = [
         { header: "Date", key: "date", width: 15 },
         { header: "Employee ID", key: "employeeId", width: 15 },
+        { header: "Biometric ID", key: "biometricId", width: 15 },
         { header: "Employee Name", key: "name", width: 25 },
-        { header: "Check In", key: "checkIn", width: 12 },
-        { header: "Check Out", key: "checkOut", width: 12 },
+        { header: "Check In", key: "checkIn", width: 14 },
+        { header: "Check Out", key: "checkOut", width: 14 },
         { header: "Working Hours", key: "workingHours", width: 15 },
         { header: "Status", key: "status", width: 12 },
-        { header: "Late", key: "late", width: 10 },
       ];
 
       worksheet.getRow(1).eachCell((cell) => {

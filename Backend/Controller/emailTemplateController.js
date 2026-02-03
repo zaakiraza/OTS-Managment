@@ -64,7 +64,8 @@ const getSampleData = (templateId) => {
       userEmail: 'preview@example.com',
       userData: {
         email: 'preview@example.com',
-      }
+      },
+      newPassword: 'SecurePass123!'
     },
     'team-lead-assignment': {
       userEmail: 'preview@example.com',
@@ -692,7 +693,7 @@ export const sendTestEmail = async (req, res) => {
         result = await notifyTicketComment(email, sampleData.commentData);
         break;
       case 'password-changed':
-        result = await notifyPasswordChanged(email, sampleData.userData);
+        result = await notifyPasswordChanged(email, sampleData.userData, sampleData.newPassword);
         break;
       case 'team-lead-assignment':
         result = await notifyTeamLeadAssignment(email, sampleData.teamData);

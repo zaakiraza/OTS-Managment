@@ -25,12 +25,43 @@ const Employees = () => {
   const [showImportModal, setShowImportModal] = useState(false);
   const [importFile, setImportFile] = useState(null);
   const [importResults, setImportResults] = useState(null);
+  const [showExportFieldsModal, setShowExportFieldsModal] = useState(false);
+  const [exportFormat, setExportFormat] = useState(null); // 'xlsx' or 'csv'
+  const [selectedExportFields, setSelectedExportFields] = useState({});
   const [pagination, setPagination] = useState({
     page: 1,
     limit: 50,
     total: 0,
     pages: 1,
   });
+
+  // Define all available export fields
+  const exportFields = [
+    { key: 'employeeId', label: 'Employee ID' },
+    { key: 'name', label: 'Name' },
+    { key: 'email', label: 'Email' },
+    { key: 'phone', label: 'Phone' },
+    { key: 'cnic', label: 'CNIC' },
+    { key: 'department', label: 'Department' },
+    { key: 'additionalDepts', label: 'Additional Departments' },
+    { key: 'leadingDepts', label: 'Leading Departments' },
+    { key: 'role', label: 'Role' },
+    { key: 'position', label: 'Position' },
+    { key: 'workSchedule', label: 'Work Schedule' },
+    { key: 'joinDate', label: 'Join Date' },
+    { key: 'salary', label: 'Salary' },
+    { key: 'status', label: 'Status' },
+  ];
+
+  // Initialize selected fields on component mount
+  useEffect(() => {
+    const initialFields = {};
+    exportFields.forEach(field => {
+      initialFields[field.key] = true;
+    });
+    setSelectedExportFields(initialFields);
+  }, []);
+
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -501,23 +532,50 @@ const Employees = () => {
   };
 
   // Export functions
-  const handleExportExcel = async () => {
+  const handleExportExcel = () => {
+    setExportFormat('xlsx');
+    setShowExportFieldsModal(true);
+  };
+
+  const handleExportCsv = () => {
+    setExportFormat('csv');
+    setShowExportFieldsModal(true);
+  };
+
+  // Perform the actual export
+  const handleConfirmExport = async () => {
     try {
       setExporting(true);
-      const params = {};
+      const selectedFields = Object.keys(selectedExportFields).filter(key => selectedExportFields[key]);
+      
+      if (selectedFields.length === 0) {
+        toast.error("Please select at least one field to export");
+        setExporting(false);
+        return;
+      }
+
+      const params = {
+        fields: selectedFields.join(','),
+      };
       if (selectedDept) params.department = selectedDept;
       
-      const response = await exportAPI.employees(params);
+      const response = exportFormat === 'xlsx' 
+        ? await exportAPI.employees(params)
+        : await exportAPI.employeesCsv(params);
+      
       const blob = new Blob([response.data], { 
-        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" 
+        type: exportFormat === 'xlsx' 
+          ? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+          : "text/csv"
       });
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `employees_${new Date().toISOString().split("T")[0]}.xlsx`;
+      link.download = `employees_${new Date().toISOString().split("T")[0]}.${exportFormat === 'xlsx' ? 'xlsx' : 'csv'}`;
       link.click();
       window.URL.revokeObjectURL(url);
-      toast.success("Employees exported to Excel successfully!");
+      toast.success(`Employees exported to ${exportFormat === 'xlsx' ? 'Excel' : 'CSV'} successfully!`);
+      setShowExportFieldsModal(false);
     } catch (error) {
       console.error("Export failed:", error);
       toast.error("Failed to export employees");
@@ -526,27 +584,20 @@ const Employees = () => {
     }
   };
 
-  const handleExportCsv = async () => {
-    try {
-      setExporting(true);
-      const params = {};
-      if (selectedDept) params.department = selectedDept;
-      
-      const response = await exportAPI.employeesCsv(params);
-      const blob = new Blob([response.data], { type: "text/csv" });
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `employees_${new Date().toISOString().split("T")[0]}.csv`;
-      link.click();
-      window.URL.revokeObjectURL(url);
-      toast.success("Employees exported to CSV successfully!");
-    } catch (error) {
-      console.error("Export failed:", error);
-      toast.error("Failed to export employees");
-    } finally {
-      setExporting(false);
-    }
+  const handleToggleExportField = (fieldKey) => {
+    setSelectedExportFields(prev => ({
+      ...prev,
+      [fieldKey]: !prev[fieldKey]
+    }));
+  };
+
+  const handleSelectAllExportFields = () => {
+    const allSelected = Object.values(selectedExportFields).every(v => v);
+    const newFields = {};
+    exportFields.forEach(field => {
+      newFields[field.key] = !allSelected;
+    });
+    setSelectedExportFields(newFields);
   };
 
   // Handle search
@@ -998,6 +1049,7 @@ const Employees = () => {
               </div>
             </>
           )}
+          {/*
           <button 
             className="btn-secondary" 
             onClick={handleDownloadTemplate}
@@ -1018,6 +1070,7 @@ const Employees = () => {
           >
             <i className="fas fa-file-upload"></i> Import Employees
           </button>
+          */}
           <button className="btn-primary" onClick={() => {
             setEditMode(false);
             setEditId(null);
@@ -1825,6 +1878,68 @@ const Employees = () => {
                   )}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Export Fields Selection Modal */}
+      {showExportFieldsModal && (
+        <div className="modal-overlay" onClick={() => setShowExportFieldsModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Select Fields to Export</h2>
+              <button 
+                type="button" 
+                className="close-btn"
+                onClick={() => setShowExportFieldsModal(false)}
+              >
+                <i className="fas fa-times"></i>
+              </button>
+            </div>
+            <div className="modal-body" style={{ maxHeight: '60vh', overflowY: 'auto' }}>
+              <div className="field-selection-container">
+                <div className="select-all-option">
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={Object.values(selectedExportFields).every(v => v)}
+                      onChange={handleSelectAllExportFields}
+                    />
+                    <span style={{ marginLeft: '8px', fontWeight: '600' }}>Select All</span>
+                  </label>
+                </div>
+                <div className="fields-grid">
+                  {exportFields.map((field) => (
+                    <label key={field.key} className="field-checkbox">
+                      <input
+                        type="checkbox"
+                        checked={selectedExportFields[field.key] || false}
+                        onChange={() => handleToggleExportField(field.key)}
+                      />
+                      <span style={{ marginLeft: '8px' }}>{field.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => setShowExportFieldsModal(false)}
+              >
+                <i className="fas fa-times"></i> Cancel
+              </button>
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={handleConfirmExport}
+                disabled={exporting || Object.values(selectedExportFields).every(v => !v)}
+              >
+                <i className={exporting ? "fas fa-spinner fa-spin" : "fas fa-download"}></i>
+                {exporting ? ` Exporting to ${exportFormat === 'xlsx' ? 'Excel' : 'CSV'}...` : `Export to ${exportFormat === 'xlsx' ? 'Excel' : 'CSV'}`}
+              </button>
             </div>
           </div>
         </div>
