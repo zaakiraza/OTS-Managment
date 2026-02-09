@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import * as XLSX from "xlsx";
 import SideBar from "../../Components/SideBar/SideBar";
 import taskAPI from "../../Config/taskApi";
 import { employeeAPI, departmentAPI } from "../../Config/Api";
@@ -21,6 +22,8 @@ function Tasks() {
     department: "",
     priority: "",
     employee: "",
+    dateRange: "active", // 'active', 'today', 'week', 'month', 'all'
+    groupBy: "status", // 'status', 'week', 'month'
   });
   const [formData, setFormData] = useState({
     title: "",
@@ -329,6 +332,99 @@ function Tasks() {
     return colors[priority] || "#999";
   };
 
+  const getTaskDateStatus = (task) => {
+    if (!task.dueDate) return null;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const dueDate = new Date(task.dueDate);
+    dueDate.setHours(0, 0, 0, 0);
+    
+    const weekStart = new Date(today);
+    weekStart.setDate(today.getDate() - today.getDay());
+    
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekStart.getDate() + 6);
+    
+    const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+    const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+    
+    return { today, dueDate, weekStart, weekEnd, monthStart, monthEnd };
+  };
+
+  const filterTasksByDateRange = (tasksToFilter) => {
+    return tasksToFilter.filter((task) => {
+      // Always exclude completed tasks unless viewing 'all'
+      if (task.status === "completed" && filter.dateRange !== "all") {
+        return false;
+      }
+
+      const dateStatus = getTaskDateStatus(task);
+      if (!dateStatus) return true; // No due date, show it
+
+      const { today, dueDate, weekStart, weekEnd, monthStart, monthEnd } = dateStatus;
+
+      switch (filter.dateRange) {
+        case "active": // Not completed and not overdue
+          return dueDate >= today;
+        case "today":
+          return dueDate.getTime() === today.getTime();
+        case "week":
+          return dueDate >= weekStart && dueDate <= weekEnd;
+        case "month":
+          return dueDate >= monthStart && dueDate <= monthEnd;
+        case "all":
+          return true;
+        default:
+          return true;
+      }
+    });
+  };
+
+  const getWeekLabel = (date) => {
+    const d = new Date(date);
+    const weekStart = new Date(d);
+    weekStart.setDate(d.getDate() - d.getDay());
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekStart.getDate() + 6);
+    return `${weekStart.toLocaleDateString()} - ${weekEnd.toLocaleDateString()}`;
+  };
+
+  const getMonthLabel = (date) => {
+    const d = new Date(date);
+    return d.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+  };
+
+  const groupTasksByWeek = (tasksToGroup) => {
+    const grouped = {};
+    tasksToGroup.forEach((task) => {
+      if (!task.dueDate) {
+        if (!grouped["No Due Date"]) grouped["No Due Date"] = [];
+        grouped["No Due Date"].push(task);
+      } else {
+        const label = getWeekLabel(task.dueDate);
+        if (!grouped[label]) grouped[label] = [];
+        grouped[label].push(task);
+      }
+    });
+    return grouped;
+  };
+
+  const groupTasksByMonth = (tasksToGroup) => {
+    const grouped = {};
+    tasksToGroup.forEach((task) => {
+      if (!task.dueDate) {
+        if (!grouped["No Due Date"]) grouped["No Due Date"] = [];
+        grouped["No Due Date"].push(task);
+      } else {
+        const label = getMonthLabel(task.dueDate);
+        if (!grouped[label]) grouped[label] = [];
+        grouped[label].push(task);
+      }
+    });
+    return grouped;
+  };
+
   const isOverdue = (dueDate) => {
     return new Date(dueDate) < new Date() && selectedTask?.status !== "completed";
   };
@@ -360,11 +456,68 @@ function Tasks() {
     );
   };
 
-  const groupedTasks = {
-    todo: tasks.filter((t) => t.status === "todo"),
-    "in-progress": tasks.filter((t) => t.status === "in-progress"),
-    completed: tasks.filter((t) => t.status === "completed"),
+  const exportTasksToExcel = () => {
+    try {
+      const exportData = filteredTasksList.map((task) => ({
+        "Task ID": task.taskId,
+        "Title": task.title,
+        "Description": task.description || "-",
+        "Priority": task.priority,
+        "Status": task.status.replace("-", " ").charAt(0).toUpperCase() + task.status.slice(1),
+        "Assigned To": renderAssignees(task.assignedTo, true),
+        "Department": task.department?.name || "-",
+        "Due Date": task.dueDate ? new Date(task.dueDate).toLocaleDateString() : "No due date",
+        "Completed At": task.completedAt ? new Date(task.completedAt).toLocaleDateString() : "-",
+      }));
+
+      if (exportData.length === 0) {
+        toast.error("No tasks to export");
+        return;
+      }
+
+      const workbook = XLSX.utils.book_new();
+      const worksheet = XLSX.utils.json_to_sheet(exportData);
+      
+      // Set column widths
+      const colWidths = [
+        { wch: 10 },
+        { wch: 25 },
+        { wch: 30 },
+        { wch: 12 },
+        { wch: 15 },
+        { wch: 25 },
+        { wch: 15 },
+        { wch: 15 },
+        { wch: 15 },
+      ];
+      worksheet["!cols"] = colWidths;
+      
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Tasks");
+      
+      const fileName = `Tasks_${new Date().toISOString().split("T")[0]}.xlsx`;
+      XLSX.writeFile(workbook, fileName);
+      toast.success("Tasks exported to Excel");
+    } catch (error) {
+      console.error("Error exporting tasks:", error);
+      toast.error("Failed to export tasks");
+    }
   };
+
+  const filteredTasksList = filterTasksByDateRange(tasks);
+  
+  let groupedTasks = {};
+  if (filter.groupBy === "week") {
+    groupedTasks = groupTasksByWeek(filteredTasksList);
+  } else if (filter.groupBy === "month") {
+    groupedTasks = groupTasksByMonth(filteredTasksList);
+  } else {
+    // Default: group by status
+    groupedTasks = {
+      todo: filteredTasksList.filter((t) => t.status === "todo"),
+      "in-progress": filteredTasksList.filter((t) => t.status === "in-progress"),
+      completed: filteredTasksList.filter((t) => t.status === "completed"),
+    };
+  }
 
   return (
     <div className="dashboard-layout">
@@ -382,11 +535,45 @@ function Tasks() {
                 <p>Assign and manage team tasks</p>
               </div>
             </div>
-            {canCreateTasks && (
-              <button className="btn-primary" onClick={() => setShowModal(true)}>
-                + Create Task
-              </button>
-            )}
+            <div style={{ display: "flex", gap: "10px" }}>
+              {canCreateTasks && (
+                <button className="btn-primary" onClick={() => setShowModal(true)}>
+                  + Create Task
+                </button>
+              )}
+              {canViewTasks && (
+                <button
+                  className="btn-primary"
+                  onClick={exportTasksToExcel}
+                  style={{
+                    background: "#3b82f6",
+                    color: "white",
+                    border: "none",
+                    padding: "10px 18px",
+                    borderRadius: "6px",
+                    cursor: "pointer",
+                    fontSize: "14px",
+                    fontWeight: "600",
+                    transition: "all 0.3s ease",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.target.style.transform = "translateY(-2px)";
+                    e.target.style.background = "#2563eb";
+                    e.target.style.boxShadow = "0 6px 16px rgba(59, 130, 246, 0.4)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.target.style.transform = "translateY(0)";
+                    e.target.style.background = "#3b82f6";
+                    e.target.style.boxShadow = "none";
+                  }}
+                >
+                  <i className="fas fa-download"></i> Export to Excel
+                </button>
+              )}
+            </div>
           </div>
 
           {canViewTasks && (
@@ -425,6 +612,30 @@ function Tasks() {
 
               {/* Filters */}
               <div className="filters">
+                <div className="filter-group">
+                  <label>Date Range</label>
+                  <select
+                    value={filter.dateRange}
+                    onChange={(e) => setFilter({ ...filter, dateRange: e.target.value })}
+                  >
+                    <option value="active">Active (Not Completed & Not Overdue)</option>
+                    <option value="today">Today</option>
+                    <option value="week">This Week</option>
+                    <option value="month">This Month</option>
+                    <option value="all">All Tasks</option>
+                  </select>
+                </div>
+                <div className="filter-group">
+                  <label>Group By</label>
+                  <select
+                    value={filter.groupBy}
+                    onChange={(e) => setFilter({ ...filter, groupBy: e.target.value })}
+                  >
+                    <option value="status">By Status (To Do, In Progress, Completed)</option>
+                    <option value="week">By Week</option>
+                    <option value="month">By Month</option>
+                  </select>
+                </div>
                 <div className="filter-group">
                   <label>Department</label>
                   <select
@@ -471,155 +682,84 @@ function Tasks() {
 
               {/* Kanban Board */}
               <div className="kanban-board">
-                {/* To Do Column */}
-                <div className="kanban-column">
-                  <div className="column-header">
-                    <div className="column-title">
-                      <i className="fas fa-list"></i> To Do
-                      <span className="column-count">{groupedTasks.todo.length}</span>
-                    </div>
-                  </div>
-                  {groupedTasks.todo.length === 0 ? (
-                    <div className="empty-column">No tasks</div>
-                  ) : (
-                    groupedTasks.todo.map((task) => (
-                      <div
-                        key={task._id}
-                        className={`task-card priority-${task.priority.toLowerCase()}`}
-                        onClick={() => handleViewTask(task)}
-                      >
-                        <div className="task-header">
-                          <span className="task-id">{task.taskId}</span>
-                          <span
-                            className="priority-badge"
-                            style={{
-                              background: getPriorityColor(task.priority),
-                              color: "white",
-                            }}
-                          >
-                            {task.priority}
-                          </span>
-                        </div>
-                        <div className="task-title">{task.title}</div>
-                        {task.description && (
-                          <div className="task-description">{task.description}</div>
-                        )}
-                        <div className="task-meta">
-                          <div className="task-assignee">
-                            <i className="fas fa-user"></i> {renderAssignees(task.assignedTo)}
-                          </div>
-                          <div
-                            className={`task-due-date ${
-                              isOverdue(task.dueDate) ? "overdue" : ""
-                            }`}
-                          >
-                            <i className="fas fa-calendar"></i> {new Date(task.dueDate).toLocaleDateString()}
-                          </div>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
+                {Object.entries(groupedTasks).map(([columnName, columnTasks]) => {
+                  // Determine column icon and styling based on groupBy type
+                  let columnIcon = "fas fa-list";
+                  let columnColor = "#94a3b8";
+                  
+                  if (filter.groupBy === "status") {
+                    if (columnName === "todo") columnIcon = "fas fa-list";
+                    else if (columnName === "in-progress") {
+                      columnIcon = "fas fa-spinner";
+                      columnColor = "#f59e0b";
+                    } else if (columnName === "completed") {
+                      columnIcon = "fas fa-check-circle";
+                      columnColor = "#10b981";
+                    }
+                  } else if (filter.groupBy === "week") {
+                    columnIcon = "fas fa-calendar-week";
+                    columnColor = "#8b5cf6";
+                  } else if (filter.groupBy === "month") {
+                    columnIcon = "fas fa-calendar";
+                    columnColor = "#06b6d4";
+                  }
 
-                {/* In Progress Column */}
-                <div className="kanban-column">
-                  <div className="column-header">
-                    <div className="column-title">
-                      <i className="fas fa-spinner"></i> In Progress
-                      <span className="column-count" style={{ background: "#f59e0b" }}>
-                        {groupedTasks["in-progress"].length}
-                      </span>
-                    </div>
-                  </div>
-                  {groupedTasks["in-progress"].length === 0 ? (
-                    <div className="empty-column">No tasks</div>
-                  ) : (
-                    groupedTasks["in-progress"].map((task) => (
-                      <div
-                        key={task._id}
-                        className={`task-card priority-${task.priority.toLowerCase()}`}
-                        onClick={() => handleViewTask(task)}
-                      >
-                        <div className="task-header">
-                          <span className="task-id">{task.taskId}</span>
-                          <span
-                            className="priority-badge"
-                            style={{
-                              background: getPriorityColor(task.priority),
-                              color: "white",
-                            }}
-                          >
-                            {task.priority}
-                          </span>
-                        </div>
-                        <div className="task-title">{task.title}</div>
-                        {task.description && (
-                          <div className="task-description">{task.description}</div>
-                        )}
-                        <div className="task-meta">
-                          <div className="task-assignee">
-                            <i className="fas fa-user"></i> {renderAssignees(task.assignedTo)}
-                          </div>
-                          <div
-                            className={`task-due-date ${
-                              isOverdue(task.dueDate) ? "overdue" : ""
-                            }`}
-                          >
-                            <i className="fas fa-calendar"></i> {new Date(task.dueDate).toLocaleDateString()}
-                          </div>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
+                  // Format column title
+                  const displayName = columnName.charAt(0).toUpperCase() + columnName.slice(1);
 
-                {/* Completed Column */}
-                <div className="kanban-column">
-                  <div className="column-header">
-                    <div className="column-title">
-                      <i className="fas fa-check-circle"></i> Completed
-                      <span className="column-count" style={{ background: "#10b981" }}>
-                        {groupedTasks.completed.length}
-                      </span>
-                    </div>
-                  </div>
-                  {groupedTasks.completed.length === 0 ? (
-                    <div className="empty-column">No tasks</div>
-                  ) : (
-                    groupedTasks.completed.map((task) => (
-                      <div
-                        key={task._id}
-                        className={`task-card priority-${task.priority.toLowerCase()}`}
-                        onClick={() => handleViewTask(task)}
-                      >
-                        <div className="task-header">
-                          <span className="task-id">{task.taskId}</span>
-                          <span
-                            className="priority-badge"
-                            style={{
-                              background: getPriorityColor(task.priority),
-                              color: "white",
-                            }}
-                          >
-                            {task.priority}
+                  return (
+                    <div key={columnName} className="kanban-column">
+                      <div className="column-header">
+                        <div className="column-title">
+                          <i className={columnIcon}></i> {displayName}
+                          <span className="column-count" style={{ background: columnColor }}>
+                            {columnTasks.length}
                           </span>
                         </div>
-                        <div className="task-title">{task.title}</div>
-                        {task.description && (
-                          <div className="task-description">{task.description}</div>
-                        )}
-                        <div className="task-meta">
-                          <div className="task-assignee">
-                            <i className="fas fa-user"></i> {renderAssignees(task.assignedTo)}
-                          </div>
-                          <div className="task-due-date">
-                            <i className="fas fa-check"></i> {new Date(task.completedAt).toLocaleDateString()}
-                          </div>
-                        </div>
                       </div>
-                    ))
-                  )}
-                </div>
+                      {columnTasks.length === 0 ? (
+                        <div className="empty-column">No tasks</div>
+                      ) : (
+                        columnTasks.map((task) => (
+                          <div
+                            key={task._id}
+                            className={`task-card priority-${task.priority.toLowerCase()}`}
+                            onClick={() => handleViewTask(task)}
+                          >
+                            <div className="task-header">
+                              <span className="task-id">{task.taskId}</span>
+                              <span
+                                className="priority-badge"
+                                style={{
+                                  background: getPriorityColor(task.priority),
+                                  color: "white",
+                                }}
+                              >
+                                {task.priority}
+                              </span>
+                            </div>
+                            <div className="task-title">{task.title}</div>
+                            {task.description && (
+                              <div className="task-description">{task.description}</div>
+                            )}
+                            <div className="task-meta">
+                              <div className="task-assignee">
+                                <i className="fas fa-user"></i> {renderAssignees(task.assignedTo)}
+                              </div>
+                              <div
+                                className={`task-due-date ${
+                                  isOverdue(task.dueDate) ? "overdue" : ""
+                                }`}
+                              >
+                                <i className="fas fa-calendar"></i> {task.dueDate ? new Date(task.dueDate).toLocaleDateString() : "No due date"}
+                              </div>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </>
           )}

@@ -309,7 +309,7 @@ export const deleteAsset = async (req, res) => {
 // Assign asset to employee
 export const assignAsset = async (req, res) => {
   try {
-    const { assetId, employeeId, conditionAtAssignment, notes } = req.body;
+    const { assetId, employeeId, conditionAtAssignment, notes, quantityToAssign } = req.body;
 
     const asset = await Asset.findById(assetId);
     if (!asset) {
@@ -319,10 +319,22 @@ export const assignAsset = async (req, res) => {
       });
     }
 
-    if (asset.status === "Assigned") {
+    // Calculate available quantity
+    const availableQuantity = asset.quantity - (asset.quantityAssigned || 0);
+    const assignQuantity = parseInt(quantityToAssign) || 1;
+
+    // Check if enough quantity is available
+    if (assignQuantity > availableQuantity) {
       return res.status(400).json({
         success: false,
-        message: "Asset is already assigned",
+        message: `Only ${availableQuantity} unit(s) available. Cannot assign ${assignQuantity} unit(s).`,
+      });
+    }
+
+    if (assignQuantity < 1) {
+      return res.status(400).json({
+        success: false,
+        message: "Quantity to assign must be at least 1",
       });
     }
 
@@ -338,17 +350,24 @@ export const assignAsset = async (req, res) => {
     const assignment = await AssetAssignment.create({
       asset: assetId,
       employee: employeeId,
+      quantity: assignQuantity,
       assignedBy: req.user._id,
       conditionAtAssignment: conditionAtAssignment || asset.condition,
       notes,
       status: "Active",
     });
 
-    // Update asset
-    asset.status = "Assigned";
-    asset.assignedTo = employeeId;
-    asset.assignedDate = new Date();
-    asset.condition = conditionAtAssignment || asset.condition;
+    // Update asset - increment quantityAssigned
+    asset.quantityAssigned = (asset.quantityAssigned || 0) + assignQuantity;
+    
+    // Update status based on availability
+    const newAvailable = asset.quantity - asset.quantityAssigned;
+    if (newAvailable === 0) {
+      asset.status = "Assigned"; // Fully assigned
+    } else if (asset.quantityAssigned > 0) {
+      asset.status = "Assigned"; // Partially or fully assigned
+    }
+    
     asset.modifiedBy = req.user._id;
     await asset.save();
 
@@ -359,7 +378,12 @@ export const assignAsset = async (req, res) => {
 
     // Audit log
     await logAssetAction(req, "ASSIGN", asset, {
-      after: { assignedTo: employee.name, employeeId: employee.employeeId }
+      after: { 
+        assignedTo: employee.name, 
+        employeeId: employee.employeeId,
+        quantity: assignQuantity,
+        availableQuantity: newAvailable
+      }
     });
 
     // Send notification to employee
@@ -368,11 +392,11 @@ export const assignAsset = async (req, res) => {
         recipient: employeeId,
         type: "asset_assigned",
         title: "Asset Assigned",
-        message: `You have been assigned ${asset.name} (${asset.assetId})`,
+        message: `You have been assigned ${assignQuantity} unit(s) of ${asset.name} (${asset.assetId})`,
         data: {
           referenceId: asset._id,
           referenceType: "Asset",
-          extra: { assetId: asset.assetId, assetName: asset.name },
+          extra: { assetId: asset.assetId, assetName: asset.name, quantity: assignQuantity },
         },
         sender: req.user._id,
       });
@@ -382,7 +406,7 @@ export const assignAsset = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message: "Asset assigned successfully",
+      message: `Successfully assigned ${assignQuantity} unit(s). ${newAvailable} unit(s) remaining.`,
       data: populatedAssignment,
     });
   } catch (error) {
@@ -413,6 +437,8 @@ export const returnAsset = async (req, res) => {
       });
     }
 
+    const returnQuantity = assignment.quantity || 1;
+
     // Update assignment
     assignment.returnDate = new Date();
     assignment.returnedBy = req.user._id;
@@ -421,11 +447,18 @@ export const returnAsset = async (req, res) => {
     assignment.status = status || "Returned";
     await assignment.save();
 
-    // Update asset
+    // Update asset - decrease quantityAssigned
     const asset = await Asset.findById(assignment.asset);
-    asset.status = status === "Damaged" ? "Damaged" : "Available";
-    asset.assignedTo = null;
-    asset.assignedDate = null;
+    asset.quantityAssigned = Math.max(0, (asset.quantityAssigned || 0) - returnQuantity);
+    
+    // Update status based on availability
+    const availableQuantity = asset.quantity - asset.quantityAssigned;
+    if (asset.quantityAssigned === 0) {
+      asset.status = status === "Damaged" ? "Damaged" : "Available";
+    } else if (availableQuantity > 0) {
+      asset.status = "Available"; // Some quantity available
+    }
+    
     asset.condition = conditionAtReturn;
     asset.modifiedBy = req.user._id;
     await asset.save();
@@ -438,7 +471,12 @@ export const returnAsset = async (req, res) => {
     // Audit log
     await logAssetAction(req, "UNASSIGN", asset, {
       before: { assignedTo: populatedAssignment.employee?.name },
-      after: { status: asset.status, condition: conditionAtReturn }
+      after: { 
+        status: asset.status, 
+        condition: conditionAtReturn,
+        returnedQuantity: returnQuantity,
+        availableQuantity: availableQuantity
+      }
     });
 
     // Notify employee about asset return confirmation
@@ -448,11 +486,11 @@ export const returnAsset = async (req, res) => {
           recipient: populatedAssignment.employee._id,
           type: "asset_returned",
           title: "Asset Returned",
-          message: `Your return of ${asset.name} (${asset.assetId}) has been processed`,
+          message: `Your return of ${returnQuantity} unit(s) of ${asset.name} (${asset.assetId}) has been processed`,
           data: {
             referenceId: asset._id,
             referenceType: "Asset",
-            extra: { assetId: asset.assetId, assetName: asset.name, condition: conditionAtReturn },
+            extra: { assetId: asset.assetId, assetName: asset.name, condition: conditionAtReturn, quantity: returnQuantity },
           },
           sender: req.user._id,
         });
@@ -503,15 +541,38 @@ export const getEmployeeAssets = async (req, res) => {
   try {
     const { employeeId } = req.params;
 
-    const assets = await Asset.find({
-      assignedTo: employeeId,
-      isActive: true,
-    }).populate("createdBy", "name");
+    // Get all active assignments for this employee
+    const assignments = await AssetAssignment.find({
+      employee: employeeId,
+      status: "Active", // Only active assignments
+    })
+      .populate({
+        path: "asset",
+        select: "assetId name category condition status quantity quantityAssigned",
+      })
+      .populate("assignedBy", "name")
+      .sort({ assignedDate: -1 });
+
+    // Transform the data to include asset details with assignment quantity
+    const employeeAssets = assignments.map((assignment) => ({
+      _id: assignment.asset._id,
+      assetId: assignment.asset.assetId,
+      name: assignment.asset.name,
+      category: assignment.asset.category,
+      condition: assignment.asset.condition,
+      status: assignment.asset.status,
+      quantity: assignment.quantity, // Quantity assigned to this employee
+      totalQuantity: assignment.asset.quantity,
+      assignedDate: assignment.assignedDate,
+      assignedBy: assignment.assignedBy?.name,
+      conditionAtAssignment: assignment.conditionAtAssignment,
+      notes: assignment.notes,
+    }));
 
     res.status(200).json({
       success: true,
-      count: assets.length,
-      data: assets,
+      count: employeeAssets.length,
+      data: employeeAssets,
     });
   } catch (error) {
     res.status(500).json({
@@ -551,6 +612,99 @@ export const getAssetStats = async (req, res) => {
         damaged,
         categoryBreakdown,
         statusBreakdown,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// Get detailed asset analytics with employee distribution
+export const getAssetAnalytics = async (req, res) => {
+  try {
+    // Count total assets by quantity
+    const totalAssets = await Asset.aggregate([
+      { $match: { isActive: true } },
+      { $group: { _id: null, total: { $sum: "$quantity" } } },
+    ]);
+
+    // Count total assigned quantity
+    const totalAssignedByQuantity = await Asset.aggregate([
+      { $match: { isActive: true } },
+      { $group: { _id: null, assigned: { $sum: "$quantityAssigned" } } },
+    ]);
+
+    const totalQuantity = totalAssets[0]?.total || 0;
+    const totalAssignedQty = totalAssignedByQuantity[0]?.assigned || 0;
+    const availableQty = totalQuantity - totalAssignedQty;
+
+    // Asset count breakdown
+    const assetCountByStatus = await Asset.aggregate([
+      { $match: { isActive: true } },
+      { $group: { _id: "$status", count: { $sum: 1 }, quantity: { $sum: "$quantity" } } },
+    ]);
+
+    // Asset count by category
+    const assetsByCategory = await Asset.aggregate([
+      { $match: { isActive: true } },
+      { $group: { _id: "$category", count: { $sum: 1 }, quantity: { $sum: "$quantity" } } },
+    ]);
+
+    // Employee-wise asset distribution
+    const employeeAssignments = await AssetAssignment.aggregate([
+      { $match: { status: "Active" } },
+      { $group: { 
+          _id: "$employee", 
+          totalAssigned: { $sum: "$quantity" },
+          itemsCount: { $sum: 1 }
+      }},
+      { $sort: { totalAssigned: -1 } },
+      { $lookup: {
+          from: "employees",
+          localField: "_id",
+          foreignField: "_id",
+          as: "employeeDetails"
+      }},
+      { $unwind: "$employeeDetails" },
+      { $project: {
+          employeeId: "$employeeDetails.employeeId",
+          employeeName: "$employeeDetails.name",
+          employeeEmail: "$employeeDetails.email",
+          totalAssigned: 1,
+          itemsCount: 1
+      }}
+    ]);
+
+    // Top assets being assigned
+    const topAssignedAssets = await Asset.aggregate([
+      { $match: { isActive: true, quantityAssigned: { $gt: 0 } } },
+      { $sort: { quantityAssigned: -1 } },
+      { $project: {
+          assetId: 1,
+          name: 1,
+          quantity: 1,
+          quantityAssigned: 1,
+          category: 1,
+          available: { $subtract: ["$quantity", "$quantityAssigned"] }
+      }}
+    ]);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        summary: {
+          totalQuantity,
+          totalAssignedQty,
+          availableQty,
+          assetCount: await Asset.countDocuments({ isActive: true })
+        },
+        assetsByStatus: assetCountByStatus,
+        assetsByCategory: assetsByCategory,
+        employeeAssignments,
+        topAssignedAssets,
       },
     });
   } catch (error) {

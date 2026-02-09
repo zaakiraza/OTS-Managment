@@ -11,6 +11,7 @@ import {
   getAssetHistory,
   getEmployeeAssets,
   getAssetStats,
+  getAssetAnalytics,
 } from "../Controller/assetController.js";
 import { verifyToken } from "../Middleware/auth.js";
 
@@ -22,6 +23,7 @@ router.use(verifyToken);
 // Asset CRUD
 router.get("/", getAllAssets);
 router.get("/stats", getAssetStats);
+router.get("/analytics/detailed", getAssetAnalytics);
 router.get("/:id", getAssetById);
 router.post("/", createAsset);
 router.post("/bulk", bulkCreateAssets);  // Bulk import

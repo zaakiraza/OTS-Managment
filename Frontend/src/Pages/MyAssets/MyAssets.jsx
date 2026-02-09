@@ -23,14 +23,12 @@ function MyAssets() {
           return JSON.parse(stored);
         } catch { return {}; }
       })();
-      const response = await assetAPI.getAll();
+      
+      // Use the getEmployeeAssets endpoint instead
+      const response = await assetAPI.getEmployeeAssets(user._id);
       
       if (response.data.success) {
-        // Filter assets assigned to current employee
-        const myAssets = response.data.data.filter(
-          (asset) => asset.assignedTo?._id === user._id
-        );
-        setAssets(myAssets);
+        setAssets(response.data.data);
       }
     } catch (error) {
       console.error("Error fetching my assets:", error);

@@ -23,6 +23,7 @@ import MyTasks from "./Pages/MyTasks/MyTasks";
 import MyAssets from "./Pages/MyAssets/MyAssets";
 import MyAttendance from "./Pages/MyAttendance/MyAttendance";
 import LeaveApproval from "./Pages/LeaveApproval/LeaveApproval";
+import AttendanceJustifications from "./Pages/AttendanceJustifications/AttendanceJustifications";
 import Resources from "./Pages/Resources/Resources";
 import AuditLogs from "./Pages/AuditLogs/AuditLogs";
 import Profile from "./Pages/Profile/Profile";
@@ -30,6 +31,7 @@ import Feedback from "./Pages/Feedback/Feedback";
 import Todos from "./Pages/Todos/Todos";
 import EmailTemplates from "./Pages/EmailTemplates/EmailTemplates";
 import Notifications from "./Pages/Notifications/Notifications";
+import AssetAnalytics from "./Pages/AssetAnalytics/AssetAnalytics";
 
 function App() {
   const isAuthenticated = () => {
@@ -182,6 +184,14 @@ function App() {
             </ProtectedRoute>
           }
         />
+        <Route
+          path="/asset-analytics"
+          element={
+            <ProtectedRoute allowedRoles={["superAdmin", "ITAssetManager"]}>
+              <AssetAnalytics />
+            </ProtectedRoute>
+          }
+        />
 
         {/* All Authenticated Users - Tickets */}
         <Route
@@ -241,12 +251,22 @@ function App() {
           }
         />
 
-        {/* Leave Approval - Super Admin and Attendance Department */}
+        {/* Leave Approval - Super Admin, Attendance Department, and Team Lead */}
         <Route
           path="/leave-approval"
           element={
-            <ProtectedRoute allowedRoles={["superAdmin", "attendanceDepartment"]}>
+            <ProtectedRoute allowedRoles={["superAdmin", "attendanceDepartment", "teamLead"]}>
               <LeaveApproval />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Attendance Justifications - Super Admin, Attendance Department, and Team Lead */}
+        <Route
+          path="/attendance-justifications"
+          element={
+            <ProtectedRoute allowedRoles={["superAdmin", "attendanceDepartment", "teamLead"]}>
+              <AttendanceJustifications />
             </ProtectedRoute>
           }
         />

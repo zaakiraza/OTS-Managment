@@ -12,13 +12,16 @@ const assetSchema = new mongoose.Schema(
       required: [true, "Asset name is required"],
       trim: true,
     },
-    serialNumber: {
-      type: String,
-      trim: true,
+    quantity: {
+      type: Number,
+      required: [true, "Quantity is required"],
+      min: [1, "Quantity must be at least 1"],
+      default: 1,
     },
-    macAddress: {
-      type: String,
-      trim: true,
+    quantityAssigned: {
+      type: Number,
+      default: 0,
+      min: [0, "Assigned quantity cannot be negative"],
     },
     category: {
       type: String,
@@ -26,6 +29,7 @@ const assetSchema = new mongoose.Schema(
       enum: [
         "Laptop",
         "Desktop",
+        "System",
         "Monitor",
         "Keyboard",
         "Mouse",
@@ -44,13 +48,9 @@ const assetSchema = new mongoose.Schema(
       type: Date,
       required: [true, "Issue date is required"],
     },
-    purchasePrice: {
-      type: Number,
-      min: 0,
-    },
     status: {
       type: String,
-      enum: ["Available", "Assigned", "Under Repair", "Damaged", "Retired"],
+      enum: ["Available", "Assigned", "Under Repair", "Damaged", "Retired", "Refurb", "New"],
       default: "Available",
     },
     condition: {
@@ -110,20 +110,7 @@ assetSchema.pre("save", async function () {
     const count = await mongoose.model("Asset").countDocuments();
     this.assetId = `AST${String(count + 1).padStart(5, "0")}`;
   }
-  
-  // Convert empty serialNumber to null
-  if (this.serialNumber === "" || this.serialNumber === undefined) {
-    this.serialNumber = null;
-  }
-  
-  // Convert empty macAddress to null
-  if (this.macAddress === "" || this.macAddress === undefined) {
-    this.macAddress = null;
-  }
 });
-
-// Note: serialNumber and macAddress are optional fields without unique constraints
-// If uniqueness is required, it should be checked at application level
 
 const Asset = mongoose.model("Asset", assetSchema);
 

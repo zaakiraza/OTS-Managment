@@ -130,6 +130,8 @@ const Notifications = () => {
       // Attendance notifications
       attendance_marked: "/my-attendance",
       attendance_updated: "/my-attendance",
+      attendance_justification: "/attendance-justifications",
+      justification_reviewed: "/my-attendance",
       // Department notifications
       department_created: "/department",
       department_updated: "/department",

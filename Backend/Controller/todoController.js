@@ -1,24 +1,17 @@
 import Todo from "../Model/Todo.js";
 import { logSystemAction } from "../Utils/auditLogger.js";
 
-// Get all todos for the current user
+// Get all personal notes for the current user
 export const getMyTodos = async (req, res) => {
   try {
-    const { status, priority, search } = req.query;
+    const { search } = req.query;
     const filter = { user: req.user._id };
 
-    if (status) filter.status = status;
-    if (priority) filter.priority = priority;
     if (search) {
-      filter.$or = [
-        { title: { $regex: search, $options: "i" } },
-        { description: { $regex: search, $options: "i" } },
-      ];
+      filter.description = { $regex: search, $options: "i" };
     }
 
     const todos = await Todo.find(filter).sort({ 
-      priority: -1, // High priority first
-      dueDate: 1,   // Earlier due dates first
       createdAt: -1 
     });
 
@@ -35,7 +28,7 @@ export const getMyTodos = async (req, res) => {
   }
 };
 
-// Get todo by ID
+// Get note by ID
 export const getTodoById = async (req, res) => {
   try {
     const todo = await Todo.findOne({
@@ -46,7 +39,7 @@ export const getTodoById = async (req, res) => {
     if (!todo) {
       return res.status(404).json({
         success: false,
-        message: "Todo not found",
+        message: "Note not found",
       });
     }
 
@@ -62,36 +55,32 @@ export const getTodoById = async (req, res) => {
   }
 };
 
-// Create a new todo
+// Create a new note
 export const createTodo = async (req, res) => {
   try {
-    const { title, description, priority, dueDate, tags, status } = req.body;
+    const { description } = req.body;
 
-    if (!title) {
+    if (!description || !description.trim()) {
       return res.status(400).json({
         success: false,
-        message: "Title is required",
+        message: "Description is required",
       });
     }
 
     const todo = await Todo.create({
       user: req.user._id,
-      title,
-      description: description || "",
-      priority: priority || "medium",
-      status: status || "pending",
-      dueDate: dueDate || null,
-      tags: tags || [],
+      description: description.trim(),
+      status: "pending",
     });
 
     // Audit log
     await logSystemAction(req, "CREATE", todo, {
-      after: { title, status: todo.status, priority: todo.priority }
-    }, `Todo created: ${title}`);
+      after: { description: description.trim().slice(0, 50) }
+    }, `Note created`);
 
     res.status(201).json({
       success: true,
-      message: "Todo created successfully",
+      message: "Note created successfully",
       data: todo,
     });
   } catch (error) {
@@ -102,51 +91,37 @@ export const createTodo = async (req, res) => {
   }
 };
 
-// Update todo
+// Update note
 export const updateTodo = async (req, res) => {
   try {
-    const { title, description, priority, status, dueDate, tags } = req.body;
+    const { description } = req.body;
 
     const todo = await Todo.findOne({
       _id: req.params.id,
-      user: req.user._id, // Ensure user can only update their own todos
+      user: req.user._id,
     });
 
     if (!todo) {
       return res.status(404).json({
         success: false,
-        message: "Todo not found",
+        message: "Note not found",
       });
     }
 
-    const oldStatus = todo.status;
-
-    if (title) todo.title = title;
-    if (description !== undefined) todo.description = description;
-    if (priority) todo.priority = priority;
-    if (status) {
-      todo.status = status;
-      // Set completedAt if status is completed
-      if (status === "completed" && !todo.completedAt) {
-        todo.completedAt = new Date();
-      } else if (status !== "completed") {
-        todo.completedAt = null;
-      }
+    if (description !== undefined && description.trim()) {
+      todo.description = description.trim();
     }
-    if (dueDate !== undefined) todo.dueDate = dueDate;
-    if (tags !== undefined) todo.tags = tags;
 
     await todo.save();
 
     // Audit log
     await logSystemAction(req, "UPDATE", todo, {
-      before: { status: oldStatus, title: todo.title },
-      after: { status: todo.status, title: todo.title, priority: todo.priority }
-    }, `Todo updated: ${todo.title}`);
+      after: { description: description?.slice(0, 50) }
+    }, `Note updated`);
 
     res.status(200).json({
       success: true,
-      message: "Todo updated successfully",
+      message: "Note updated successfully",
       data: todo,
     });
   } catch (error) {
@@ -157,32 +132,31 @@ export const updateTodo = async (req, res) => {
   }
 };
 
-// Delete todo
+// Delete note
 export const deleteTodo = async (req, res) => {
   try {
     const todo = await Todo.findOne({
       _id: req.params.id,
-      user: req.user._id, // Ensure user can only delete their own todos
+      user: req.user._id,
     });
 
     if (!todo) {
       return res.status(404).json({
         success: false,
-        message: "Todo not found",
+        message: "Note not found",
       });
     }
 
-    const todoTitle = todo.title;
     await Todo.findByIdAndDelete(req.params.id);
 
     // Audit log
     await logSystemAction(req, "DELETE", todo, {
-      before: { title: todoTitle, status: todo.status }
-    }, `Todo deleted: ${todoTitle}`);
+      before: { description: todo.description?.slice(0, 50) }
+    }, `Note deleted`);
 
     res.status(200).json({
       success: true,
-      message: "Todo deleted successfully",
+      message: "Note deleted successfully",
     });
   } catch (error) {
     res.status(500).json({
@@ -192,7 +166,7 @@ export const deleteTodo = async (req, res) => {
   }
 };
 
-// Toggle todo status (quick action)
+// Toggle note status (quick action)
 export const toggleTodoStatus = async (req, res) => {
   try {
     const todo = await Todo.findOne({
@@ -203,7 +177,7 @@ export const toggleTodoStatus = async (req, res) => {
     if (!todo) {
       return res.status(404).json({
         success: false,
-        message: "Todo not found",
+        message: "Note not found",
       });
     }
 
@@ -223,11 +197,11 @@ export const toggleTodoStatus = async (req, res) => {
     await logSystemAction(req, "UPDATE", todo, {
       before: { status: oldStatus },
       after: { status: todo.status }
-    }, `Todo status toggled: ${todo.title}`);
+    }, `Note marked as ${todo.status}`);
 
     res.status(200).json({
       success: true,
-      message: "Todo status updated",
+      message: "Note status updated",
       data: todo,
     });
   } catch (error) {

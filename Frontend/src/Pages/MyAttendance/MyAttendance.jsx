@@ -43,6 +43,10 @@ function MyAttendance() {
   const [editingLeave, setEditingLeave] = useState(null);
   const [existingAttachments, setExistingAttachments] = useState([]);
   const [submitting, setSubmitting] = useState(false);
+  const [showJustificationModal, setShowJustificationModal] = useState(false);
+  const [selectedAttendance, setSelectedAttendance] = useState(null);
+  const [justificationReason, setJustificationReason] = useState("");
+  const [submittingJustification, setSubmittingJustification] = useState(false);
 
   const user = (() => {
     try {
@@ -304,14 +308,53 @@ function MyAttendance() {
     setExistingAttachments((prev) => prev.filter((_, i) => i !== index));
   };
 
+  const openJustificationModal = (attendance) => {
+    setSelectedAttendance(attendance);
+    setJustificationReason(attendance.justificationReason || "");
+    setShowJustificationModal(true);
+  };
+
+  const closeJustificationModal = () => {
+    setShowJustificationModal(false);
+    setSelectedAttendance(null);
+    setJustificationReason("");
+  };
+
+  const handleSubmitJustification = async () => {
+    if (!justificationReason.trim()) {
+      toast.error("Please provide a reason for justification");
+      return;
+    }
+
+    try {
+      setSubmittingJustification(true);
+      const response = await attendanceAPI.submitJustification({
+        attendanceId: selectedAttendance._id,
+        reason: justificationReason.trim(),
+      });
+
+      if (response.data.success) {
+        toast.success("Justification submitted successfully");
+        closeJustificationModal();
+        fetchMyAttendance(); // Refresh attendance data
+      }
+    } catch (error) {
+      console.error("Error submitting justification:", error);
+      toast.error(error.response?.data?.message || "Failed to submit justification");
+    } finally {
+      setSubmittingJustification(false);
+    }
+  };
+
   const calculateStats = (records) => {
     const stats = {
       totalDays: records.length,
       present: records.filter((r) => r.status === "present" || r.status === "early-departure").length,
-      absent: records.filter((r) => r.status === "absent").length,
+      absent: records.filter((r) => r.status === "absent" || r.status === "missing").length,
       late: records.filter((r) => r.status === "late" || r.status === "late-early-departure").length,
       halfDay: records.filter((r) => r.status === "half-day").length,
       onLeave: records.filter((r) => r.status === "leave").length,
+      missing: records.filter((r) => r.status === "missing").length,
     };
     setStats(stats);
   };
@@ -326,6 +369,7 @@ function MyAttendance() {
       "half-day": "#3b82f6",
       leave: "#8b5cf6",
       pending: "#6b7280",
+      missing: "#dc2626",
     };
     return colors[status] || "#6b7280";
   };
@@ -336,6 +380,7 @@ function MyAttendance() {
       absent: "Absent",
       late: "Late",
       "late-early-departure": "Late + Early Departure",
+      missing: "Missing",
       "early-departure": "Early Departure",
       "half-day": "Half Day",
       leave: "On Leave",
@@ -349,6 +394,7 @@ function MyAttendance() {
     return new Date(dateTime).toLocaleTimeString([], {
       hour: "2-digit",
       minute: "2-digit",
+      hour12: true,
     });
   };
 
@@ -499,18 +545,19 @@ function MyAttendance() {
                       <th>Work Hours</th>
                       <th>Extra Hours</th>
                       <th>Remarks</th>
+                        <th>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {loading ? (
                       <tr>
-                        <td colSpan="8" style={{ textAlign: "center" }}>
+                          <td colSpan="9" style={{ textAlign: "center" }}>
                           Loading...
                         </td>
                       </tr>
                     ) : attendance.length === 0 ? (
                       <tr>
-                        <td colSpan="8" style={{ textAlign: "center" }}>
+                          <td colSpan="9" style={{ textAlign: "center" }}>
                           No attendance records found for selected period
                         </td>
                       </tr>
@@ -546,7 +593,74 @@ function MyAttendance() {
                               "-"
                             )}
                           </td>
-                          <td>{record.remarks || "-"}</td>
+                            <td>
+                              {record.justificationReason && (
+                                <div style={{ fontSize: "0.85rem" }}>
+                                  <strong>Reason:</strong> {record.justificationReason}
+                                  <br />
+                                  <span style={{ 
+                                    color: record.justificationStatus === "approved" ? "#10b981" : 
+                                           record.justificationStatus === "rejected" ? "#ef4444" : "#f59e0b",
+                                    fontWeight: "bold"
+                                  }}>
+                                    [{record.justificationStatus?.toUpperCase()}]
+                                  </span>
+                                </div>
+                              )}
+                              {record.remarks && (
+                                <div style={{ fontSize: "0.85rem", marginTop: "4px" }}>
+                                  <strong>Remarks:</strong> {record.remarks}
+                                </div>
+                              )}
+                              {!record.justificationReason && !record.remarks && "-"}
+                            </td>
+                            <td>
+                              {["late", "absent", "half-day", "early-departure", "late-early-departure", "missing"].includes(record.status) && (
+                                <>
+                                  {record.justificationStatus === "none" || !record.justificationStatus ? (
+                                    <button
+                                      className="btn btn-sm btn-warning"
+                                      onClick={() => openJustificationModal(record)}
+                                      style={{ 
+                                        fontSize: "0.8rem", 
+                                        padding: "4px 8px",
+                                        background: "#f59e0b",
+                                        border: "none",
+                                        color: "white",
+                                        borderRadius: "4px",
+                                        cursor: "pointer"
+                                      }}
+                                    >
+                                      <i className="fas fa-comment-alt"></i> Add Reason
+                                    </button>
+                                  ) : record.justificationStatus === "pending" ? (
+                                    <span style={{ color: "#f59e0b", fontSize: "0.85rem" }}>
+                                      <i className="fas fa-clock"></i> Pending Review
+                                    </span>
+                                  ) : record.justificationStatus === "approved" ? (
+                                    <span style={{ color: "#10b981", fontSize: "0.85rem" }}>
+                                      <i className="fas fa-check-circle"></i> Approved
+                                    </span>
+                                  ) : (
+                                    <button
+                                      className="btn btn-sm btn-warning"
+                                      onClick={() => openJustificationModal(record)}
+                                      style={{ 
+                                        fontSize: "0.8rem", 
+                                        padding: "4px 8px",
+                                        background: "#f59e0b",
+                                        border: "none",
+                                        color: "white",
+                                        borderRadius: "4px",
+                                        cursor: "pointer"
+                                      }}
+                                    >
+                                      <i className="fas fa-redo"></i> Resubmit
+                                    </button>
+                                  )}
+                                </>
+                              )}
+                            </td>
                         </tr>
                       ))
                     )}
@@ -589,6 +703,7 @@ function MyAttendance() {
                   <thead>
                     <tr>
                       <th>Date</th>
+
                       <th>Total Days</th>
                       <th>Reason</th>
                       <th>Status</th>
@@ -675,6 +790,46 @@ function MyAttendance() {
           )}
         </div>
       </div>
+
+      {/* Justification Modal */}
+      {showJustificationModal && selectedAttendance && (
+        <div className="modal-overlay" onClick={closeJustificationModal}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Submit Justification</h2>
+              <button className="close-btn" onClick={closeJustificationModal}>
+                &times;
+              </button>
+            </div>
+            <div className="modal-body">
+              <div style={{ marginBottom: "12px", color: "#6b7280" }}>
+                <strong>Date:</strong> {new Date(selectedAttendance.date).toLocaleDateString()}<br />
+                <strong>Status:</strong> {formatStatus(selectedAttendance.status)}
+              </div>
+              <label className="form-label">Reason for Justification</label>
+              <textarea
+                className="form-textarea"
+                rows="4"
+                value={justificationReason}
+                onChange={(e) => setJustificationReason(e.target.value)}
+                placeholder="Explain why this should be marked as present..."
+              />
+            </div>
+            <div className="modal-actions">
+              <button className="btn btn-secondary" onClick={closeJustificationModal}>
+                Cancel
+              </button>
+              <button
+                className="btn btn-primary"
+                onClick={handleSubmitJustification}
+                disabled={submittingJustification}
+              >
+                {submittingJustification ? "Submitting..." : "Submit"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Leave Application Modal */}
       {showLeaveModal && (

@@ -79,6 +79,9 @@ export const attendanceAPI = {
   createManualAttendance: (data) => api.post("/attendance/manual", data),
   updateAttendance: (id, data) => api.put(`/attendance/${id}`, data),
   deleteAttendance: (id) => api.delete(`/attendance/${id}`),
+    submitJustification: (data) => api.post("/attendance/justification", data),
+    reviewJustification: (attendanceId, data) => api.put(`/attendance/justification/${attendanceId}`, data),
+    getPendingJustifications: () => api.get("/attendance/justifications/pending"),
 };
 
 // Department API
@@ -100,6 +103,8 @@ export const employeeAPI = {
   create: (data) => api.post("/employees", data),
   update: (id, data) => api.put(`/employees/${id}`, data),
   delete: (id) => api.delete(`/employees/${id}`),
+  getDepartmentShifts: (id) => api.get(`/employees/${id}/shifts`),
+  updateDepartmentShifts: (id, data) => api.put(`/employees/${id}/shifts`, data),
   downloadTemplate: () => api.get("/employees/template/download", { responseType: "blob" }),
   importEmployees: (formData) => api.post("/employees/import", formData, {
     headers: {
@@ -143,6 +148,7 @@ export const assetAPI = {
   getHistory: (assetId) => api.get(`/assets/${assetId}/history`),
   getEmployeeAssets: (employeeId) => api.get(`/assets/employee/${employeeId}`),
   getStats: () => api.get("/assets/stats"),
+  getAnalytics: () => api.get("/assets/analytics/detailed"),
 };
 
 // Export API

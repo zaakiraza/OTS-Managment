@@ -18,17 +18,17 @@ router.get("/my-leaves", verifyToken, getMyLeaves);
 router.put("/:id", verifyToken, leaveAttachmentUpload, handleUploadError, updateLeave);
 router.delete("/:id", verifyToken, cancelLeave);
 
-// Attendance Department / SuperAdmin routes
+// Attendance Department / SuperAdmin / Team Lead routes
 router.get(
   "/all",
   verifyToken,
-  hasRole("superAdmin", "attendanceDepartment"),
+  hasRole("superAdmin", "attendanceDepartment", "teamLead"),
   getAllLeaves
 );
 router.put(
   "/:id/status",
   verifyToken,
-  hasRole("superAdmin", "attendanceDepartment"),
+  hasRole("superAdmin", "attendanceDepartment", "teamLead"),
   updateLeaveStatus
 );
 

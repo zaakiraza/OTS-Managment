@@ -7,6 +7,8 @@ import {
   deleteEmployee,
   downloadEmployeeTemplate,
   importEmployees,
+  updateDepartmentShifts,
+  getDepartmentShifts,
 } from "../Controller/employeeController.js";
 import { verifyToken, hasRole } from "../Middleware/auth.js";
 import { employeeValidation, paginationValidation, validateMongoId } from "../Middleware/validators.js";
@@ -26,6 +28,10 @@ router.post("/import", hasRole("superAdmin", "attendanceDepartment"), excelUploa
 router.post("/", hasRole("superAdmin", "attendanceDepartment"), employeeValidation.create, createEmployee);
 router.put("/:id", hasRole("superAdmin", "attendanceDepartment"), employeeValidation.update, updateEmployee);
 router.delete("/:id", hasRole("superAdmin", "attendanceDepartment"), validateMongoId(), deleteEmployee);
+
+// Department shift configuration - superAdmin only
+router.get("/:employeeId/shifts", hasRole("superAdmin"), validateMongoId(), getDepartmentShifts);
+router.put("/:employeeId/shifts", hasRole("superAdmin"), validateMongoId(), updateDepartmentShifts);
 
 // Read operations - Allow ITAssetManager and teamLead as well
 router.get("/", hasRole("superAdmin", "attendanceDepartment", "ITAssetManager", "teamLead"), paginationValidation, getAllEmployees);

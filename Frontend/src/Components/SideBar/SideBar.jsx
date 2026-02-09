@@ -122,9 +122,19 @@ function SideBar() {
               {!isCollapsed && <span className="nav-text">Leave Approval</span>}
             </NavLink>
 
+            <NavLink to="/attendance-justifications" className="nav-item">
+              <span className="nav-icon"><i className="fas fa-clipboard-check"></i></span>
+              {!isCollapsed && <span className="nav-text">Attendance Justifications</span>}
+            </NavLink>
+
             <NavLink to="/assets" className="nav-item">
               <span className="nav-icon"><i className="fas fa-laptop"></i></span>
               {!isCollapsed && <span className="nav-text">Assets</span>}
+            </NavLink>
+
+            <NavLink to="/asset-analytics" className="nav-item">
+              <span className="nav-icon"><i className="fas fa-chart-bar"></i></span>
+              {!isCollapsed && <span className="nav-text">Asset Analytics</span>}
             </NavLink>
 
             <NavLink to="/tickets" className="nav-item">
@@ -187,6 +197,11 @@ function SideBar() {
               {!isCollapsed && <span className="nav-text">Leave Approval</span>}
             </NavLink>
 
+            <NavLink to="/attendance-justifications" className="nav-item">
+              <span className="nav-icon"><i className="fas fa-clipboard-check"></i></span>
+              {!isCollapsed && <span className="nav-text">Attendance Justifications</span>}
+            </NavLink>
+
             <NavLink to="/my-attendance" className="nav-item">
               <span className="nav-icon"><i className="fas fa-calendar-check"></i></span>
               {!isCollapsed && <span className="nav-text">My Attendance</span>}
@@ -222,6 +237,11 @@ function SideBar() {
               {!isCollapsed && <span className="nav-text">Assets</span>}
             </NavLink>
 
+            <NavLink to="/asset-analytics" className="nav-item">
+              <span className="nav-icon"><i className="fas fa-chart-bar"></i></span>
+              {!isCollapsed && <span className="nav-text">Asset Analytics</span>}
+            </NavLink>
+
             <NavLink to="/tickets" className="nav-item">
               <span className="nav-icon"><i className="fas fa-ticket-alt"></i></span>
               {!isCollapsed && <span className="nav-text">Tickets</span>}
@@ -255,6 +275,16 @@ function SideBar() {
             <NavLink to="/my-tasks" className="nav-item">
               <span className="nav-icon"><i className="fas fa-check-circle"></i></span>
               {!isCollapsed && <span className="nav-text">My Tasks</span>}
+            </NavLink>
+
+            <NavLink to="/leave-approval" className="nav-item">
+              <span className="nav-icon"><i className="fas fa-user-clock"></i></span>
+              {!isCollapsed && <span className="nav-text">Leave Approval</span>}
+            </NavLink>
+
+            <NavLink to="/attendance-justifications" className="nav-item">
+              <span className="nav-icon"><i className="fas fa-clipboard-check"></i></span>
+              {!isCollapsed && <span className="nav-text">Attendance Justifications</span>}
             </NavLink>
 
             <NavLink to="/my-assets" className="nav-item">
@@ -314,7 +344,7 @@ function SideBar() {
 
         <NavLink to="/todos" className="nav-item">
           <span className="nav-icon"><i className="fas fa-list-check"></i></span>
-          {!isCollapsed && <span className="nav-text">My Todos</span>}
+          {!isCollapsed && <span className="nav-text">Personal Notes</span>}
         </NavLink>
       </nav>
 

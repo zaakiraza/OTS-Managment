@@ -27,8 +27,8 @@ const Salaries = () => {
     attendanceMarkingMethod: 'checkinCheckout',
     hourlyDeductionRate: 0,
     lateThreshold: 3,
-    halfDayThreshold: 0,
-    earlyDepartureThreshold: 0,
+    halfDayThreshold: 2,
+    earlyDepartureThreshold: 2,
     lateEarlyDepartureThreshold: 0,
     includeExtraWorkingHours: false,
     includeWeeklyOffDaysWorked: false,
@@ -52,14 +52,14 @@ const Salaries = () => {
   const isSuperAdmin = user?.role?.name === "superAdmin";
 
   useEffect(() => {
-    fetchEmployees();
     fetchDepartments();
   }, []);
 
   useEffect(() => {
+    fetchEmployees();
     fetchSalaries();
     fetchAttendanceForMonth();
-  }, [selectedMonth, selectedYear]);
+  }, [selectedMonth, selectedYear, selectedDepartment]);
 
   useEffect(() => {
     combineData();
@@ -68,10 +68,14 @@ const Salaries = () => {
   const fetchSalaries = async () => {
     try {
       setLoading(true);
-      const response = await salaryAPI.getAll({
+      const params = {
         month: selectedMonth,
         year: selectedYear,
-      });
+      };
+      if (selectedDepartment) {
+        params.department = selectedDepartment;
+      }
+      const response = await salaryAPI.getAll(params);
       if (response.data.success) {
         setSalaries(response.data.data);
       }
@@ -84,7 +88,11 @@ const Salaries = () => {
 
   const fetchEmployees = async () => {
     try {
-      const response = await employeeAPI.getAll({ isActive: true });
+      const params = { isActive: true };
+      if (selectedDepartment) {
+        params.department = selectedDepartment;
+      }
+      const response = await employeeAPI.getAll(params);
       if (response.data.success) {
         setEmployees(response.data.data);
       }
@@ -115,10 +123,17 @@ const Salaries = () => {
       const endDateStr = endDate.toISOString().split('T')[0];
 
       // Fetch all attendance for the month
-      const response = await attendanceAPI.getAllAttendance({
+      const params = {
         startDate: startDateStr,
         endDate: endDateStr,
-      });
+      };
+      
+      // Add department filter if selected
+      if (selectedDepartment) {
+        params.department = selectedDepartment;
+      }
+      
+      const response = await attendanceAPI.getAllAttendance(params);
 
       if (response.data.success) {
         // Group attendance by employee
@@ -205,16 +220,9 @@ const Salaries = () => {
   };
 
   const combineData = () => {
-    // Filter employees by department if selected
-    let filteredEmployees = employees;
-    if (selectedDepartment) {
-      filteredEmployees = employees.filter(
-        (emp) => emp.department._id === selectedDepartment
-      );
-    }
-
-    // Combine employee data with salary data and attendance stats
-    const combined = filteredEmployees.map((emp) => {
+    // Backend already returns filtered data by department, no need to filter again
+    // Just combine employee data with salary data and attendance stats
+    const combined = employees.map((emp) => {
       const salary = salaries.find((s) => s.employeeId === emp.employeeId);
       const attendance = attendanceStats[emp.employeeId] || {
         present: 0,
@@ -991,10 +999,9 @@ const Salaries = () => {
                   className="btn-preview"
                   onClick={fetchPreview}
                   disabled={previewLoading || (calculationType === 'single' && !formData.employeeId)}
-                  style={{ marginRight: '10px', backgroundColor: '#17a2b8', color: 'white' }}
                 >
                   <i className={previewLoading ? "fas fa-spinner fa-spin" : "fas fa-eye"}></i>
-                  {previewLoading ? " Loading..." : " Preview Calculation"}
+                  {previewLoading ? " Loading Preview..." : " Preview Calculation"}
                 </button>
                 <button type="submit" className="btn-primary" disabled={loading}>
                   <i className={loading ? "fas fa-spinner fa-spin" : "fas fa-calculator"}></i>

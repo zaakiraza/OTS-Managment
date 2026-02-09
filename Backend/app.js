@@ -29,6 +29,7 @@ import emailTemplateRoutes from "./Routes/emailTemplateRoutes.js";
 import notificationRoutes from "./Routes/notificationRoutes.js";
 import { connectToDevice, startPolling } from "./Utils/zktecoDevice.js";
 import { scheduleAbsenteeCheck } from "./Utils/markAbsentees.js";
+import { scheduleMarkMissingAttendance } from "./Utils/markMissingAttendance.js";
 import logger from "./Utils/logger.js";
 import {
   globalErrorHandler,
@@ -131,6 +132,9 @@ app.listen(process.env.PORT, async () => {
   // Schedule daily absentee check at 11:59 PM
   // scheduleAbsenteeCheck("23:59");
   // logger.info("Daily absentee check scheduled");
+
+  // Schedule marking old pending attendance as missing (runs daily at midnight UTC)
+  // scheduleMarkMissingAttendance();
 });
 
 export default app;

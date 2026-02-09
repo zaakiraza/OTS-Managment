@@ -60,8 +60,8 @@ function Reports() {
     if (!time) return "-";
     try {
       const date = new Date(time);
-      const hours = String(date.getHours()).padStart(2, '0');
-      const minutes = String(date.getMinutes()).padStart(2, '0');
+      const hours = String(date.getHours()).padStart(2, "0");
+      const minutes = String(date.getMinutes()).padStart(2, "0");
       return `${hours}:${minutes}`;
     } catch (error) {
       return "-";
@@ -77,18 +77,6 @@ function Reports() {
       fetchEmployeesByDepartment(filters.departmentId);
     }
   }, [filters.departmentId]);
-
-  const fetchDepartments = async () => {
-    try {
-      const response = await departmentAPI.getAll();
-      if (response.data.success) {
-        // Use flatData to get all departments including sub-departments
-        setDepartments(response.data.flatData || response.data.data || []);
-      }
-    } catch (error) {
-      console.error("Error fetching departments:", error);
-    }
-  };
 
   const fetchEmployeesByDepartment = async (deptId) => {
     try {
@@ -256,19 +244,23 @@ function Reports() {
           <h3>Avg Hours</h3>
           <p className="stat-number">{summary.averageWorkingHours?.toFixed(2) || 0}</p>
         </div>
+        <div className="stat-box">
+          <h3>Extra Working Hours</h3>
+          <p className="stat-number" style={{ color: "#4CAF50" }}>+{summary.totalExtraWorkingHours?.toFixed(2) || 0}h</p>
+        </div>
         {salaryInfo && (
           <>
             <div className="stat-box salary-box">
-              <h3>Base Salary</h3>
-              <p className="stat-number">${typeof salaryInfo.baseSalary === 'number' ? salaryInfo.baseSalary.toFixed(2) : '0.00'}</p>
+              <h3>Committed Salary</h3>
+              <p className="stat-number">PKR {typeof salaryInfo.baseSalary === "number" ? salaryInfo.baseSalary.toLocaleString("en-PK", { maximumFractionDigits: 0 }) : "0"}</p>
             </div>
             <div className="stat-box salary-box">
               <h3>Deductions</h3>
-              <p className="stat-number deduction">-${typeof salaryInfo.deductions === 'number' ? salaryInfo.deductions.toFixed(2) : '0.00'}</p>
+              <p className="stat-number deduction">-PKR {typeof salaryInfo.deductions === "number" ? salaryInfo.deductions.toLocaleString("en-PK", { maximumFractionDigits: 0 }) : "0"}</p>
             </div>
             <div className="stat-box salary-box net-salary">
               <h3>Net Salary</h3>
-              <p className="stat-number">${typeof salaryInfo.netSalary === 'number' ? salaryInfo.netSalary.toFixed(2) : '0.00'}</p>
+              <p className="stat-number">PKR {typeof salaryInfo.netSalary === "number" ? salaryInfo.netSalary.toLocaleString("en-PK", { maximumFractionDigits: 0 }) : "0"}</p>
             </div>
           </>
         )}

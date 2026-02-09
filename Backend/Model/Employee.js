@@ -75,6 +75,44 @@ const employeeSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "Department",
     }],
+    // Department-wise shift schedules (for employees working in multiple departments)
+    departmentShifts: [{
+      department: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Department",
+        required: true,
+      },
+      startTime: {
+        type: String,
+        required: true,
+        match: /^([01]\d|2[0-3]):([0-5]\d)$/,
+        description: "Shift start time in HH:MM format (24-hour)",
+      },
+      endTime: {
+        type: String,
+        required: true,
+        match: /^([01]\d|2[0-3]):([0-5]\d)$/,
+        description: "Shift end time in HH:MM format (24-hour)",
+      },
+      daysOfWeek: {
+        type: [String],
+        enum: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
+        default: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
+      },
+      daySchedules: {
+        type: Map,
+        of: {
+          startTime: String,
+          endTime: String,
+        },
+        default: new Map(),
+        description: "Day-specific schedules that override default start/end times for specific days",
+      },
+      isActive: {
+        type: Boolean,
+        default: true,
+      },
+    }],
     leadingDepartments: [{
       type: mongoose.Schema.Types.ObjectId,
       ref: "Department",

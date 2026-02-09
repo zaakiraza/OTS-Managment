@@ -22,13 +22,11 @@ function Assets() {
   });
   const [formData, setFormData] = useState({
     name: "",
-    serialNumber: "",
-    macAddress: "",
+    quantity: 1,
     category: "",
     condition: "Good",
     status: "Available",
     issueDate: "",
-    purchasePrice: "",
     notes: "",
     department: "",
     assignToEmployee: "",
@@ -40,7 +38,9 @@ function Assets() {
   });
   const [imagePreview, setImagePreview] = useState(null);
   const [assignData, setAssignData] = useState({
+    department: "",
     employeeId: "",
+    quantityToAssign: 1,
     conditionAtAssignment: "Good",
     notes: "",
   });
@@ -49,10 +49,30 @@ function Assets() {
   const [importData, setImportData] = useState([]);
   const [importErrors, setImportErrors] = useState([]);
   const [importing, setImporting] = useState(false);
+  const [showAssignmentsModal, setShowAssignmentsModal] = useState(false);
+  const [assignments, setAssignments] = useState([]);
+  const [assignmentsLoading, setAssignmentsLoading] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exportFields, setExportFields] = useState({
+    "S.No": true,
+    "Asset ID": true,
+    "Asset Name": true,
+    "Quantity": true,
+    "Quantity Assigned": true,
+    "Category": true,
+    "Condition": true,
+    "Status": true,
+    "Issue Date": true,
+    "Building": true,
+    "Floor": true,
+    "Notes": true,
+    "Created At": true,
+  });
 
   const categories = [
     "Laptop",
     "Desktop",
+    "System",
     "Monitor",
     "Keyboard",
     "Mouse",
@@ -68,7 +88,7 @@ function Assets() {
   ];
 
   const conditions = ["Excellent", "Good", "Fair", "Poor"];
-  const statuses = ["Available", "Assigned", "Under Repair", "Damaged", "Retired"];
+  const statuses = ["Available", "Assigned", "Under Repair", "Damaged", "Retired", "Refurb", "New"];
 
   useEffect(() => {
     fetchAssets();
@@ -107,9 +127,50 @@ function Assets() {
     }
   };
 
+  const fetchAssignments = async (assetId) => {
+    try {
+      setAssignmentsLoading(true);
+      const response = await assetAPI.getHistory(assetId);
+      if (response.data.success) {
+        setAssignments(response.data.data);
+        setShowAssignmentsModal(true);
+      }
+    } catch (error) {
+      console.error("Error fetching assignments:", error);
+      toast.error("Failed to fetch assignments");
+    } finally {
+      setAssignmentsLoading(false);
+    }
+  };
+
+  const handleUnassign = async (assignmentId) => {
+    if (!window.confirm("Are you sure you want to unassign this asset?")) {
+      return;
+    }
+    try {
+      setAssignmentsLoading(true);
+      await assetAPI.return({
+        assignmentId,
+        conditionAtReturn: "Good",
+        returnNotes: "Asset unassigned",
+        status: "Returned",
+      });
+      toast.success("Asset unassigned successfully!");
+      // Refresh the assignments list
+      await fetchAssignments(selectedAsset._id);
+      fetchAssets();
+      fetchStats();
+    } catch (error) {
+      console.error("Error unassigning asset:", error);
+      toast.error(error.response?.data?.message || "Failed to unassign asset");
+    } finally {
+      setAssignmentsLoading(false);
+    }
+  };
+
   const fetchEmployees = async () => {
     try {
-      const response = await employeeAPI.getAll({ isActive: true, forAssignment: true });
+      const response = await employeeAPI.getAll({ isActive: true, forAssignment: true, noPagination: true });
       if (response.data.success) {
         setEmployees(response.data.data);
         setFilteredEmployees(response.data.data);
@@ -140,14 +201,12 @@ function Assets() {
       // Prepare asset data
       const assetData = {
         name: formData.name,
+        quantity: parseInt(formData.quantity) || 1,
         category: formData.category,
-        serialNumber: formData.serialNumber,
-        macAddress: formData.macAddress,
         condition: formData.condition,
         // If assigning to employee during creation, set status to Available first
         // The assign API will change it to Assigned
         status: formData.assignToEmployee ? "Available" : formData.status,
-        purchasePrice: formData.purchasePrice,
         issueDate: formData.issueDate,
         notes: formData.notes,
         location: formData.location,
@@ -204,7 +263,9 @@ function Assets() {
       setShowAssignModal(false);
       setSelectedAsset(null);
       setAssignData({
+        department: "",
         employeeId: "",
+        quantityToAssign: 1,
         conditionAtAssignment: "Good",
         notes: "",
       });
@@ -222,13 +283,11 @@ function Assets() {
     setSelectedAsset(asset);
     setFormData({
       name: asset.name,
-      serialNumber: asset.serialNumber || "",
-      macAddress: asset.macAddress || "",
+      quantity: asset.quantity || 1,
       category: asset.category,
       condition: asset.condition,
       status: asset.status || "Available",
       issueDate: asset.issueDate ? asset.issueDate.split("T")[0] : "",
-      purchasePrice: asset.purchasePrice || "",
       notes: asset.notes || "",
       department: "",
       assignToEmployee: "",
@@ -258,13 +317,11 @@ function Assets() {
   const resetForm = () => {
     setFormData({
       name: "",
-      serialNumber: "",
-      macAddress: "",
+      quantity: 1,
       category: "",
       condition: "Good",
       status: "Available",
       issueDate: "",
-      purchasePrice: "",
       notes: "",
       department: "",
       assignToEmployee: "",
@@ -334,6 +391,21 @@ function Assets() {
     }
   };
 
+  const handleAssignDepartmentChange = (departmentId) => {
+    setAssignData({ ...assignData, department: departmentId, employeeId: "" });
+  };
+
+  const getAssignFilteredEmployees = () => {
+    if (assignData.department) {
+      const filtered = employees.filter(emp => {
+        const empDeptId = emp.department?._id || emp.department;
+        return empDeptId === assignData.department;
+      });
+      return filtered;
+    }
+    return employees;
+  };
+
   const getStatusBadge = (status) => {
     const colors = {
       Available: "#4caf50",
@@ -368,53 +440,94 @@ function Assets() {
       toast.warning("No assets to export");
       return;
     }
+    setShowExportModal(true);
+  };
+
+  const handleExport = () => {
+    // Get only selected fields
+    const selectedFields = Object.keys(exportFields).filter(field => exportFields[field]);
+    
+    if (selectedFields.length === 0) {
+      toast.warning("Please select at least one field to export");
+      return;
+    }
 
     // Prepare data for export
-    const exportData = assets.map((asset, index) => ({
-      "S.No": index + 1,
-      "Asset ID": asset.assetId || "",
-      "Asset Name": asset.name || "",
-      "Category": asset.category || "",
-      "Serial Number": asset.serialNumber || "",
-      "MAC Address": asset.macAddress || "",
-      "Condition": asset.condition || "",
-      "Status": asset.status || "",
-      "Purchase Price (PKR)": asset.purchasePrice || "",
-      "Issue Date": asset.issueDate ? new Date(asset.issueDate).toLocaleDateString() : "",
-      "Building": asset.location?.building || "",
-      "Floor": asset.location?.floor || "",
-      "Assigned To (ID)": asset.assignedTo?.employeeId || "",
-      "Assigned To (Name)": asset.assignedTo?.name || "",
-      "Assignment Date": asset.assignedDate ? new Date(asset.assignedDate).toLocaleDateString() : "",
-      "Notes": asset.notes || "",
-      "Created At": asset.createdAt ? new Date(asset.createdAt).toLocaleDateString() : "",
-    }));
+    const exportData = assets.map((asset, index) => {
+      const row = {};
+      
+      selectedFields.forEach(field => {
+        switch(field) {
+          case "S.No":
+            row["S.No"] = index + 1;
+            break;
+          case "Asset ID":
+            row["Asset ID"] = asset.assetId || "";
+            break;
+          case "Asset Name":
+            row["Asset Name"] = asset.name || "";
+            break;
+          case "Quantity":
+            row["Quantity"] = asset.quantity || 1;
+            break;
+          case "Quantity Assigned":
+            row["Quantity Assigned"] = asset.quantityAssigned || 0;
+            break;
+          case "Category":
+            row["Category"] = asset.category || "";
+            break;
+          case "Condition":
+            row["Condition"] = asset.condition || "";
+            break;
+          case "Status":
+            row["Status"] = asset.status || "";
+            break;
+          case "Issue Date":
+            row["Issue Date"] = asset.issueDate ? new Date(asset.issueDate).toLocaleDateString() : "";
+            break;
+          case "Building":
+            row["Building"] = asset.location?.building || "";
+            break;
+          case "Floor":
+            row["Floor"] = asset.location?.floor || "";
+            break;
+          case "Notes":
+            row["Notes"] = asset.notes || "";
+            break;
+          case "Created At":
+            row["Created At"] = asset.createdAt ? new Date(asset.createdAt).toLocaleDateString() : "";
+            break;
+          default:
+            break;
+        }
+      });
+      
+      return row;
+    });
 
     // Create workbook and worksheet
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.json_to_sheet(exportData);
 
-    // Set column widths
-    const colWidths = [
-      { wch: 5 },   // S.No
-      { wch: 12 },  // Asset ID
-      { wch: 25 },  // Asset Name
-      { wch: 15 },  // Category
-      { wch: 20 },  // Serial Number
-      { wch: 20 },  // MAC Address
-      { wch: 10 },  // Condition
-      { wch: 12 },  // Status
-      { wch: 18 },  // Purchase Price
-      { wch: 12 },  // Issue Date
-      { wch: 15 },  // Building
-      { wch: 12 },  // Floor
-      { wch: 15 },  // Assigned To (ID)
-      { wch: 20 },  // Assigned To (Name)
-      { wch: 20 },  // Assigned To (Dept)
-      { wch: 15 },  // Assignment Date
-      { wch: 30 },  // Notes
-      { wch: 12 },  // Created At
-    ];
+    // Set column widths based on selected fields
+    const colWidths = selectedFields.map(field => {
+      switch(field) {
+        case "S.No": return { wch: 5 };
+        case "Asset ID": return { wch: 12 };
+        case "Asset Name": return { wch: 25 };
+        case "Quantity": return { wch: 10 };
+        case "Quantity Assigned": return { wch: 15 };
+        case "Category": return { wch: 15 };
+        case "Condition": return { wch: 10 };
+        case "Status": return { wch: 12 };
+        case "Issue Date": return { wch: 12 };
+        case "Building": return { wch: 15 };
+        case "Floor": return { wch: 12 };
+        case "Notes": return { wch: 30 };
+        case "Created At": return { wch: 12 };
+        default: return { wch: 15 };
+      }
+    });
     ws["!cols"] = colWidths;
 
     // Add worksheet to workbook
@@ -427,6 +540,8 @@ function Assets() {
 
     // Save file
     XLSX.writeFile(wb, filename);
+    setShowExportModal(false);
+    toast.success("Assets exported successfully!");
   };
 
   // Download import template
@@ -434,12 +549,10 @@ function Assets() {
     const templateData = [
       {
         "Asset Name": "Example Laptop",
+        "Quantity": "5",
         "Category": "Laptop",
-        "Serial Number": "SN-123456",
-        "MAC Address": "AA:BB:CC:DD:EE:FF",
         "Condition": "Good",
         "Status": "Available",
-        "Purchase Price": "50000",
         "Issue Date": "2025-01-15",
         "Building": "Main Office",
         "Floor": "3rd Floor",
@@ -452,9 +565,8 @@ function Assets() {
     
     // Set column widths
     ws["!cols"] = [
-      { wch: 25 }, { wch: 15 }, { wch: 20 }, { wch: 20 },
-      { wch: 12 }, { wch: 12 }, { wch: 15 }, { wch: 12 },
-      { wch: 15 }, { wch: 12 }, { wch: 30 }
+      { wch: 25 }, { wch: 10 }, { wch: 15 }, { wch: 12 }, { wch: 12 },
+      { wch: 12 }, { wch: 15 }, { wch: 12 }, { wch: 30 }
     ];
 
     XLSX.utils.book_append_sheet(wb, ws, "Assets Template");
@@ -502,7 +614,7 @@ function Assets() {
           }
 
           // Status validation
-          const validStatuses = ["Available", "Assigned", "Under Repair", "Damaged", "Retired"];
+          const validStatuses = ["Available", "Assigned", "Under Repair", "Damaged", "Retired", "Refurb", "New"];
           if (row["Status"] && !validStatuses.includes(row["Status"])) {
             rowErrors.push(`Invalid status: ${row["Status"]}`);
           }
@@ -513,12 +625,10 @@ function Assets() {
 
           return {
             name: row["Asset Name"] || "",
+            quantity: row["Quantity"] ? parseInt(row["Quantity"]) : 1,
             category: row["Category"] || "",
-            serialNumber: row["Serial Number"] || "",
-            macAddress: row["MAC Address"] || "",
             condition: row["Condition"] || "Good",
             status: row["Status"] || "Available",
-            purchasePrice: row["Purchase Price"] ? Number(row["Purchase Price"]) : null,
             issueDate: row["Issue Date"] || new Date().toISOString().split("T")[0],
             location: {
               building: row["Building"] || "",
@@ -692,11 +802,9 @@ function Assets() {
               <thead>
                 <tr>
                   <th>Asset ID</th>
-                  <th>Image</th>
                   <th>Name</th>
+                  <th>Quantity</th>
                   <th>Category</th>
-                  <th>Serial No.</th>
-                  <th>MAC Address</th>
                   <th>Condition</th>
                   <th>Status</th>
                   <th>Assigned To</th>
@@ -706,40 +814,36 @@ function Assets() {
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan="10" style={{ textAlign: "center" }}>
+                    <td colSpan="8" style={{ textAlign: "center" }}>
                       Loading...
                     </td>
                   </tr>
                 ) : assets.length === 0 ? (
                   <tr>
-                    <td colSpan="10" style={{ textAlign: "center" }}>
+                    <td colSpan="8" style={{ textAlign: "center" }}>
                       No assets found
                     </td>
                   </tr>
                 ) : (
-                  assets.map((asset) => (
+                  assets.map((asset) => {
+                    const available = (asset.quantity || 1) - (asset.quantityAssigned || 0);
+                    const total = asset.quantity || 1;
+                    return (
                     <tr key={asset._id}>
                       <td className="asset-id">{asset.assetId}</td>
-                      <td>
-                        <div className="asset-thumbnail">
-                          {asset.images && asset.images.length > 0 ? (
-                            <img src={asset.images[0]} alt={asset.name} />
-                          ) : (
-                            <div className="no-image">
-                              <i className="fas fa-laptop"></i>
-                            </div>
-                          )}
-                        </div>
-                      </td>
                       <td>{asset.name}</td>
+                      <td>
+                        <span style={{ color: available === 0 ? '#f44336' : available < total ? '#ff9800' : '#4caf50' }}>
+                          {available}
+                        </span>
+                        {' / '}{total}
+                      </td>
                       <td>{asset.category}</td>
-                      <td className="serial-number">{asset.serialNumber || "-"}</td>
-                      <td className="mac-address">{asset.macAddress || "-"}</td>
                       <td>{getConditionBadge(asset.condition)}</td>
                       <td>{getStatusBadge(asset.status)}</td>
                       <td>
-                        {asset.assignedTo
-                          ? `${asset.assignedTo.employeeId} - ${asset.assignedTo.name}`
+                        {asset.quantityAssigned > 0
+                          ? `${asset.quantityAssigned} assigned`
                           : "-"}
                       </td>
                       <td>
@@ -751,7 +855,7 @@ function Assets() {
                           >
                             <i className="fas fa-edit"></i>
                           </button>
-                          {asset.status === "Available" && (
+                          {available > 0 && (
                             <button
                               className="btn-assign"
                               onClick={() => {
@@ -761,6 +865,16 @@ function Assets() {
                               title="Assign"
                             >
                               <i className="fas fa-user"></i>
+                            </button>
+                          )}
+                          {asset.quantityAssigned > 0 && (
+                            <button
+                              className="btn-view"
+                              onClick={() => fetchAssignments(asset._id)}
+                              title="View Assignments"
+                              style={{ backgroundColor: '#2196f3', color: 'white' }}
+                            >
+                              <i className="fas fa-eye"></i>
                             </button>
                           )}
                           <button
@@ -773,7 +887,8 @@ function Assets() {
                         </div>
                       </td>
                     </tr>
-                  ))
+                    );
+                  })
                 )}
               </tbody>
             </table>
@@ -832,25 +947,16 @@ function Assets() {
                         </select>
                       </div>
                       <div className="form-group">
-                        <label><i className="fas fa-barcode"></i> Serial Number</label>
+                        <label><i className="fas fa-box"></i> Quantity *</label>
                         <input
-                          type="text"
-                          value={formData.serialNumber}
+                          type="number"
+                          value={formData.quantity}
                           onChange={(e) =>
-                            setFormData({ ...formData, serialNumber: e.target.value })
+                            setFormData({ ...formData, quantity: e.target.value })
                           }
-                          placeholder="e.g., SN-123456789"
-                        />
-                      </div>
-                      <div className="form-group">
-                        <label><i className="fas fa-network-wired"></i> MAC Address</label>
-                        <input
-                          type="text"
-                          value={formData.macAddress}
-                          onChange={(e) =>
-                            setFormData({ ...formData, macAddress: e.target.value })
-                          }
-                          placeholder="e.g., AA:BB:CC:DD:EE:FF"
+                          placeholder="How many items"
+                          min="1"
+                          required
                         />
                       </div>
                       <div className="form-group">
@@ -884,20 +990,6 @@ function Assets() {
                             </option>
                           ))}
                         </select>
-                      </div>
-                      <div className="form-group">
-                        <label><i className="fas fa-money-bill-wave"></i> Purchase Price (PKR)</label>
-                        <input
-                          type="number"
-                          value={formData.purchasePrice}
-                          onChange={(e) =>
-                            setFormData({
-                              ...formData,
-                              purchasePrice: e.target.value,
-                            })
-                          }
-                          placeholder="Enter price"
-                        />
                       </div>
                       <div className="form-group">
                         <label><i className="fas fa-calendar-alt"></i> Issue Date *</label>
@@ -1140,6 +1232,20 @@ function Assets() {
                     <h3 className="section-title"><i className="fas fa-user"></i> Assignment Details</h3>
                     <div className="form-grid">
                       <div className="form-group">
+                        <label>Select Department</label>
+                        <select
+                          value={assignData.department}
+                          onChange={(e) => handleAssignDepartmentChange(e.target.value)}
+                        >
+                          <option value="">All Departments</option>
+                          {departments.map((dept) => (
+                            <option key={dept._id} value={dept._id}>
+                              {"—".repeat(dept.level || 0)} {dept.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="form-group">
                         <label>Assign to Employee *</label>
                         <select
                           value={assignData.employeeId}
@@ -1152,12 +1258,33 @@ function Assets() {
                           required
                         >
                           <option value="">Select Employee</option>
-                          {employees.map((emp) => (
+                          {getAssignFilteredEmployees().map((emp) => (
                             <option key={emp._id} value={emp._id}>
                               {emp.name} ({emp.employeeId})
                             </option>
                           ))}
                         </select>
+                      </div>
+                      <div className="form-group">
+                        <label>
+                          Quantity to Assign * 
+                          <span style={{ color: '#666', fontSize: '0.9em', marginLeft: '10px' }}>
+                            (Available: {(selectedAsset?.quantity || 1) - (selectedAsset?.quantityAssigned || 0)})
+                          </span>
+                        </label>
+                        <input
+                          type="number"
+                          value={assignData.quantityToAssign}
+                          onChange={(e) =>
+                            setAssignData({
+                              ...assignData,
+                              quantityToAssign: parseInt(e.target.value) || 1,
+                            })
+                          }
+                          min="1"
+                          max={(selectedAsset?.quantity || 1) - (selectedAsset?.quantityAssigned || 0)}
+                          required
+                        />
                       </div>
                       <div className="form-group">
                         <label>Condition</label>
@@ -1257,11 +1384,8 @@ function Assets() {
                       <div className="tip-category">
                         <h5><i className="fas fa-info-circle text-info"></i> Optional Fields</h5>
                         <ul>
-                          <li><strong>Serial Number</strong> - Device serial number</li>
-                          <li><strong>MAC Address</strong> - Network MAC address (format: AA:BB:CC:DD:EE:FF)</li>
                           <li><strong>Condition</strong> - Excellent, Good, Fair, or Poor (default: Good)</li>
-                          <li><strong>Status</strong> - Available, Assigned, Under Repair, Damaged, or Retired (default: Available)</li>
-                          <li><strong>Purchase Price</strong> - Numeric value in PKR</li>
+                          <li><strong>Status</strong> - Available, Assigned, Under Repair, Damaged, Retired, Refurb, or New (default: Available)</li>
                           <li><strong>Issue Date</strong> - Date format: YYYY-MM-DD (default: today)</li>
                           <li><strong>Building, Floor</strong> - Location details</li>
                           <li><strong>Notes</strong> - Additional information</li>
@@ -1362,8 +1486,8 @@ function Assets() {
                                 <tr>
                                   <th>Status</th>
                                   <th>Name</th>
+                                  <th>Quantity</th>
                                   <th>Category</th>
-                                  <th>Serial No.</th>
                                   <th>Condition</th>
                                 </tr>
                               </thead>
@@ -1378,8 +1502,8 @@ function Assets() {
                                       )}
                                     </td>
                                     <td>{item.name || "-"}</td>
+                                    <td>{item.quantity || 1}</td>
                                     <td>{item.category || "-"}</td>
-                                    <td>{item.serialNumber || "-"}</td>
                                     <td>{item.condition || "-"}</td>
                                   </tr>
                                 ))}
@@ -1422,6 +1546,226 @@ function Assets() {
                         <i className="fas fa-upload"></i> Import {importData.filter(d => d.isValid).length} Assets
                       </>
                     )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* View Assignments Modal */}
+          {showAssignmentsModal && (
+            <div className="modal-backdrop">
+              <div className="modal" style={{ width: "100%", maxWidth: "1200px" }}>
+                <div className="modal-header">
+                  <h2>
+                    Assignments {selectedAsset?.name ? `- ${selectedAsset.name} (${selectedAsset.assetId})` : ""}
+                  </h2>
+                  <button
+                    className="modal-close"
+                    onClick={() => setShowAssignmentsModal(false)}
+                    style={{
+                      background: "none",
+                      border: "none",
+                      fontSize: "28px",
+                      cursor: "pointer",
+                      color: "#666",
+                      padding: "0 10px",
+                    }}
+                  >
+                    ×
+                  </button>
+                </div>
+                <div className="modal-body">
+                  {assignmentsLoading ? (
+                    <div style={{ textAlign: "center", padding: "20px" }}>
+                      <p>Loading assignments...</p>
+                    </div>
+                  ) : assignments.length === 0 ? (
+                    <div style={{ textAlign: "center", padding: "20px" }}>
+                      <p>No assignments found for this asset.</p>
+                    </div>
+                  ) : (
+                    <div style={{ overflowX: "auto", width: "100%" }}>
+                      <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                        <thead>
+                          <tr style={{ backgroundColor: "#f0f0f0" }}>
+                            <th style={{ padding: "10px", textAlign: "left", borderBottom: "2px solid #ddd" }}>Employee</th>
+                            <th style={{ padding: "10px", textAlign: "left", borderBottom: "2px solid #ddd" }}>Quantity</th>
+                            <th style={{ padding: "10px", textAlign: "left", borderBottom: "2px solid #ddd" }}>Assigned Date</th>
+                            <th style={{ padding: "10px", textAlign: "left", borderBottom: "2px solid #ddd" }}>Condition at Assignment</th>
+                            <th style={{ padding: "10px", textAlign: "left", borderBottom: "2px solid #ddd" }}>Status</th>
+                            <th style={{ padding: "10px", textAlign: "left", borderBottom: "2px solid #ddd" }}>Return Date</th>
+                            <th style={{ padding: "10px", textAlign: "left", borderBottom: "2px solid #ddd" }}>Notes</th>
+                            <th style={{ padding: "10px", textAlign: "center", borderBottom: "2px solid #ddd" }}>Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {assignments.map((assignment, index) => (
+                            <tr key={assignment._id} style={{ borderBottom: "1px solid #eee" }}>
+                              <td style={{ padding: "10px" }}>
+                                {assignment.employee?.name} ({assignment.employee?.employeeId})
+                              </td>
+                              <td style={{ padding: "10px" }}>
+                                <span style={{ 
+                                  backgroundColor: "#e3f2fd", 
+                                  padding: "4px 8px", 
+                                  borderRadius: "4px",
+                                  fontWeight: "bold"
+                                }}>
+                                  {assignment.quantity}
+                                </span>
+                              </td>
+                              <td style={{ padding: "10px" }}>
+                                {new Date(assignment.assignedDate).toLocaleDateString()}
+                              </td>
+                              <td style={{ padding: "10px" }}>
+                                <span style={{
+                                  backgroundColor: 
+                                    assignment.conditionAtAssignment === "Excellent" ? "#c8e6c9" :
+                                    assignment.conditionAtAssignment === "Good" ? "#fff9c4" :
+                                    assignment.conditionAtAssignment === "Fair" ? "#ffe0b2" :
+                                    "#ffcdd2",
+                                  padding: "4px 8px",
+                                  borderRadius: "4px"
+                                }}>
+                                  {assignment.conditionAtAssignment}
+                                </span>
+                              </td>
+                              <td style={{ padding: "10px" }}>
+                                <span style={{
+                                  backgroundColor:
+                                    assignment.status === "Active" ? "#c8e6c9" :
+                                    assignment.status === "Returned" ? "#bbdefb" :
+                                    assignment.status === "Damaged" ? "#ffcdd2" :
+                                    "#f0f0f0",
+                                  padding: "4px 8px",
+                                  borderRadius: "4px",
+                                  color: assignment.status === "Active" ? "#2e7d32" : "#333"
+                                }}>
+                                  {assignment.status}
+                                </span>
+                              </td>
+                              <td style={{ padding: "10px" }}>
+                                {assignment.returnDate 
+                                  ? new Date(assignment.returnDate).toLocaleDateString()
+                                  : "-"
+                                }
+                              </td>
+                              <td style={{ padding: "10px", fontSize: "0.9em" }}>
+                                {assignment.notes || "-"}
+                              </td>
+                              <td style={{ padding: "10px", textAlign: "center" }}>
+                                {assignment.status === "Active" && (
+                                  <button
+                                    onClick={() => handleUnassign(assignment._id)}
+                                    disabled={assignmentsLoading}
+                                    style={{
+                                      backgroundColor: "#f44336",
+                                      color: "white",
+                                      border: "none",
+                                      padding: "6px 12px",
+                                      borderRadius: "4px",
+                                      cursor: assignmentsLoading ? "not-allowed" : "pointer",
+                                      fontSize: "0.9em",
+                                      opacity: assignmentsLoading ? 0.6 : 1,
+                                    }}
+                                    title="Unassign this asset"
+                                  >
+                                    <i className="fas fa-times"></i> Unassign
+                                  </button>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+                <div className="modal-footer">
+                  <button
+                    className="btn-secondary"
+                    onClick={() => setShowAssignmentsModal(false)}
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Export Modal */}
+          {showExportModal && (
+            <div className="modal-backdrop">
+              <div className="modal" style={{ maxWidth: "500px" }}>
+                <div className="modal-header">
+                  <h2>Select Fields to Export</h2>
+                  <button
+                    className="modal-close"
+                    onClick={() => setShowExportModal(false)}
+                    style={{
+                      background: "none",
+                      border: "none",
+                      fontSize: "28px",
+                      cursor: "pointer",
+                      color: "#666",
+                      padding: "0 10px",
+                    }}
+                  >
+                    ×
+                  </button>
+                </div>
+                <div className="modal-body">
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px" }}>
+                    {Object.keys(exportFields).map((field) => (
+                      <label
+                        key={field}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          cursor: "pointer",
+                          padding: "8px",
+                          borderRadius: "4px",
+                          backgroundColor: exportFields[field] ? "#e3f2fd" : "transparent",
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={exportFields[field]}
+                          onChange={(e) =>
+                            setExportFields({
+                              ...exportFields,
+                              [field]: e.target.checked,
+                            })
+                          }
+                          style={{ marginRight: "8px", cursor: "pointer" }}
+                        />
+                        <span>{field}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+                <div className="modal-footer">
+                  <button
+                    className="btn-secondary"
+                    onClick={() => setShowExportModal(false)}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    className="btn-primary"
+                    onClick={handleExport}
+                    style={{
+                      backgroundColor: "#4caf50",
+                      color: "white",
+                      border: "none",
+                      padding: "10px 20px",
+                      borderRadius: "4px",
+                      cursor: "pointer",
+                      fontSize: "1em",
+                    }}
+                  >
+                    <i className="fas fa-file-excel"></i> Export
                   </button>
                 </div>
               </div>

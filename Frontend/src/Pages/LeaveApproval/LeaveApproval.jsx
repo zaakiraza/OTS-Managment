@@ -147,19 +147,20 @@ function LeaveApproval() {
                   <th>Reason</th>
                   <th>Status</th>
                   <th>Applied On</th>
+                  {filterStatus !== "pending" && <th>Approved By</th>}
                   <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan="9" style={{ textAlign: "center" }}>
+                    <td colSpan={filterStatus !== "pending" ? "10" : "9"} style={{ textAlign: "center" }}>
                       Loading...
                     </td>
                   </tr>
                 ) : leaves.length === 0 ? (
                   <tr>
-                    <td colSpan="9" style={{ textAlign: "center" }}>
+                    <td colSpan={filterStatus !== "pending" ? "10" : "9"} style={{ textAlign: "center" }}>
                       No leave requests found
                     </td>
                   </tr>
@@ -199,6 +200,18 @@ function LeaveApproval() {
                         </span>
                       </td>
                       <td>{new Date(leave.createdAt).toLocaleDateString()}</td>
+                      {filterStatus !== "pending" && (
+                        <td>
+                          {leave.approvedBy ? (
+                            <div className="approver-info">
+                              <strong>{leave.approvedBy.name}</strong>
+                              <small>{leave.approvedBy.employeeId}</small>
+                            </div>
+                          ) : (
+                            <span style={{ color: "#999" }}>-</span>
+                          )}
+                        </td>
+                      )}
                       <td>
                         <div className="action-buttons">
                           <button
@@ -350,15 +363,25 @@ function LeaveApproval() {
               {selectedLeave.status === "approved" && selectedLeave.approvedBy && (
                 <div className="detail-item full-width">
                   <label>Approved By</label>
-                  <span>{selectedLeave.approvedBy?.name} on {new Date(selectedLeave.approvedDate).toLocaleDateString()}</span>
+                  <span>{selectedLeave.approvedBy?.name} ({selectedLeave.approvedBy?.employeeId}) on {new Date(selectedLeave.approvedDate).toLocaleDateString()}</span>
                 </div>
               )}
 
-              {selectedLeave.status === "rejected" && selectedLeave.rejectionReason && (
-                <div className="detail-item full-width">
-                  <label>Rejection Reason</label>
-                  <p className="rejection-reason-text">{selectedLeave.rejectionReason}</p>
-                </div>
+              {selectedLeave.status === "rejected" && (
+                <>
+                  {selectedLeave.approvedBy && (
+                    <div className="detail-item full-width">
+                      <label>Rejected By</label>
+                      <span>{selectedLeave.approvedBy?.name} ({selectedLeave.approvedBy?.employeeId}) on {new Date(selectedLeave.approvedDate).toLocaleDateString()}</span>
+                    </div>
+                  )}
+                  {selectedLeave.rejectionReason && (
+                    <div className="detail-item full-width">
+                      <label>Rejection Reason</label>
+                      <p className="rejection-reason-text">{selectedLeave.rejectionReason}</p>
+                    </div>
+                  )}
+                </>
               )}
 
               {selectedLeave.attachments && selectedLeave.attachments.length > 0 && (

@@ -117,12 +117,26 @@ export const applyLeave = async (req, res) => {
     }).select("_id");
 
     // Get the employee's createdBy (who created the employee ID)
-    const employee = await Employee.findById(employeeId).select("createdBy");
+    const employee = await Employee.findById(employeeId)
+      .select("createdBy department")
+      .populate("department");
+    
     const recipientsSet = new Set(superAdmins.map((a) => a._id.toString()));
     
     // Add createdBy to recipients (the attendance dept person who created this employee)
     if (employee?.createdBy) {
       recipientsSet.add(employee.createdBy.toString());
+    }
+
+    // Add team leads who are leading this employee's department
+    if (employee?.department) {
+      const teamLeads = await Employee.find({
+        isActive: true,
+        leadingDepartments: employee.department._id,
+        role: { $in: await getRoleIdsByName(["teamLead"]) },
+      }).select("_id");
+      
+      teamLeads.forEach((tl) => recipientsSet.add(tl._id.toString()));
     }
 
     if (recipientsSet.size > 0) {
@@ -195,7 +209,7 @@ export const getAllLeaves = async (req, res) => {
 
     const filter = {};
 
-    // For attendanceDepartment, only show leaves from employees they created
+    // For Attendance Department role, show only leaves of employees they created
     if (userRole === "attendanceDepartment") {
       const employeesCreatedByUser = await Employee.find({
         createdBy: req.user._id,
@@ -204,6 +218,24 @@ export const getAllLeaves = async (req, res) => {
 
       const employeeIds = employeesCreatedByUser.map((emp) => emp._id);
       filter.employee = { $in: employeeIds };
+    }
+
+    // For Team Lead role, show only leaves from employees in departments they are leading
+    if (userRole === "teamLead") {
+      const currentEmployee = await Employee.findById(req.user._id).select("leadingDepartments");
+      
+      if (currentEmployee?.leadingDepartments && currentEmployee.leadingDepartments.length > 0) {
+        const employeesInDepartments = await Employee.find({
+          department: { $in: currentEmployee.leadingDepartments },
+          isActive: true,
+        }).select("_id");
+
+        const employeeIds = employeesInDepartments.map((emp) => emp._id);
+        filter.employee = { $in: employeeIds };
+      } else {
+        // If team lead has no leading departments, show no leaves
+        filter.employee = { $in: [] };
+      }
     }
 
     if (status) {

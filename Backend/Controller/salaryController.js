@@ -117,7 +117,8 @@ export const calculateSalary = async (req, res) => {
         presentDays++;
         if (status === "early-departure") earlyArrivals++;
       }
-      else if (status === "absent") {
+      else if (status === "absent" || status === "missing") {
+        // Both absent and missing are counted as absent days
         recordedAbsentDays++;
       }
       else if (status === "half-day") {
@@ -135,25 +136,22 @@ export const calculateSalary = async (req, res) => {
         presentDays++; // Late-early-departure is still considered present
         earlyArrivals++; // Also count for early arrival bonus
       }
-      else if (status === "pending" && record.checkIn) {
-        // Pending with check-in counts as present
-        presentDays++;
+      else if (status === "pending") {
+        if (record.checkIn) {
+          // Pending with check-in counts as present
+          presentDays++;
+        } else {
+          // Pending without checkIn = absent
+          recordedAbsentDays++;
+        }
       }
     });
 
-    // Subtract leave days from total working days
-    // Leave days should not be counted in the denominator for salary calculation
-    totalWorkingDays = Math.max(0, totalWorkingDays - leaveDays);
+    // NOTE: Leave days are PAID LEAVE, so they should NOT be subtracted from total working days.
+    // Total working days now includes leave days as they are paid days.
+    // This ensures per-day salary is calculated correctly including paid leaves.
 
-    // Calculate missing days (working days without any attendance record, excluding leave days)
-    // First, create a set of dates that have leave records
-    const leaveDates = new Set();
-    dateStatusMap.forEach((record, dateStr) => {
-      if (record.status === "leave") {
-        leaveDates.add(dateStr);
-      }
-    });
-
+    // Calculate missing days (working days without any attendance record)
     let missingDays = 0;
     const today = new Date();
     today.setHours(23, 59, 59, 999);
@@ -170,13 +168,12 @@ export const calculateSalary = async (req, res) => {
       if (date > today) continue;
       
       // If no record exists for this working day, count as missing (absent)
-      // But exclude days that are leaves (leaves are already accounted for)
-      if (!datesWithRecords.has(dateStr) && !leaveDates.has(dateStr)) {
+      if (!datesWithRecords.has(dateStr)) {
         missingDays++;
       }
     }
 
-    // Total absent = explicitly marked absent + missing days
+    // Total absent = explicitly marked absent + missing records + pending without checkIn
     const absentDays = recordedAbsentDays + missingDays;
 
     logger.debug(`Attendance stats: Present=${presentDays}, Recorded Absent=${recordedAbsentDays}, Missing Days=${missingDays}, Total Absent=${absentDays}, Late=${lateDays}, HalfDays=${halfDays}, Leaves=${leaveDays}, EarlyArrivals=${earlyArrivals}`);
@@ -199,9 +196,8 @@ export const calculateSalary = async (req, res) => {
       totalDeductions = missingHours * (criteria.hourlyDeductionRate || 0);
     } else {
       // Check-in/checkout method
-      // Apply leave threshold logic
-      const leaveThreshold = employee.salary.leaveThreshold || 0;
-      const excessLeaves = Math.max(0, leaveDays - leaveThreshold);
+      // NOTE: Approved leaves are PAID LEAVES - no deduction should apply
+      // Only deduct for unauthorized absences and attendance issues
       
       // Apply late penalty
       const lateAsAbsent = Math.floor(lateDays / (criteria.lateThreshold || SALARY.DEFAULT_LATE_THRESHOLD));
@@ -228,7 +224,8 @@ export const calculateSalary = async (req, res) => {
         ? Math.floor(lateEarlyDepartureDays / criteria.lateEarlyDepartureThreshold) 
         : 0;
       
-      const totalAbsents = absentDays + lateAsAbsent + halfDayAsAbsent + earlyDepartureAsAbsent + lateEarlyDepartureAsAbsent + excessLeaves;
+      // Total absents = unauthorized absences + attendance penalties only (NO leave deduction)
+      const totalAbsents = absentDays + lateAsAbsent + halfDayAsAbsent + earlyDepartureAsAbsent + lateEarlyDepartureAsAbsent;
       
       // Calculate deductions
       // Auto-calculate per day salary (rounded down, no decimals)
@@ -236,7 +233,7 @@ export const calculateSalary = async (req, res) => {
       const absentDeduction = totalAbsents * perDaySalary;
       totalDeductions = absentDeduction;
       
-      logger.debug(`Leave calculation: Total=${leaveDays}, Threshold=${leaveThreshold}, Excess=${excessLeaves}, Total Absents=${totalAbsents}`);
+      logger.debug(`Attendance deduction: Absents=${absentDays}, Late=${lateAsAbsent}, HalfDay=${halfDayAsAbsent}, EarlyDep=${earlyDepartureAsAbsent}, LateEarlyDep=${lateEarlyDepartureAsAbsent}, Total Absents=${totalAbsents}`);
     }
 
     // Perfect attendance bonus
@@ -247,13 +244,19 @@ export const calculateSalary = async (req, res) => {
       }
     }
 
+    // Initialize extra work variables
+    let totalExtraWorkingHours = 0;
+    let weeklyOffDaysWorked = 0;
+    const perHourSalary = baseSalary / (totalWorkingDays * 8); // Assuming 8-hour workday
+    let extraWorkAdditions = 0;
+
     // Calculate total worked days
     const totalWorkedDays = presentDays + halfDays * ATTENDANCE.HALF_DAY_MULTIPLIER;
     // Auto-calculate per day salary (rounded down, no decimals)
     const perDaySalary = Math.floor(baseSalary / totalWorkingDays);
 
     // Calculate net salary
-    const netSalary = baseSalary - totalDeductions + bonus;
+    const netSalary = baseSalary - totalDeductions + bonus + extraWorkAdditions;
 
     const salaryData = {
       employee: employee._id,
@@ -449,7 +452,8 @@ export const calculateAllSalaries = async (req, res) => {
             presentDays++;
             if (status === "early-departure") earlyArrivals++;
           }
-          else if (status === "absent") {
+          else if (status === "absent" || status === "missing") {
+            // Both absent and missing are counted as absent days
             recordedAbsentDays++;
           }
           else if (status === "half-day") {
@@ -463,25 +467,21 @@ export const calculateAllSalaries = async (req, res) => {
             presentDays++; // Late is still considered present
             if (status === "late-early-departure") earlyArrivals++;
           }
-          else if (status === "pending" && record.checkIn) {
-            // Pending with check-in counts as present
-            presentDays++;
+          else if (status === "pending") {
+            if (record.checkIn) {
+              // Pending with check-in counts as present
+              presentDays++;
+            } else {
+              // Pending without checkIn = absent
+              recordedAbsentDays++;
+            }
           }
         });
 
-        // Subtract leave days from total working days
-        // Leave days should not be counted in the denominator for salary calculation
-        totalWorkingDays = Math.max(0, totalWorkingDays - leaveDays);
-
-        // Calculate missing days (working days without any attendance record, excluding leave days)
-        // First, create a set of dates that have leave records
-        const leaveDates = new Set();
-        dateStatusMap.forEach((record, dateStr) => {
-          if (record.status === "leave") {
-            leaveDates.add(dateStr);
-          }
-        });
-
+        // NOTE: Leave days are PAID LEAVE, so they should NOT be subtracted from total working days.
+        // Total working days now includes leave days as they are paid days.
+        
+        // Calculate missing days (working days without any attendance record)
         let missingDays = 0;
         const today = new Date();
         today.setHours(23, 59, 59, 999);
@@ -498,13 +498,12 @@ export const calculateAllSalaries = async (req, res) => {
           if (date > today) continue;
           
           // If no record exists for this working day, count as missing (absent)
-          // But exclude days that are leaves (leaves are already accounted for)
-          if (!datesWithRecords.has(dateStr) && !leaveDates.has(dateStr)) {
+          if (!datesWithRecords.has(dateStr)) {
             missingDays++;
           }
         }
 
-        // Total absent = explicitly marked absent + missing days
+        // Total absent = explicitly marked absent + missing records + pending without checkIn
         const absentDays = recordedAbsentDays + missingDays;
 
         logger.debug(`${employee.employeeId}: Present=${presentDays}, Recorded Absent=${recordedAbsentDays}, Missing Days=${missingDays}, Total Absent=${absentDays}, Late=${lateDays}`);
@@ -612,6 +611,8 @@ export const calculateAllSalaries = async (req, res) => {
           extraWorkAdditions += weeklyOffDaysWorked * perDaySalary;
         }
         
+        // Ensure extraWorkAdditions is always defined
+        extraWorkAdditions = extraWorkAdditions || 0;
         const netSalary = baseSalary - totalDeductions + bonus + extraWorkAdditions;
 
         const salaryData = {
@@ -800,7 +801,8 @@ export const previewSalary = async (req, res) => {
         presentDays++;
         if (status === "early-departure") earlyArrivals++;
       }
-      else if (status === "absent") {
+      else if (status === "absent" || status === "missing") {
+        // Both absent and missing are counted as absent days
         recordedAbsentDays++;
       }
       else if (status === "half-day") {
@@ -818,16 +820,22 @@ export const previewSalary = async (req, res) => {
         presentDays++; // Late-early-departure is still considered present
         earlyArrivals++; // Also count for early arrival bonus
       }
-      else if (status === "pending" && record.checkIn) {
-        presentDays++;
+      else if (status === "pending") {
+        if (record.checkIn) {
+          presentDays++;
+        } else {
+          // Pending without checkIn = absent
+          recordedAbsentDays++;
+        }
       }
     });
 
-    // Subtract leave days from total working days
-    totalWorkingDays = Math.max(0, totalWorkingDays - leaveDays);
+    // NOTE: Leave days are PAID LEAVE, so they should NOT be subtracted from total working days.
+    // Total working days now includes leave days as they are paid days.
+    // totalWorkingDays already correctly includes all working days (excluding only weekly offs)
 
-    // Calculate missing days (working days without any attendance record, excluding leave days)
-    // First, create a set of dates that have leave records
+    // Calculate missing days (working days without any attendance record)
+    // Missing days are now only those with no record at all, as "missing" status is now handled in the loop above
     const leaveDates = new Set();
     dateStatusMap.forEach((record, dateStr) => {
       if (record.status === "leave") {
@@ -851,13 +859,12 @@ export const previewSalary = async (req, res) => {
       if (date > today) continue;
       
       // If no record exists for this working day, count as missing (absent)
-      // But exclude days that are leaves (leaves are already accounted for)
-      if (!datesWithRecords.has(dateStr) && !leaveDates.has(dateStr)) {
+      if (!datesWithRecords.has(dateStr)) {
         missingDays++;
       }
     }
 
-    // Total absent = explicitly marked absent + missing days
+    // Total absent = explicitly marked absent + missing records + pending without checkIn
     const absentDays = recordedAbsentDays + missingDays;
 
     let totalDeductions = 0;
@@ -893,10 +900,8 @@ export const previewSalary = async (req, res) => {
       deductionBreakdown.otherDeductions = totalDeductions;
     } else {
       // Check-in/checkout method
-      // Apply leave threshold logic
-      const leaveThreshold = employee.salary.leaveThreshold || 0;
-      const excessLeaves = Math.max(0, leaveDays - leaveThreshold);
-      deductionBreakdown.excessLeaves = excessLeaves;
+      // NOTE: Approved leaves are PAID LEAVES - no deduction should apply
+      // Only deduct for unauthorized absences and attendance issues
       
       // Apply late penalty
       const lateAsAbsent = Math.floor(lateDays / (criteria.lateThreshold || SALARY.DEFAULT_LATE_THRESHOLD));
@@ -933,7 +938,9 @@ export const previewSalary = async (req, res) => {
         : 0;
       deductionBreakdown.lateEarlyDepartureAsAbsent = lateEarlyDepartureAsAbsent;
       
-      const totalAbsents = absentDays + lateAsAbsent + halfDayAsAbsent + earlyDepartureAsAbsent + lateEarlyDepartureAsAbsent + excessLeaves;
+      // Total absents = unauthorized absences + attendance penalties only (NO leave deduction)
+      const totalAbsents = absentDays + lateAsAbsent + halfDayAsAbsent + earlyDepartureAsAbsent + lateEarlyDepartureAsAbsent;
+      deductionBreakdown.excessLeaves = 0; // No deduction for approved leaves
       
       // Calculate deductions
       // Auto-calculate per day salary (rounded down, no decimals)
@@ -996,6 +1003,9 @@ export const previewSalary = async (req, res) => {
     if (criteria.includeWeeklyOffDaysWorked && weeklyOffDaysWorked > 0) {
       extraWorkAdditions += weeklyOffDaysWorked * perDaySalary;
     }
+
+    // Ensure extraWorkAdditions is always defined
+    extraWorkAdditions = extraWorkAdditions || 0;
 
     // Calculate net salary
     const netSalary = baseSalary - totalDeductions + bonus + extraWorkAdditions;
@@ -1145,7 +1155,8 @@ export const previewAllSalaries = async (req, res) => {
             presentDays++;
             if (status === "early-departure") earlyArrivals++;
           }
-          else if (status === "absent") {
+          else if (status === "absent" || status === "missing") {
+            // Both absent and missing are counted as absent days
             recordedAbsentDays++;
           }
           else if (status === "half-day") {
@@ -1159,22 +1170,20 @@ export const previewAllSalaries = async (req, res) => {
             presentDays++; // Late is still considered present
             if (status === "late-early-departure") earlyArrivals++;
           }
-          else if (status === "pending" && record.checkIn) {
-            presentDays++;
+          else if (status === "pending") {
+            if (record.checkIn) {
+              presentDays++;
+            } else {
+              // Pending without checkIn = absent
+              recordedAbsentDays++;
+            }
           }
         });
 
-        totalWorkingDays = Math.max(0, totalWorkingDays - leaveDays);
+        // NOTE: Leave days are PAID LEAVE, so they should NOT be subtracted from total working days.
+        // Total working days now includes leave days as they are paid days.
 
-        // Calculate missing days (working days without any attendance record, excluding leave days)
-        // First, create a set of dates that have leave records
-        const leaveDates = new Set();
-        dateStatusMap.forEach((record, dateStr) => {
-          if (record.status === "leave") {
-            leaveDates.add(dateStr);
-          }
-        });
-
+        // Calculate missing days (working days without any attendance record)
         let missingDays = 0;
         const today = new Date();
         today.setHours(23, 59, 59, 999);
@@ -1188,8 +1197,7 @@ export const previewAllSalaries = async (req, res) => {
           if (date > today) continue;
           
           // If no record exists for this working day, count as missing (absent)
-          // But exclude days that are leaves (leaves are already accounted for)
-          if (!datesWithRecords.has(dateStr) && !leaveDates.has(dateStr)) {
+          if (!datesWithRecords.has(dateStr)) {
             missingDays++;
           }
         }
@@ -1292,6 +1300,9 @@ export const previewAllSalaries = async (req, res) => {
           extraWorkAdditions += weeklyOffDaysWorked * perDaySalary;
         }
 
+        // Ensure extraWorkAdditions is always defined
+        extraWorkAdditions = extraWorkAdditions || 0;
+
         const netSalary = baseSalary - totalDeductions + bonus + extraWorkAdditions;
 
         previews.push({
@@ -1346,13 +1357,24 @@ export const previewAllSalaries = async (req, res) => {
 // Get all salaries
 export const getAllSalaries = async (req, res) => {
   try {
-    const { month, year, status, employeeId } = req.query;
+    const { month, year, status, employeeId, department } = req.query;
     const filter = {};
 
     if (month) filter.month = parseInt(month);
     if (year) filter.year = parseInt(year);
     if (status) filter.status = status;
     if (employeeId) filter.employeeId = employeeId;
+
+    // If department filter is provided, find all employees in that department
+    if (department) {
+      const employeesInDept = await Employee.find({
+        department: department,
+        isActive: true
+      }).select('employeeId');
+      
+      const employeeIds = employeesInDept.map(emp => emp.employeeId);
+      filter.employeeId = { $in: employeeIds };
+    }
 
     const salaries = await Salary.find(filter)
       .populate("employee", "employeeId name email department position")

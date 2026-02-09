@@ -5,6 +5,8 @@ import Settings from "../Model/Settings.js";
 import logger from "../Utils/logger.js";
 import { TIME } from "../Config/constants.js";
 import { logAttendanceAction } from "../Utils/auditLogger.js";
+import { splitAttendanceByDepartments, hasMultiDepartmentShifts } from "../Utils/attendanceSplitter.js";
+import { markOldPendingAsMissing } from "../Utils/markMissingAttendance.js";
 import { 
   getDateAtMidnightUTC, 
   parseLocalTimeToUTC, 
@@ -167,46 +169,90 @@ export const markAttendance = async (req, res) => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    // Find or create today's attendance record
-    let attendance = await Attendance.findOne({
-      userId,
-      date: {
-        $gte: today,
-        $lt: new Date(today.getTime() + TIME.ONE_DAY),
-      },
-    });
+      const now = new Date();
+    
+      // Check if employee has multiple department shifts configured
+      const hasShifts = await hasMultiDepartmentShifts(employee._id);
 
-    const now = new Date();
+      if (hasShifts) {
+        // Employee works in multiple departments - split attendance by shifts
+        logger.info(`Multi-department employee detected: ${userId}, splitting attendance`);
+      
+        // Prepare attendance data for splitting
+        const attendanceData = {
+          employee: employee._id,
+          userId,
+          date: today,
+          checkIn: type === "checkIn" ? now : null,
+          checkOut: type === "checkOut" ? now : null,
+          deviceId: deviceId || "",
+          isManualEntry: false,
+        };
 
-    if (!attendance) {
-      // Create new attendance record
-      attendance = await Attendance.create({
-        employee: employee._id,
-        userId,
-        date: new Date(),
-        checkIn: type === "checkIn" ? now : null,
-        checkOut: type === "checkOut" ? now : null,
-        deviceId: deviceId || "",
-        isManualEntry: false,
-      });
-    } else {
-      // Update existing record
-      if (type === "checkIn" && !attendance.checkIn) {
-        attendance.checkIn = now;
-      } else if (type === "checkOut") {
-        attendance.checkOut = now;
+        // Split attendance across departments based on shifts
+        const splitRecords = await splitAttendanceByDepartments(attendanceData);
+
+        // Populate and return all created/updated records
+        const populatedRecords = await Promise.all(
+          splitRecords.map(record => 
+            Attendance.findById(record._id)
+              .populate("employee", "name employeeId email department")
+              .populate("department", "name")
+          )
+        );
+
+        const hasShiftRecords = splitRecords.some(r => r.isShiftBased);
+
+        return res.status(200).json({
+          success: true,
+          message: hasShiftRecords
+            ? `${type === "checkIn" ? "Check-in" : "Check-out"} marked successfully across ${splitRecords.length} departments`
+            : `${type === "checkIn" ? "Check-in" : "Check-out"} marked successfully`,
+          multiDepartment: hasShiftRecords,
+          data: populatedRecords,
+        });
+      } else {
+        // Regular single-department attendance
+        let attendance = await Attendance.findOne({
+          userId,
+          date: {
+            $gte: today,
+            $lt: new Date(today.getTime() + TIME.ONE_DAY),
+          },
+          isShiftBased: false, // Only find non-shift-based records
+        });
+
+        if (!attendance) {
+          // Create new attendance record
+          attendance = await Attendance.create({
+            employee: employee._id,
+            userId,
+            date: new Date(),
+            checkIn: type === "checkIn" ? now : null,
+            checkOut: type === "checkOut" ? now : null,
+            deviceId: deviceId || "",
+            isManualEntry: false,
+            isShiftBased: false,
+          });
+        } else {
+          // Update existing record
+          if (type === "checkIn" && !attendance.checkIn) {
+            attendance.checkIn = now;
+          } else if (type === "checkOut") {
+            attendance.checkOut = now;
+          }
+          await attendance.save();
+        }
+
+        const populatedAttendance = await Attendance.findById(attendance._id)
+          .populate("employee", "name employeeId email department");
+
+        return res.status(200).json({
+          success: true,
+          message: `${type === "checkIn" ? "Check-in" : "Check-out"} marked successfully`,
+          data: populatedAttendance,
+        });
       }
-      await attendance.save();
-    }
-
-    const populatedAttendance = await Attendance.findById(attendance._id)
-      .populate("employee", "name employeeId email department");
-
-    res.status(200).json({
-      success: true,
-      message: `${type === "checkIn" ? "Check-in" : "Check-out"} marked successfully`,
-      data: populatedAttendance,
-    });
   } catch (error) {
     res.status(500).json({
       success: false,
@@ -218,6 +264,9 @@ export const markAttendance = async (req, res) => {
 // Get all attendance records with filters
 export const getAllAttendance = async (req, res) => {
   try {
+    // Mark any pending attendance from before today as missing
+    await markOldPendingAsMissing();
+
     const { date, userId, employee, status, startDate, endDate, month, year } = req.query;
     
     // console.log("📋 Fetching attendance with params:", { date, userId, employee, status, startDate, endDate, month, year });
@@ -270,20 +319,31 @@ export const getAllAttendance = async (req, res) => {
     }
 
     // Filter by department
-    if (req.query.department) {
-      // Find all employees in the selected department
-      const employeesInDept = await Employee.find({
-        department: req.query.department,
-        isActive: true
-      }).select('_id');
+    const hasDepartmentFilter = req.query.department ? true : false;
+    if (hasDepartmentFilter) {
+        // Find all employees in the selected department (primary or additional)
+        const employeesInDept = await Employee.find({
+          $or: [
+            { department: req.query.department, isActive: true },
+            { additionalDepartments: req.query.department, isActive: true }
+          ]
+        }).select('_id');
       
-      const deptEmployeeIds = employeesInDept.map(emp => emp._id);
-      filter.employee = { $in: deptEmployeeIds };
+        const deptEmployeeIds = employeesInDept.map(emp => emp._id);
+      
+        // Include both:
+        // 1. Regular attendance for employees in this department
+        // 2. Shift-based attendance records specifically tagged for this department
+        filter.$or = [
+          { employee: { $in: deptEmployeeIds }, isShiftBased: false },
+          { department: req.query.department, isShiftBased: true }
+        ];
     }
 
     // For attendanceDepartment role, only show attendance of employees they created + their own attendance
+    // BUT: if a department filter is explicitly provided, skip this restriction (admin-level query)
     const requestingUserRole = req.user?.role?.name || req.user?.role;
-    if (requestingUserRole === "attendanceDepartment") {
+    if (requestingUserRole === "attendanceDepartment" && !hasDepartmentFilter) {
       // Get all employees created by this user
       const employeesCreatedByUser = await Employee.find({
         createdBy: req.user._id,
@@ -294,20 +354,40 @@ export const getAllAttendance = async (req, res) => {
       
       // Also add the logged-in user's own ID to see their own attendance
       employeeIds.push(req.user._id);
-      
-      // Add to filter - only show attendance for these employees
-      if (filter.employee) {
-        // If employee filter already exists (e.g., from department filter), merge the arrays
-        const existingIds = filter.employee.$in || [filter.employee];
-        const allowedIds = employeeIds.map(id => id.toString());
-        const filteredIds = existingIds.filter(id => allowedIds.includes(id.toString()));
-        filter.employee = { $in: filteredIds };
+
+      // Get departments created by the user + their assigned department
+      const userCreatedDepts = await Department.find({
+        createdBy: req.user._id,
+        isActive: true
+      }).select('_id');
+
+      const deptIdSet = new Set(userCreatedDepts.map(d => d._id.toString()));
+      const currentEmployee = await Employee.findById(req.user._id).select('department');
+      if (currentEmployee?.department) {
+        deptIdSet.add(currentEmployee.department.toString());
+      }
+
+      const deptIds = Array.from(deptIdSet).map(id => new mongoose.Types.ObjectId(id));
+
+      const roleFilter = deptIds.length > 0 ? {
+        $or: [
+          { employee: { $in: employeeIds }, isShiftBased: false },
+          { department: { $in: deptIds }, isShiftBased: true }
+        ]
+      } : {
+        employee: { $in: employeeIds },
+        isShiftBased: false
+      };
+
+      if (filter.$or || filter.$and) {
+        const existingFilter = { ...filter };
+        filter = { $and: [existingFilter, roleFilter] };
       } else {
-        filter.employee = { $in: employeeIds };
+        Object.assign(filter, roleFilter);
       }
     }
     // For regular users (not superAdmin or attendanceDepartment), only show their own attendance
-    else if (requestingUserRole !== "superAdmin") {
+    else if (requestingUserRole !== "superAdmin" && !hasDepartmentFilter) {
       // Override any employee filter to ensure users can only see their own data
       filter.employee = req.user._id;
     }
@@ -315,6 +395,7 @@ export const getAllAttendance = async (req, res) => {
     const attendanceRecords = await Attendance.find(filter)
       .select('+checkIn +checkOut') // Explicitly include these fields
       .populate("employee", "name employeeId email phone department")
+      .populate("department", "name code")
       .populate("modifiedBy", "name")
       .sort({ date: -1, createdAt: -1 });
 
@@ -687,15 +768,57 @@ export const createManualAttendance = async (req, res) => {
       attendanceData.workingHours = workingHours;
     }
 
-    const attendance = await Attendance.create(attendanceData);
+    const hasShifts = await hasMultiDepartmentShifts(employee._id);
+    if (hasShifts) {
+      delete attendanceData.workingHours;
+    }
 
-    const populatedAttendance = await Attendance.findById(attendance._id)
-      .populate("employee", "name employeeId");
+    let responseData = null;
+    let responseMessage = "Manual attendance created successfully";
+    let responseStatus = 201;
+    let multiDepartment = false;
+    let referenceId = null;
 
-    // Audit log
-    await logAttendanceAction(req, "CREATE", populatedAttendance, {
-      after: { userId, date: attendanceDate, checkIn: checkInDate, checkOut: checkOutDate, isManualEntry: true }
-    }, `Manual attendance created for ${employee.name} (${userId})`);
+    if (hasShifts) {
+      logger.info(`Manual attendance split for multi-department employee: ${userId}`);
+      const splitRecords = await splitAttendanceByDepartments(attendanceData);
+
+      const populatedRecords = await Promise.all(
+        splitRecords.map(record =>
+          Attendance.findById(record._id)
+            .populate("employee", "name employeeId")
+            .populate("department", "name")
+        )
+      );
+
+      // Audit log
+      await logAttendanceAction(req, "CREATE", populatedRecords[0], {
+        after: { userId, date: attendanceDate, checkIn: checkInDate, checkOut: checkOutDate, isManualEntry: true }
+      }, `Manual attendance created for ${employee.name} (${userId}) across ${splitRecords.length} departments`);
+
+      const hasShiftRecords = splitRecords.some(r => r.isShiftBased);
+
+      responseData = populatedRecords;
+      responseMessage = hasShiftRecords
+        ? `Manual attendance created for ${splitRecords.length} department shifts`
+        : "Manual attendance created successfully";
+      responseStatus = 200;
+      multiDepartment = hasShiftRecords;
+      referenceId = populatedRecords[0]?._id;
+    } else {
+      const attendance = await Attendance.create(attendanceData);
+
+      const populatedAttendance = await Attendance.findById(attendance._id)
+        .populate("employee", "name employeeId");
+
+      // Audit log
+      await logAttendanceAction(req, "CREATE", populatedAttendance, {
+        after: { userId, date: attendanceDate, checkIn: checkInDate, checkOut: checkOutDate, isManualEntry: true }
+      }, `Manual attendance created for ${employee.name} (${userId})`);
+
+      responseData = populatedAttendance;
+      referenceId = populatedAttendance._id;
+    }
 
     // Notify the employee and superAdmin about manual attendance
     try {
@@ -719,7 +842,7 @@ export const createManualAttendance = async (req, res) => {
           type: "attendance_marked",
           title: "Attendance Marked",
           message: `${req.user.name} manually marked attendance for ${employee.name} on ${dateStr}`,
-          referenceId: populatedAttendance._id,
+          referenceId: referenceId,
           referenceType: "Attendance",
           sender: req.user._id,
         });
@@ -728,10 +851,11 @@ export const createManualAttendance = async (req, res) => {
       console.error("Error creating manual attendance notification:", notifError);
     }
 
-    res.status(201).json({
+    res.status(responseStatus).json({
       success: true,
-      message: "Manual attendance created successfully",
-      data: populatedAttendance,
+      message: responseMessage,
+      multiDepartment,
+      data: responseData,
     });
   } catch (error) {
     res.status(500).json({
@@ -846,3 +970,289 @@ export const markAbsent = async (req, res) => {
     });
   }
 };
+
+// Submit justification for attendance issue
+export const submitJustification = async (req, res) => {
+  try {
+    const { attendanceId, reason } = req.body;
+    const employeeId = req.user._id;
+
+    if (!attendanceId || !reason || !reason.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Attendance ID and reason are required",
+      });
+    }
+
+    const attendance = await Attendance.findById(attendanceId);
+    
+    if (!attendance) {
+      return res.status(404).json({
+        success: false,
+        message: "Attendance record not found",
+      });
+    }
+
+    // Verify this attendance belongs to the requesting employee
+    if (attendance.employee.toString() !== employeeId.toString()) {
+      return res.status(403).json({
+        success: false,
+        message: "You can only submit justification for your own attendance",
+      });
+    }
+
+    // Check if status is eligible for justification
+    const eligibleStatuses = ["late", "absent", "half-day", "early-departure", "late-early-departure", "missing"];
+    if (!eligibleStatuses.includes(attendance.status)) {
+      return res.status(400).json({
+        success: false,
+        message: "This attendance status does not require justification",
+      });
+    }
+
+    // Check if already has a pending or approved justification
+    if (attendance.justificationStatus === "pending") {
+      return res.status(400).json({
+        success: false,
+        message: "A justification is already pending for this attendance",
+      });
+    }
+
+    if (attendance.justificationStatus === "approved") {
+      return res.status(400).json({
+        success: false,
+        message: "This attendance already has an approved justification",
+      });
+    }
+
+    // Update attendance with justification
+    attendance.justificationReason = reason.trim();
+    attendance.justificationStatus = "pending";
+    await attendance.save();
+
+    // Notify team leads and admins
+    const employee = await Employee.findById(employeeId)
+      .select("name employeeId department createdBy")
+      .populate("department");
+    
+    const superAdminIds = await getSuperAdminIds();
+    const recipientsSet = new Set(superAdminIds.map(id => id.toString()));
+
+    // Add team leads who are leading this employee's department
+    if (employee?.department) {
+      const teamLeads = await Employee.find({
+        isActive: true,
+        leadingDepartments: employee.department._id,
+      }).select("_id");
+      
+      teamLeads.forEach((tl) => recipientsSet.add(tl._id.toString()));
+    }
+
+    // Add attendance department who created this employee
+    if (employee?.createdBy) {
+      recipientsSet.add(employee.createdBy.toString());
+    }
+
+    if (recipientsSet.size > 0) {
+      await createBulkNotifications({
+        recipients: Array.from(recipientsSet),
+        type: "attendance_justification",
+        title: "Attendance Justification Submitted",
+        message: `${employee.name} (${employee.employeeId}) submitted justification for ${attendance.status} on ${new Date(attendance.date).toLocaleDateString()}`,
+        referenceId: attendance._id,
+        referenceType: "Attendance",
+        sender: employeeId,
+      });
+    }
+
+    await logAttendanceAction(
+      req,
+      "JUSTIFICATION_SUBMITTED",
+      attendance,
+      null,
+      `Justification submitted for ${attendance.status} status`
+    );
+
+    res.status(200).json({
+      success: true,
+      message: "Justification submitted successfully",
+      data: attendance,
+    });
+  } catch (error) {
+    logger.error(`Error in submitJustification: ${error.message}`, { stack: error.stack });
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// Approve or reject justification (for team leads and admins)
+export const reviewJustification = async (req, res) => {
+  try {
+    const { attendanceId } = req.params;
+    const { status, remarks } = req.body; // status: "approved" or "rejected"
+    const reviewerId = req.user._id;
+    const userRole = req.user?.role?.name || req.user?.role;
+
+    if (!["approved", "rejected"].includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: "Status must be either 'approved' or 'rejected'",
+      });
+    }
+
+    const attendance = await Attendance.findById(attendanceId).populate("employee");
+    
+    if (!attendance) {
+      return res.status(404).json({
+        success: false,
+        message: "Attendance record not found",
+      });
+    }
+
+    if (attendance.justificationStatus !== "pending") {
+      return res.status(400).json({
+        success: false,
+        message: "No pending justification found for this attendance",
+      });
+    }
+
+    // Verify the reviewer has authority over this employee
+    if (userRole === "teamLead") {
+      const reviewer = await Employee.findById(reviewerId).select("leadingDepartments");
+      const employeeDeptId = attendance.employee.department?.toString();
+      
+      const hasAuthority = reviewer.leadingDepartments?.some(
+        deptId => deptId.toString() === employeeDeptId
+      );
+      
+      if (!hasAuthority) {
+        return res.status(403).json({
+          success: false,
+          message: "You can only review justifications for employees in your departments",
+        });
+      }
+    } else if (userRole === "attendanceDepartment") {
+      // Check if this attendance department user created the employee
+      const employee = await Employee.findById(attendance.employee._id).select("createdBy");
+      if (employee.createdBy?.toString() !== reviewerId.toString()) {
+        return res.status(403).json({
+          success: false,
+          message: "You can only review justifications for employees you created",
+        });
+      }
+    }
+    // superAdmin can review any justification
+
+    // Update justification status
+    attendance.justificationStatus = status;
+    attendance.justifiedBy = reviewerId;
+    attendance.justifiedAt = new Date();
+
+    // If approved, mark attendance as present to avoid salary deduction
+    if (status === "approved") {
+      attendance.status = "present";
+      attendance.isManualEntry = true;
+    }
+    
+    if (remarks) {
+      attendance.remarks = (attendance.remarks ? attendance.remarks + " | " : "") + remarks;
+    }
+
+    await attendance.save();
+
+    // Notify the employee
+    await createNotification({
+      recipient: attendance.employee._id,
+      type: "justification_reviewed",
+      title: `Attendance Justification ${status === "approved" ? "Approved" : "Rejected"}`,
+      message: `Your justification for ${attendance.status} on ${new Date(attendance.date).toLocaleDateString()} has been ${status}`,
+      referenceId: attendance._id,
+      referenceType: "Attendance",
+      sender: reviewerId,
+    });
+
+    await logAttendanceAction(
+      req,
+      status === "approved" ? "JUSTIFICATION_APPROVED" : "JUSTIFICATION_REJECTED",
+      attendance,
+      null,
+      `Justification ${status} by ${req.user.name}`
+    );
+
+    res.status(200).json({
+      success: true,
+      message: `Justification ${status} successfully`,
+      data: attendance,
+    });
+  } catch (error) {
+    logger.error(`Error in reviewJustification: ${error.message}`, { stack: error.stack });
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// Get pending justifications (for team leads and admins)
+export const getPendingJustifications = async (req, res) => {
+  try {
+    const reviewerId = req.user._id;
+    const userRole = req.user?.role?.name || req.user?.role;
+
+    let filter = { justificationStatus: "pending" };
+
+    // For team leads, only show justifications from their departments
+    if (userRole === "teamLead") {
+      const reviewer = await Employee.findById(reviewerId).select("leadingDepartments");
+      
+      if (reviewer?.leadingDepartments && reviewer.leadingDepartments.length > 0) {
+        const employeesInDepartments = await Employee.find({
+          department: { $in: reviewer.leadingDepartments },
+          isActive: true,
+        }).select("_id");
+
+        const employeeIds = employeesInDepartments.map((emp) => emp._id);
+        filter.employee = { $in: employeeIds };
+      } else {
+        filter.employee = { $in: [] };
+      }
+    }
+
+    // For attendance department, only show justifications from employees they created
+    if (userRole === "attendanceDepartment") {
+      const employeesCreatedByUser = await Employee.find({
+        createdBy: reviewerId,
+        isActive: true,
+      }).select("_id");
+
+      const employeeIds = employeesCreatedByUser.map((emp) => emp._id);
+      filter.employee = { $in: employeeIds };
+    }
+
+    const justifications = await Attendance.find(filter)
+      .populate({
+        path: "employee",
+        select: "name employeeId email department",
+        populate: {
+          path: "department",
+          select: "name code"
+        }
+      })
+      .sort({ date: -1 })
+      .limit(100);
+
+    res.status(200).json({
+      success: true,
+      data: justifications,
+    });
+  } catch (error) {
+    logger.error(`Error in getPendingJustifications: ${error.message}`, { stack: error.stack });
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+

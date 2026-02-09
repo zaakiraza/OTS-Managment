@@ -12,6 +12,27 @@ const attendanceSchema = new mongoose.Schema(
       type: String,
       required: [true, "Employee ID is required"],
     },
+    department: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Department",
+      required: false,
+      description: "Department this attendance record belongs to (for multi-department employees)",
+    },
+    shiftStartTime: {
+      type: String,
+      required: false,
+      description: "Expected shift start time (HH:MM) for this department",
+    },
+    shiftEndTime: {
+      type: String,
+      required: false,
+      description: "Expected shift end time (HH:MM) for this department",
+    },
+    isShiftBased: {
+      type: Boolean,
+      default: false,
+      description: "True if this is a department-specific shift record",
+    },
     date: {
       type: Date,
       required: [true, "Date is required"],
@@ -26,7 +47,7 @@ const attendanceSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ["present", "absent", "half-day", "late", "early-departure", "late-early-departure", "pending", "leave"],
+      enum: ["present", "absent", "half-day", "late", "early-departure", "late-early-departure", "pending", "leave", "missing"],
       default: "pending",
     },
     workingHours: {
@@ -52,6 +73,24 @@ const attendanceSchema = new mongoose.Schema(
     modifiedBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Employee",
+      default: null,
+    },
+    justificationReason: {
+      type: String,
+      default: "",
+    },
+    justificationStatus: {
+      type: String,
+      enum: ["none", "pending", "approved", "rejected"],
+      default: "none",
+    },
+    justifiedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Employee",
+      default: null,
+    },
+    justifiedAt: {
+      type: Date,
       default: null,
     },
   },
@@ -99,7 +138,15 @@ attendanceSchema.pre("save", async function () {
           const employee = await mongoose.model("Employee").findById(this.employee).populate('department');
           if (employee && employee.workSchedule) {
             const dailyHours = employee.workSchedule.workingHoursPerWeek / employee.workSchedule.workingDaysPerWeek;
-            this.extraWorkingHours = Math.max(0, this.workingHours - dailyHours);
+            let expectedDailyHours = dailyHours;
+
+            if (this.isShiftBased && this.shiftStartTime && this.shiftEndTime) {
+              const [schedInHr, schedInMin] = this.shiftStartTime.split(":").map(Number);
+              const [schedOutHr, schedOutMin] = this.shiftEndTime.split(":").map(Number);
+              expectedDailyHours = (schedOutHr * 60 + schedOutMin - (schedInHr * 60 + schedInMin)) / 60;
+            }
+
+            this.extraWorkingHours = Math.max(0, this.workingHours - expectedDailyHours);
           }
         } catch (err) {
           // If employee not found, use default 8 hours
@@ -125,8 +172,20 @@ attendanceSchema.pre("save", async function () {
     
     if (employee) {
       // Get department leverage time settings
-      const checkInLeverage = employee.department?.leverageTime?.checkInMinutes || ATTENDANCE.DEFAULT_CHECK_IN_LEVERAGE;
-      const checkOutLeverage = employee.department?.leverageTime?.checkOutMinutes || ATTENDANCE.DEFAULT_CHECK_OUT_LEVERAGE;
+      let checkInLeverage = employee.department?.leverageTime?.checkInMinutes || ATTENDANCE.DEFAULT_CHECK_IN_LEVERAGE;
+      let checkOutLeverage = employee.department?.leverageTime?.checkOutMinutes || ATTENDANCE.DEFAULT_CHECK_OUT_LEVERAGE;
+
+      if (this.isShiftBased && this.department) {
+        try {
+          const shiftDept = await mongoose.model("Department").findById(this.department);
+          if (shiftDept?.leverageTime) {
+            checkInLeverage = shiftDept.leverageTime.checkInMinutes || checkInLeverage;
+            checkOutLeverage = shiftDept.leverageTime.checkOutMinutes || checkOutLeverage;
+          }
+        } catch (err) {
+          // Fallback to employee department leverage
+        }
+      }
       
       // Get day of week for this attendance record
       const dayOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][checkInDate.getUTCDay()];
@@ -135,8 +194,14 @@ attendanceSchema.pre("save", async function () {
       let checkInTime = employee.workSchedule.checkInTime;
       let checkOutTime = employee.workSchedule.checkOutTime;
       let isDaySpecificSchedule = false;
+
+      if (this.isShiftBased && this.shiftStartTime && this.shiftEndTime) {
+        checkInTime = this.shiftStartTime;
+        checkOutTime = this.shiftEndTime;
+        isDaySpecificSchedule = true;
+      }
       
-      if (employee.workSchedule.daySchedules && employee.workSchedule.daySchedules.get(dayOfWeek)) {
+      if (!this.isShiftBased && employee.workSchedule.daySchedules && employee.workSchedule.daySchedules.get(dayOfWeek)) {
         const daySchedule = employee.workSchedule.daySchedules.get(dayOfWeek);
         if (!daySchedule.isOff) {
           checkInTime = daySchedule.checkInTime || checkInTime;
@@ -247,6 +312,8 @@ attendanceSchema.index({ userId: 1, date: 1 }); // For quick lookup by user and 
 attendanceSchema.index({ employee: 1, date: 1 }); // For employee-based queries
 attendanceSchema.index({ date: 1, status: 1 }); // For status-based reporting
 attendanceSchema.index({ date: 1 }); // For date range queries
+attendanceSchema.index({ employee: 1, date: 1, department: 1 }); // For department-specific shift queries
+attendanceSchema.index({ department: 1, date: 1 }); // For department-based attendance reports
 
 const Attendance = mongoose.model("Attendance", attendanceSchema);
 

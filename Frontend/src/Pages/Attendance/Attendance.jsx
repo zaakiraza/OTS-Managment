@@ -288,6 +288,7 @@ function Attendance() {
       "early-departure": "status-early",
       "late-early-departure": "status-late-early",
       pending: "status-pending",
+      missing: "status-missing",
     };
     return statusColors[status] || "status-pending";
   };
@@ -301,6 +302,7 @@ function Attendance() {
       "early-departure": "Early Departure",
       "late-early-departure": "Late + Early Departure",
       pending: "Pending",
+      missing: "Missing",
     };
     return statusLabels[status] || status;
   };
@@ -665,6 +667,7 @@ function Attendance() {
                 <tr>
                   <th>User ID</th>
                   <th>Name</th>
+                  <th>Department</th>
                   <th>Date</th>
                   <th>Check In</th>
                   <th>Check Out</th>
@@ -678,13 +681,13 @@ function Attendance() {
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan="10" style={{ textAlign: "center" }}>
+                    <td colSpan="11" style={{ textAlign: "center" }}>
                       Loading...
                     </td>
                   </tr>
                 ) : displayRecords.length === 0 ? (
                   <tr>
-                    <td colSpan="10" style={{ textAlign: "center" }}>
+                    <td colSpan="11" style={{ textAlign: "center" }}>
                       No attendance records found
                     </td>
                   </tr>
@@ -693,6 +696,7 @@ function Attendance() {
                     <tr key={record._id}>
                       <td>{record?.employee?.employeeId}</td>
                       <td>{record?.employee?.name}</td>
+                      <td>{record?.department?.name || record?.employee?.department?.name || "-"}</td>
                       <td>{formatDate(record.date)}</td>
                       <td className="time-cell">
                         {formatTime(record.checkIn)}

@@ -11,16 +11,9 @@ function Todos() {
   const [showModal, setShowModal] = useState(false);
   const [editingTodo, setEditingTodo] = useState(null);
   const [formData, setFormData] = useState({
-    title: "",
     description: "",
-    priority: "medium",
-    status: "pending",
-    dueDate: "",
-    tags: "",
   });
   const [filter, setFilter] = useState({
-    status: "",
-    priority: "",
     search: "",
   });
 
@@ -32,8 +25,6 @@ function Todos() {
     try {
       setLoading(true);
       const params = {};
-      if (filter.status) params.status = filter.status;
-      if (filter.priority) params.priority = filter.priority;
       if (filter.search) params.search = filter.search;
 
       const response = await todoAPI.getAll(params);
@@ -41,8 +32,8 @@ function Todos() {
         setTodos(response.data.data);
       }
     } catch (error) {
-      console.error("Error fetching todos:", error);
-      toast.error(error.response?.data?.message || "Failed to fetch todos");
+      console.error("Error fetching notes:", error);
+      toast.error(error.response?.data?.message || "Failed to fetch notes");
     } finally {
       setLoading(false);
     }
@@ -53,34 +44,26 @@ function Todos() {
     try {
       setLoading(true);
       const todoData = {
-        ...formData,
-        tags: formData.tags
-          ? formData.tags.split(",").map((tag) => tag.trim())
-          : [],
+        description: formData.description,
       };
 
       if (editingTodo) {
         await todoAPI.update(editingTodo._id, todoData);
-        toast.success("Todo updated successfully!");
+        toast.success("Note updated successfully!");
       } else {
         await todoAPI.create(todoData);
-        toast.success("Todo created successfully!");
+        toast.success("Note created successfully!");
       }
 
       setShowModal(false);
       setEditingTodo(null);
       setFormData({
-        title: "",
         description: "",
-        priority: "medium",
-        status: "pending",
-        dueDate: "",
-        tags: "",
       });
       fetchTodos();
     } catch (error) {
-      console.error("Error saving todo:", error);
-      toast.error(error.response?.data?.message || "Failed to save todo");
+      console.error("Error saving note:", error);
+      toast.error(error.response?.data?.message || "Failed to save note");
     } finally {
       setLoading(false);
     }
@@ -89,29 +72,22 @@ function Todos() {
   const handleEdit = (todo) => {
     setEditingTodo(todo);
     setFormData({
-      title: todo.title,
       description: todo.description || "",
-      priority: todo.priority,
-      status: todo.status,
-      dueDate: todo.dueDate
-        ? new Date(todo.dueDate).toISOString().split("T")[0]
-        : "",
-      tags: todo.tags ? todo.tags.join(", ") : "",
     });
     setShowModal(true);
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm("Are you sure you want to delete this todo?")) return;
+    if (!window.confirm("Are you sure you want to delete this note?")) return;
 
     try {
       setLoading(true);
       await todoAPI.delete(id);
-      toast.success("Todo deleted successfully!");
+      toast.success("Note deleted successfully!");
       fetchTodos();
     } catch (error) {
-      console.error("Error deleting todo:", error);
-      toast.error(error.response?.data?.message || "Failed to delete todo");
+      console.error("Error deleting note:", error);
+      toast.error(error.response?.data?.message || "Failed to delete note");
     } finally {
       setLoading(false);
     }
@@ -123,38 +99,11 @@ function Todos() {
       await todoAPI.toggleStatus(id);
       fetchTodos();
     } catch (error) {
-      console.error("Error toggling todo:", error);
-      toast.error(error.response?.data?.message || "Failed to update todo");
+      console.error("Error toggling note:", error);
+      toast.error(error.response?.data?.message || "Failed to update note");
     } finally {
       setLoading(false);
     }
-  };
-
-  const getPriorityColor = (priority) => {
-    const colors = {
-      low: "#10b981",
-      medium: "#f59e0b",
-      high: "#ef4444",
-    };
-    return colors[priority] || "#6b7280";
-  };
-
-  const getStatusColor = (status) => {
-    const colors = {
-      pending: "#6b7280",
-      "in-progress": "#3b82f6",
-      completed: "#10b981",
-    };
-    return colors[status] || "#6b7280";
-  };
-
-  const isOverdue = (dueDate) => {
-    if (!dueDate) return false;
-    const due = new Date(dueDate);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    due.setHours(0, 0, 0, 0);
-    return due < today;
   };
 
   return (
@@ -165,47 +114,23 @@ function Todos() {
           <div className="page-header">
             <div>
               <h1>
-                <i className="fas fa-list-check"></i> My Todos
+                <i className="fas fa-list-check"></i> Personal Notes
               </h1>
-              <p>Manage your personal tasks and reminders</p>
+              <p>Manage your personal notes and reminders</p>
             </div>
             <button className="btn-primary" onClick={() => setShowModal(true)}>
-              <i className="fas fa-plus"></i> New Todo
+              <i className="fas fa-plus"></i> New Note
             </button>
           </div>
 
           <div className="filters-container">
-            <div className="filter-group">
-              <label>Status</label>
-              <select
-                value={filter.status}
-                onChange={(e) => setFilter({ ...filter, status: e.target.value })}
-              >
-                <option value="">All Status</option>
-                <option value="pending">Pending</option>
-                <option value="in-progress">In Progress</option>
-                <option value="completed">Completed</option>
-              </select>
-            </div>
-            <div className="filter-group">
-              <label>Priority</label>
-              <select
-                value={filter.priority}
-                onChange={(e) => setFilter({ ...filter, priority: e.target.value })}
-              >
-                <option value="">All Priorities</option>
-                <option value="low">Low</option>
-                <option value="medium">Medium</option>
-                <option value="high">High</option>
-              </select>
-            </div>
             <div className="filter-group">
               <label>Search</label>
               <input
                 type="text"
                 value={filter.search}
                 onChange={(e) => setFilter({ ...filter, search: e.target.value })}
-                placeholder="Search todos..."
+                placeholder="Search notes..."
               />
             </div>
           </div>
@@ -216,7 +141,7 @@ function Todos() {
             ) : todos.length === 0 ? (
               <div className="empty-state">
                 <i className="fas fa-clipboard-list"></i>
-                <p>No todos found. Create your first todo!</p>
+                <p>No notes found. Create your first note!</p>
               </div>
             ) : (
               todos.map((todo) => (
@@ -230,7 +155,7 @@ function Todos() {
                         className="todo-checkbox"
                       />
                       <h3 className={todo.status === "completed" ? "completed" : ""}>
-                        {todo.title}
+                        {todo.description || "Note"}
                       </h3>
                     </div>
                     <div className="todo-actions">
@@ -250,46 +175,6 @@ function Todos() {
                       </button>
                     </div>
                   </div>
-                  {todo.description && (
-                    <p className="todo-description">{todo.description}</p>
-                  )}
-                  <div className="todo-footer">
-                    <div className="todo-meta">
-                      <span
-                        className="priority-badge"
-                        style={{ background: getPriorityColor(todo.priority) }}
-                      >
-                        {todo.priority}
-                      </span>
-                      <span
-                        className="status-badge"
-                        style={{ background: getStatusColor(todo.status) }}
-                      >
-                        {todo.status}
-                      </span>
-                      {todo.dueDate && (
-                        <span
-                          className={`due-date ${
-                            isOverdue(todo.dueDate) && todo.status !== "completed"
-                              ? "overdue"
-                              : ""
-                          }`}
-                        >
-                          <i className="fas fa-calendar"></i>
-                          {new Date(todo.dueDate).toLocaleDateString()}
-                        </span>
-                      )}
-                    </div>
-                    {todo.tags && todo.tags.length > 0 && (
-                      <div className="todo-tags">
-                        {todo.tags.map((tag, index) => (
-                          <span key={index} className="tag">
-                            {tag}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
                 </div>
               ))
             )}
@@ -301,19 +186,14 @@ function Todos() {
               setShowModal(false);
               setEditingTodo(null);
               setFormData({
-                title: "",
                 description: "",
-                priority: "medium",
-                status: "pending",
-                dueDate: "",
-                tags: "",
               });
             }}>
               <div className="modal-content" onClick={(e) => e.stopPropagation()}>
                 <div className="modal-header">
                   <h2>
                     <i className="fas fa-list-check"></i>{" "}
-                    {editingTodo ? "Edit Todo" : "New Todo"}
+                    {editingTodo ? "Edit Note" : "New Note"}
                   </h2>
                   <button
                     className="close-btn"
@@ -321,12 +201,7 @@ function Todos() {
                       setShowModal(false);
                       setEditingTodo(null);
                       setFormData({
-                        title: "",
                         description: "",
-                        priority: "medium",
-                        status: "pending",
-                        dueDate: "",
-                        tags: "",
                       });
                     }}
                   >
@@ -336,20 +211,6 @@ function Todos() {
                 <form onSubmit={handleSubmit} className="modal-body">
                   <div className="form-group">
                     <label>
-                      <i className="fas fa-heading"></i> Title <span className="required">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.title}
-                      onChange={(e) =>
-                        setFormData({ ...formData, title: e.target.value })
-                      }
-                      placeholder="Enter todo title"
-                      required
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label>
                       <i className="fas fa-align-left"></i> Description
                     </label>
                     <textarea
@@ -357,65 +218,9 @@ function Todos() {
                       onChange={(e) =>
                         setFormData({ ...formData, description: e.target.value })
                       }
-                      rows="4"
-                      placeholder="Add details..."
-                    />
-                  </div>
-                  <div className="form-row">
-                    <div className="form-group">
-                      <label>
-                        <i className="fas fa-exclamation-circle"></i> Priority
-                      </label>
-                      <select
-                        value={formData.priority}
-                        onChange={(e) =>
-                          setFormData({ ...formData, priority: e.target.value })
-                        }
-                      >
-                        <option value="low">Low</option>
-                        <option value="medium">Medium</option>
-                        <option value="high">High</option>
-                      </select>
-                    </div>
-                    <div className="form-group">
-                      <label>
-                        <i className="fas fa-tasks"></i> Status
-                      </label>
-                      <select
-                        value={formData.status}
-                        onChange={(e) =>
-                          setFormData({ ...formData, status: e.target.value })
-                        }
-                      >
-                        <option value="pending">Pending</option>
-                        <option value="in-progress">In Progress</option>
-                        <option value="completed">Completed</option>
-                      </select>
-                    </div>
-                  </div>
-                  <div className="form-group">
-                    <label>
-                      <i className="fas fa-calendar"></i> Due Date
-                    </label>
-                    <input
-                      type="date"
-                      value={formData.dueDate}
-                      onChange={(e) =>
-                        setFormData({ ...formData, dueDate: e.target.value })
-                      }
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label>
-                      <i className="fas fa-tags"></i> Tags (comma-separated)
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.tags}
-                      onChange={(e) =>
-                        setFormData({ ...formData, tags: e.target.value })
-                      }
-                      placeholder="work, personal, urgent"
+                      rows="6"
+                      placeholder="Write your note..."
+                      required
                     />
                   </div>
                   <div className="modal-actions">
@@ -426,12 +231,7 @@ function Todos() {
                         setShowModal(false);
                         setEditingTodo(null);
                         setFormData({
-                          title: "",
                           description: "",
-                          priority: "medium",
-                          status: "pending",
-                          dueDate: "",
-                          tags: "",
                         });
                       }}
                     >
@@ -441,8 +241,8 @@ function Todos() {
                       {loading
                         ? "Saving..."
                         : editingTodo
-                        ? "Update Todo"
-                        : "Create Todo"}
+                        ? "Update Note"
+                        : "Create Note"}
                     </button>
                   </div>
                 </form>

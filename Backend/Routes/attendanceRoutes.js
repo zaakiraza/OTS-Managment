@@ -10,6 +10,9 @@ import {
   getAttendanceStats,
   deviceCheckIn,
   markAbsent,
+  submitJustification,
+  reviewJustification,
+  getPendingJustifications,
 } from "../Controller/attendanceController.js";
 import { verifyToken, hasRole } from "../Middleware/auth.js";
 
@@ -56,6 +59,30 @@ router.post(
   verifyToken,
   hasRole("superAdmin"),
   markAbsent
+);
+
+// Justification routes
+// Employee can submit justification for their attendance issues
+router.post(
+  "/justification",
+  verifyToken,
+  submitJustification
+);
+
+// Team leads and admins can review justifications
+router.put(
+  "/justification/:attendanceId",
+  verifyToken,
+  hasRole("superAdmin", "attendanceDepartment", "teamLead"),
+  reviewJustification
+);
+
+// Get pending justifications for review
+router.get(
+  "/justifications/pending",
+  verifyToken,
+  hasRole("superAdmin", "attendanceDepartment", "teamLead"),
+  getPendingJustifications
 );
 
 export default router;
