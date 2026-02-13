@@ -1,6 +1,14 @@
 import mongoose from "mongoose";
 import bcrypt from "bcrypt";
+import { encryptNumber, decryptNumber } from "../Utils/encryption.js";
 
+/**
+ * Employee Model (V2 Restructured — with V1 legacy fields preserved)
+ * 
+ * V2 uses DepartmentAssignment collection for per-department data.
+ * V1 legacy fields (department, shifts, salary, workSchedule, etc.)
+ * are kept so the old /api/employees routes continue to work.
+ */
 const employeeSchema = new mongoose.Schema(
   {
     employeeId: {
@@ -31,24 +39,82 @@ const employeeSchema = new mongoose.Schema(
       type: String,
       select: false,
       validate: {
-        validator: function(v) {
-          // Allow empty/undefined passwords (will keep existing or auto-generate)
+        validator: function (v) {
           if (!v) return true;
-          // If provided, must be at least 6 characters
           return v.length >= 6;
         },
-        message: "Password must be at least 6 characters"
-      }
+        message: "Password must be at least 6 characters",
+      },
     },
     role: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Role",
       required: [true, "Role is required"],
+      description: "Global/system-level role (superAdmin, employee, etc.)",
+    },
+
+    // ── V2 field: denormalized primary department ──
+    primaryDepartment: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Department",
+      default: null,
+      description: "Cached from the DepartmentAssignment where isPrimary=true",
+    },
+
+    // ── V1 legacy fields (kept for backward compat) ──
+    department: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Department",
+    },
+    position: {
+      type: String,
+      trim: true,
     },
     isTeamLead: {
       type: Boolean,
       default: false,
     },
+    leadingDepartments: [{
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Department",
+    }],
+    salary: {
+      monthlySalary: { type: mongoose.Schema.Types.Mixed, default: null }, // Stores encrypted string
+      currency: { type: String, default: "PKR" },
+      leaveThreshold: { type: Number, default: 0 },
+    },
+    workSchedule: {
+      checkInTime: { type: String, default: "09:00" },
+      checkOutTime: { type: String, default: "17:00" },
+      workingDaysPerWeek: { type: Number, default: 5 },
+      workingHoursPerWeek: { type: Number, default: 40 },
+      weeklyOffs: { type: [String], default: ["Saturday", "Sunday"] },
+      daySchedules: { type: mongoose.Schema.Types.Mixed, default: {} },
+    },
+    joiningDate: {
+      type: Date,
+    },
+    shifts: [{
+      department: { type: mongoose.Schema.Types.ObjectId, ref: "Department" },
+      isPrimary: { type: Boolean, default: false },
+      position: { type: String, trim: true },
+      monthlySalary: { type: mongoose.Schema.Types.Mixed }, // Stores encrypted string
+      currency: { type: String, default: "PKR" },
+      leaveThreshold: { type: Number, default: 0 },
+      joiningDate: { type: Date },
+      isActive: { type: Boolean, default: true },
+      daysOfWeek: [String],
+      workSchedule: {
+        checkInTime: String,
+        checkOutTime: String,
+        workingDaysPerWeek: Number,
+        workingHoursPerWeek: Number,
+        weeklyOffs: [String],
+        daySchedules: { type: mongoose.Schema.Types.Mixed, default: {} },
+      },
+      daySchedules: { type: mongoose.Schema.Types.Mixed, default: {} },
+    }],
+
     phone: {
       type: String,
       trim: true,
@@ -59,125 +125,13 @@ const employeeSchema = new mongoose.Schema(
       sparse: true,
       trim: true,
       validate: {
-        validator: function(v) {
-          if (!v) return true; // Allow empty/null values
+        validator: function (v) {
+          if (!v) return true;
           return /^\d{5}-\d{7}-\d{1}$/.test(v);
         },
-        message: props => `${props.value} is not a valid CNIC format! Use format: XXXXX-XXXXXXX-X`
-      }
-    },
-    department: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Department",
-      required: [true, "Primary department is required"],
-    },
-    additionalDepartments: [{
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Department",
-    }],
-    // Department-wise shift schedules (for employees working in multiple departments)
-    departmentShifts: [{
-      department: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "Department",
-        required: true,
+        message: (props) =>
+          `${props.value} is not a valid CNIC format! Use format: XXXXX-XXXXXXX-X`,
       },
-      startTime: {
-        type: String,
-        required: true,
-        match: /^([01]\d|2[0-3]):([0-5]\d)$/,
-        description: "Shift start time in HH:MM format (24-hour)",
-      },
-      endTime: {
-        type: String,
-        required: true,
-        match: /^([01]\d|2[0-3]):([0-5]\d)$/,
-        description: "Shift end time in HH:MM format (24-hour)",
-      },
-      daysOfWeek: {
-        type: [String],
-        enum: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
-        default: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
-      },
-      daySchedules: {
-        type: Map,
-        of: {
-          startTime: String,
-          endTime: String,
-        },
-        default: new Map(),
-        description: "Day-specific schedules that override default start/end times for specific days",
-      },
-      isActive: {
-        type: Boolean,
-        default: true,
-      },
-    }],
-    leadingDepartments: [{
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Department",
-    }],
-    position: {
-      type: String,
-      required: [true, "Position is required"],
-    },
-    salary: {
-      monthlySalary: {
-        type: Number,
-        min: 0,
-      },
-      currency: {
-        type: String,
-        default: "PKR",
-      },
-      leaveThreshold: {
-        type: Number,
-        default: 0,
-        min: 0,
-        description: "Number of leaves allowed before marking as absent for salary calculation"
-      },
-    },
-    workSchedule: {
-      checkInTime: {
-        type: String,
-        required: [true, "Check-in time is required"],
-        default: "09:00",
-      },
-      checkOutTime: {
-        type: String,
-        required: [true, "Check-out time is required"],
-        default: "17:00",
-      },
-      workingDaysPerWeek: {
-        type: Number,
-        default: 5,
-        min: 1,
-        max: 7,
-      },
-      workingHoursPerWeek: {
-        type: Number,
-        default: 40,
-        min: 0,
-      },
-      weeklyOffs: {
-        type: [String],
-        default: ["Saturday", "Sunday"],
-        enum: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
-      },
-      // Day-specific schedules (optional) - overrides default checkIn/checkOut for specific days
-      daySchedules: {
-        type: Map,
-        of: {
-          checkInTime: String,
-          checkOutTime: String,
-          isHalfDay: { type: Boolean, default: false },
-          isOff: { type: Boolean, default: false }
-        },
-        default: new Map()
-      }
-    },
-    joiningDate: {
-      type: Date,
     },
     address: {
       street: String,
@@ -213,35 +167,149 @@ const employeeSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
+    toJSON: { virtuals: true },
+    toObject: { virtuals: true },
   }
 );
 
-// Indexes for better query performance
-employeeSchema.index({ department: 1, isActive: 1 }); // For department-based queries
-employeeSchema.index({ additionalDepartments: 1 }); // For additional department queries
-employeeSchema.index({ leadingDepartments: 1 }); // For team lead queries
-employeeSchema.index({ isActive: 1 }); // For filtering active employees
-// Note: biometricId already has unique index from schema definition
+// ── Indexes ──────────────────────────────────────────────────────────
+employeeSchema.index({ primaryDepartment: 1, isActive: 1 });
+employeeSchema.index({ department: 1, isActive: 1 });
+employeeSchema.index({ isActive: 1 });
 
-// Hash password before saving
+// ── Helper: Encrypt salary fields ────────────────────────────────────
+const encryptEmployeeSalaryFields = (doc) => {
+  // Encrypt salary.monthlySalary
+  if (doc.salary?.monthlySalary !== undefined && typeof doc.salary.monthlySalary === "number") {
+    doc.salary.monthlySalary = encryptNumber(doc.salary.monthlySalary);
+  }
+  
+  // Encrypt shifts[].monthlySalary
+  if (doc.shifts && Array.isArray(doc.shifts)) {
+    doc.shifts.forEach((shift) => {
+      if (shift.monthlySalary !== undefined && typeof shift.monthlySalary === "number") {
+        shift.monthlySalary = encryptNumber(shift.monthlySalary);
+      }
+    });
+  }
+};
+
+// ── Helper: Decrypt salary fields ────────────────────────────────────
+const decryptEmployeeSalaryFields = (doc) => {
+  if (!doc) return doc;
+  
+  // Decrypt salary.monthlySalary
+  if (doc.salary?.monthlySalary !== undefined && typeof doc.salary.monthlySalary === "string") {
+    doc.salary.monthlySalary = decryptNumber(doc.salary.monthlySalary);
+  }
+  
+  // Decrypt shifts[].monthlySalary
+  if (doc.shifts && Array.isArray(doc.shifts)) {
+    doc.shifts.forEach((shift) => {
+      if (shift.monthlySalary !== undefined && typeof shift.monthlySalary === "string") {
+        shift.monthlySalary = decryptNumber(shift.monthlySalary);
+      }
+    });
+  }
+  
+  return doc;
+};
+
+// ── Pre-save: encrypt salary and hash password ───────────────────────
 employeeSchema.pre("save", async function () {
-  // If this is a new document or password is being modified
+  // Encrypt salary fields
+  encryptEmployeeSalaryFields(this);
+  
+  // Hash password
   if (this.isNew || this.isModified("password")) {
-    // If no password provided, generate default: Emp@{last4digits}
     if (!this.password) {
       const last4 = this.employeeId.slice(-4);
       this.password = `Emp@${last4}`;
     }
-    
-    // Hash the password
     this.password = await bcrypt.hash(this.password, 10);
   }
 });
 
-// Method to compare passwords
+// ── Pre-findOneAndUpdate: encrypt salary fields ──────────────────────
+employeeSchema.pre(["findOneAndUpdate", "findByIdAndUpdate"], function () {
+  const update = this.getUpdate();
+  
+  // Handle $set operations
+  if (update.$set) {
+    encryptEmployeeSalaryFields(update.$set);
+  }
+  
+  // Also check direct update (when fields are at root level)
+  if (update.salary || update.shifts) {
+    encryptEmployeeSalaryFields(update);
+  }
+});
+
+// Also handle updateOne and updateMany
+employeeSchema.pre(["updateOne", "updateMany"], function () {
+  const update = this.getUpdate();
+  if (update.$set) {
+    encryptEmployeeSalaryFields(update.$set);
+  } else {
+    encryptEmployeeSalaryFields(update);
+  }
+});
+
+// ── Post-find hooks: decrypt salary fields ───────────────────────────
+employeeSchema.post("find", function (docs) {
+  if (Array.isArray(docs)) {
+    docs.forEach(doc => decryptEmployeeSalaryFields(doc));
+  }
+});
+
+employeeSchema.post("findOne", function (doc) {
+  decryptEmployeeSalaryFields(doc);
+});
+
+employeeSchema.post("findOneAndUpdate", function (doc) {
+  decryptEmployeeSalaryFields(doc);
+});
+
+// ── Methods ──────────────────────────────────────────────────────────
 employeeSchema.methods.comparePassword = async function (candidatePassword) {
   return await bcrypt.compare(candidatePassword, this.password);
 };
+
+// ── Transform for JSON output: Ensure decrypted salary values ────────
+const originalToJSON = employeeSchema.get("toJSON");
+employeeSchema.set("toJSON", {
+  ...originalToJSON,
+  transform: function (doc, ret) {
+    decryptEmployeeSalaryFields(ret);
+    if (originalToJSON?.transform) {
+      return originalToJSON.transform(doc, ret);
+    }
+    return ret;
+  },
+});
+
+const originalToObject = employeeSchema.get("toObject");
+employeeSchema.set("toObject", {
+  ...originalToObject,
+  transform: function (doc, ret) {
+    decryptEmployeeSalaryFields(ret);
+    if (originalToObject?.transform) {
+      return originalToObject.transform(doc, ret);
+    }
+    return ret;
+  },
+});
+
+// ── Virtuals (populated from DepartmentAssignment) ───────────────────
+// These require a populate or separate query at the controller level.
+// They are kept here for backward-compat convenience when the
+// departmentAssignments are attached to the employee object.
+employeeSchema.virtual("departmentAssignments", {
+  ref: "DepartmentAssignment",
+  localField: "_id",
+  foreignField: "employee",
+  justOne: false,
+});
 
 const Employee = mongoose.model("Employee", employeeSchema);
 

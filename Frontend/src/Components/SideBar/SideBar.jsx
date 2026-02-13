@@ -24,7 +24,7 @@ function SideBar() {
   return (
     <div className={`sidebar ${isCollapsed ? "collapsed" : ""}`}>
       <div className="sidebar-header">
-        <h2>{isCollapsed ? "OMS" : "OMS Admin"}</h2>
+        <h2>{isCollapsed ? "OMS" : "OMS"}</h2>
         <button
           className="toggle-btn"
           onClick={() => setIsCollapsed(!isCollapsed)}
@@ -85,6 +85,11 @@ function SideBar() {
             <NavLink to="/email-templates" className="nav-item">
               <span className="nav-icon"><i className="fas fa-envelope"></i></span>
               {!isCollapsed && <span className="nav-text">Email Templates</span>}
+            </NavLink>
+
+            <NavLink to="/settings" className="nav-item">
+              <span className="nav-icon"><i className="fas fa-cog"></i></span>
+              {!isCollapsed && <span className="nav-text">Settings</span>}
             </NavLink>
 
             <NavLink to="/departments" className="nav-item">
@@ -270,11 +275,6 @@ function SideBar() {
             <NavLink to="/tasks" className="nav-item">
               <span className="nav-icon"><i className="fas fa-tasks"></i></span>
               {!isCollapsed && <span className="nav-text">Task Board</span>}
-            </NavLink>
-
-            <NavLink to="/my-tasks" className="nav-item">
-              <span className="nav-icon"><i className="fas fa-check-circle"></i></span>
-              {!isCollapsed && <span className="nav-text">My Tasks</span>}
             </NavLink>
 
             <NavLink to="/leave-approval" className="nav-item">

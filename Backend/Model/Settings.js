@@ -14,6 +14,7 @@ const settingsSchema = new mongoose.Schema(
         "emailUser",
         "emailPassword",
         "emailFromName",
+        "lastProcessedAttendanceSN",
       ],
     },
     value: {

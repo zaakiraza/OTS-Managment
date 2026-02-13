@@ -15,8 +15,14 @@ const attendanceSchema = new mongoose.Schema(
     department: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Department",
-      required: false,
-      description: "Department this attendance record belongs to (for multi-department employees)",
+      required: true,
+      description: "Department this attendance record belongs to",
+    },
+    departmentAssignment: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "DepartmentAssignment",
+      default: null,
+      description: "Links to the specific DepartmentAssignment (shift) for this record",
     },
     shiftStartTime: {
       type: String,
@@ -27,11 +33,6 @@ const attendanceSchema = new mongoose.Schema(
       type: String,
       required: false,
       description: "Expected shift end time (HH:MM) for this department",
-    },
-    isShiftBased: {
-      type: Boolean,
-      default: false,
-      description: "True if this is a department-specific shift record",
     },
     date: {
       type: Date,
@@ -125,31 +126,37 @@ attendanceSchema.pre("save", async function () {
   
   // If status was manually set to a non-pending value, don't auto-calculate
   if (statusWasModified && this.status && this.status !== 'pending' && this.isManualEntry) {
-      // Keep the manually set status, skip auto-calculation entirely
       if (this.checkIn && this.checkOut) {
-        // Still calculate working hours even if status is manual
         const checkInDate = this.checkIn instanceof Date ? this.checkIn : new Date(this.checkIn);
         const checkOutDate = this.checkOut instanceof Date ? this.checkOut : new Date(this.checkOut);
         const diffMs = checkOutDate - checkInDate;
         this.workingHours = diffMs / TIME.ONE_HOUR;
         
-        // Calculate extra working hours if employee data is available
         try {
-          const employee = await mongoose.model("Employee").findById(this.employee).populate('department');
-          if (employee && employee.workSchedule) {
-            const dailyHours = employee.workSchedule.workingHoursPerWeek / employee.workSchedule.workingDaysPerWeek;
-            let expectedDailyHours = dailyHours;
+          const employee = await mongoose.model("Employee").findById(this.employee);
+          if (employee) {
+            // Find the shift matching this attendance's department
+            const shift = employee.shifts?.find(s => 
+              String(s.department) === String(this.department)
+            ) || employee.shifts?.[0];
+            
+            if (shift?.workSchedule) {
+              const ws = shift.workSchedule;
+              const dailyHours = (ws.workingHoursPerWeek || 40) / (ws.workingDaysPerWeek || 5);
+              let expectedDailyHours = dailyHours;
 
-            if (this.isShiftBased && this.shiftStartTime && this.shiftEndTime) {
-              const [schedInHr, schedInMin] = this.shiftStartTime.split(":").map(Number);
-              const [schedOutHr, schedOutMin] = this.shiftEndTime.split(":").map(Number);
-              expectedDailyHours = (schedOutHr * 60 + schedOutMin - (schedInHr * 60 + schedInMin)) / 60;
+              if (this.shiftStartTime && this.shiftEndTime) {
+                const [schedInHr, schedInMin] = this.shiftStartTime.split(":").map(Number);
+                const [schedOutHr, schedOutMin] = this.shiftEndTime.split(":").map(Number);
+                expectedDailyHours = (schedOutHr * 60 + schedOutMin - (schedInHr * 60 + schedInMin)) / 60;
+              }
+
+              this.extraWorkingHours = Math.max(0, this.workingHours - expectedDailyHours);
+            } else {
+              this.extraWorkingHours = Math.max(0, this.workingHours - 8);
             }
-
-            this.extraWorkingHours = Math.max(0, this.workingHours - expectedDailyHours);
           }
         } catch (err) {
-          // If employee not found, use default 8 hours
           this.extraWorkingHours = Math.max(0, this.workingHours - 8);
         }
       }
@@ -157,52 +164,58 @@ attendanceSchema.pre("save", async function () {
   }
   
   if (this.checkIn && this.checkOut) {
-    // Ensure checkIn and checkOut are Date objects
     const checkInDate = this.checkIn instanceof Date ? this.checkIn : new Date(this.checkIn);
     const checkOutDate = this.checkOut instanceof Date ? this.checkOut : new Date(this.checkOut);
     
     const diffMs = checkOutDate - checkInDate;
-    this.workingHours = diffMs / TIME.ONE_HOUR; // Convert to hours
+    this.workingHours = diffMs / TIME.ONE_HOUR;
     
-    // Find the employee to get their scheduled times and daily working hours
+    // Find the employee and their shift for this department
     let employee = null;
     if (this.employee) {
       employee = await mongoose.model("Employee").findById(this.employee).populate('department');
     }
     
     if (employee) {
-      // Get department leverage time settings
-      let checkInLeverage = employee.department?.leverageTime?.checkInMinutes || ATTENDANCE.DEFAULT_CHECK_IN_LEVERAGE;
-      let checkOutLeverage = employee.department?.leverageTime?.checkOutMinutes || ATTENDANCE.DEFAULT_CHECK_OUT_LEVERAGE;
-
-      if (this.isShiftBased && this.department) {
-        try {
-          const shiftDept = await mongoose.model("Department").findById(this.department);
-          if (shiftDept?.leverageTime) {
-            checkInLeverage = shiftDept.leverageTime.checkInMinutes || checkInLeverage;
-            checkOutLeverage = shiftDept.leverageTime.checkOutMinutes || checkOutLeverage;
-          }
-        } catch (err) {
-          // Fallback to employee department leverage
-        }
+      // Find the shift matching this attendance's department
+      const shift = employee.shifts?.find(s => 
+        String(s.department) === String(this.department)
+      ) || employee.shifts?.[0];
+      
+      const ws = shift?.workSchedule;
+      if (!ws) {
+        // Fallback if no shift/workSchedule found
+        const standardDailyHours = 8;
+        this.extraWorkingHours = Math.max(0, this.workingHours - standardDailyHours);
+        if (this.workingHours >= 8) this.status = "present";
+        else if (this.workingHours >= 4) this.status = "half-day";
+        else if (this.workingHours > 0) this.status = "late";
+        return;
       }
+
+      // Get department leverage time settings
+      let attDept = this.department ? await mongoose.model("Department").findById(this.department) : employee.department;
+      let checkInLeverage = attDept?.leverageTime?.checkInMinutes || ATTENDANCE.DEFAULT_CHECK_IN_LEVERAGE;
+      let checkOutLeverage = attDept?.leverageTime?.checkOutMinutes || ATTENDANCE.DEFAULT_CHECK_OUT_LEVERAGE;
       
       // Get day of week for this attendance record
       const dayOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][checkInDate.getUTCDay()];
       
-      // Check if there's a day-specific schedule for this day
-      let checkInTime = employee.workSchedule.checkInTime;
-      let checkOutTime = employee.workSchedule.checkOutTime;
+      // Determine check-in/check-out times from shift schedule
+      let checkInTime = ws.checkInTime || "09:00";
+      let checkOutTime = ws.checkOutTime || "17:00";
       let isDaySpecificSchedule = false;
 
-      if (this.isShiftBased && this.shiftStartTime && this.shiftEndTime) {
+      // Use shiftStartTime/shiftEndTime if stored on the attendance record
+      if (this.shiftStartTime && this.shiftEndTime) {
         checkInTime = this.shiftStartTime;
         checkOutTime = this.shiftEndTime;
         isDaySpecificSchedule = true;
       }
       
-      if (!this.isShiftBased && employee.workSchedule.daySchedules && employee.workSchedule.daySchedules.get(dayOfWeek)) {
-        const daySchedule = employee.workSchedule.daySchedules.get(dayOfWeek);
+      // Check for day-specific schedule override
+      if (!isDaySpecificSchedule && ws.daySchedules && ws.daySchedules.get && ws.daySchedules.get(dayOfWeek)) {
+        const daySchedule = ws.daySchedules.get(dayOfWeek);
         if (!daySchedule.isOff) {
           checkInTime = daySchedule.checkInTime || checkInTime;
           checkOutTime = daySchedule.checkOutTime || checkOutTime;
@@ -210,10 +223,9 @@ attendanceSchema.pre("save", async function () {
         }
       }
       
-      // Calculate daily working hours (weekly hours / working days per week)
-      const dailyHours = employee.workSchedule.workingHoursPerWeek / employee.workSchedule.workingDaysPerWeek;
+      // Calculate daily working hours
+      const dailyHours = (ws.workingHoursPerWeek || 40) / (ws.workingDaysPerWeek || 5);
       
-      // If day has specific schedule with different hours, calculate expected hours for this day
       let expectedDailyHours = dailyHours;
       if (isDaySpecificSchedule) {
         const [schedInHr, schedInMin] = checkInTime.split(":").map(Number);
@@ -223,8 +235,6 @@ attendanceSchema.pre("save", async function () {
       
       const halfDayThreshold = expectedDailyHours * ATTENDANCE.HALF_DAY_MULTIPLIER;
       
-      // Calculate extra working hours (actual hours - scheduled hours)
-      // Only count positive values (worked more than scheduled)
       this.extraWorkingHours = Math.max(0, this.workingHours - expectedDailyHours);
       
       // Get scheduled check-in and check-out times (in PKT)

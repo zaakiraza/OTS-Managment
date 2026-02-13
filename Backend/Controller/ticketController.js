@@ -45,7 +45,7 @@ export const getAllTickets = async (req, res) => {
 
     // Filter tickets based on visibility rules
     const currentUser = req.user;
-    const currentUserDeptId = currentUser.department?._id?.toString() || currentUser.department?.toString();
+    const currentUserDeptIds = req.user.departments || [];
     const currentUserId = currentUser._id.toString();
     const isSuperAdmin = currentUser.role?.name === "superAdmin";
     
@@ -70,10 +70,10 @@ export const getAllTickets = async (req, res) => {
         return true;
       }
       
-      // For restricted tickets, check if user's department is in the visible departments list
-      if (currentUserDeptId) {
+      // For restricted tickets, check if any of user's departments is in the visible departments list
+      if (currentUserDeptIds.length > 0) {
         const isVisible = ticket.visibleToDepartments.some(
-          dept => dept._id.toString() === currentUserDeptId
+          dept => currentUserDeptIds.includes(dept._id.toString())
         );
         return isVisible;
       }

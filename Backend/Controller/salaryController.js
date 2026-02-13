@@ -366,7 +366,10 @@ export const calculateAllSalaries = async (req, res) => {
 
     let query = { isActive: true };
     if (departmentId) {
-      query.department = departmentId;
+      query.$or = [
+        { department: departmentId },
+        { "shifts.department": departmentId }
+      ];
     }
     // Exclude superAdmin from salary calculation
     if (superAdminRole) {
@@ -1072,7 +1075,10 @@ export const previewAllSalaries = async (req, res) => {
 
     let query = { isActive: true };
     if (departmentId) {
-      query.department = departmentId;
+      query.$or = [
+        { department: departmentId },
+        { "shifts.department": departmentId }
+      ];
     }
     // Exclude superAdmin from salary calculation
     if (superAdminRole) {

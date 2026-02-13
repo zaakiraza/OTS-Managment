@@ -32,6 +32,7 @@ import Todos from "./Pages/Todos/Todos";
 import EmailTemplates from "./Pages/EmailTemplates/EmailTemplates";
 import Notifications from "./Pages/Notifications/Notifications";
 import AssetAnalytics from "./Pages/AssetAnalytics/AssetAnalytics";
+import Settings from "./Pages/Settings/Settings";
 
 function App() {
   const isAuthenticated = () => {
@@ -117,6 +118,14 @@ function App() {
           element={
             <ProtectedRoute allowedRoles={["superAdmin"]}>
               <EmailTemplates />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/settings"
+          element={
+            <ProtectedRoute allowedRoles={["superAdmin"]}>
+              <Settings />
             </ProtectedRoute>
           }
         />
@@ -215,7 +224,7 @@ function App() {
         <Route
           path="/my-tasks"
           element={
-            <ProtectedRoute allowedRoles={["superAdmin", "attendanceDepartment", "ITAssetManager", "teamLead", "employee"]}>
+            <ProtectedRoute allowedRoles={["superAdmin", "attendanceDepartment", "ITAssetManager", "employee"]}>
               <MyTasks />
             </ProtectedRoute>
           }

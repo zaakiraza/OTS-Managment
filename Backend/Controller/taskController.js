@@ -35,34 +35,63 @@ export const getAllTasks = async (req, res) => {
           filter.department = { $in: leadingDeptIds };
         }
       } else {
-        // If no leading departments, only show their own department's tasks
-        const userDept = req.user.department?._id || req.user.department;
-        if (department) {
-          // Validate the requested department matches their own
-          if (String(department) === String(userDept)) {
-            filter.department = department;
-          } else {
-            filter._id = null;
-          }
-        } else {
-          filter.department = userDept;
-        }
+        // If no leading departments, team lead cannot see any tasks
+        filter._id = null;
       }
-    } else if (roleName !== "superAdmin" && roleName !== "attendanceDepartment") {
-      // For regular employees, only show their department's tasks
-      const userDept = req.user.department?._id || req.user.department;
+    } else if (roleName === "attendanceDepartment") {
+      // For attendanceDepartment, show only tasks from PRIMARY departments of employees they created
+      // (excluding shift departments to prevent cross-department visibility)
+      const employeesCreatedByUser = await Employee.find({
+        createdBy: req.user._id,
+        isActive: true,
+      }).select("employeeId name department");
+
+      console.log("[AttendanceDepartment] User ID:", req.user._id);
+      console.log("[AttendanceDepartment] Employees created:", employeesCreatedByUser.length);
+
+      // Collect all unique PRIMARY department IDs from employees they created
+      const departmentIds = new Set();
+      employeesCreatedByUser.forEach(emp => {
+        if (emp.department) {
+          const deptId = emp.department.toString();
+          departmentIds.add(deptId);
+        }
+      });
+
+      const allowedDepts = Array.from(departmentIds);
+      console.log("[AttendanceDepartment] Allowed departments (primary only):", allowedDepts);
+      
       if (department) {
-        // Validate the requested department matches their own
-        if (String(department) === String(userDept)) {
+        // Validate the requested department is in their allowed list
+        if (allowedDepts.includes(department.toString())) {
           filter.department = department;
         } else {
           filter._id = null;
         }
       } else {
-        filter.department = userDept;
+        if (allowedDepts.length > 0) {
+          // Convert string IDs to ObjectIds for MongoDB query
+          const mongoose = (await import('mongoose')).default;
+          filter.department = { $in: allowedDepts.map(id => new mongoose.Types.ObjectId(id)) };
+        } else {
+          console.log("[AttendanceDepartment] No allowed departments, returning no tasks");
+          filter._id = null;
+        }
+      }
+    } else if (roleName !== "superAdmin") {
+      // For regular employees, show tasks from all their departments (multi-dept support)
+      const userDepts = req.user.departments || [];
+      if (department) {
+        if (userDepts.includes(String(department))) {
+          filter.department = department;
+        } else {
+          filter._id = null;
+        }
+      } else {
+        filter.department = { $in: userDepts };
       }
     } else {
-      // superAdmin and attendanceDepartment can see all tasks and filter by any department
+      // superAdmin can see all tasks and filter by any department
       if (department) filter.department = department;
     }
 
@@ -101,11 +130,30 @@ export const getAllTasks = async (req, res) => {
 export const getMyTasks = async (req, res) => {
   try {
     const userId = req.user._id.toString();
-    const userDepartment = req.user.department?._id || req.user.department;
+    const userDepartments = req.user.departments || [];
+    const { department } = req.query;
 
-    // Get all tasks from user's department
+    // Build department filter
+    let deptFilter;
+    if (department) {
+      // Validate that the requested department is one of user's departments
+      if (userDepartments.includes(String(department))) {
+        deptFilter = department;
+      } else {
+        // Requested department not in user's departments, return empty
+        return res.status(200).json({
+          success: true,
+          count: 0,
+          data: [],
+        });
+      }
+    } else {
+      deptFilter = { $in: userDepartments };
+    }
+
+    // Get all tasks from user's departments (multi-dept support)
     const tasks = await Task.find({
-      department: userDepartment,
+      department: deptFilter,
       isActive: true,
     })
       .populate("assignedBy", "name email employeeId")

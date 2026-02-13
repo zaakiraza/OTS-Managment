@@ -72,6 +72,17 @@ function Reports() {
     fetchDepartments();
   }, []);
 
+  const fetchDepartments = async () => {
+    try {
+      const response = await departmentAPI.getAll();
+      if (response.data.success) {
+        setDepartments(response.data.flatData || response.data.data);
+      }
+    } catch (error) {
+      console.error("Error fetching departments:", error);
+    }
+  };
+
   useEffect(() => {
     if (filters.departmentId) {
       fetchEmployeesByDepartment(filters.departmentId);

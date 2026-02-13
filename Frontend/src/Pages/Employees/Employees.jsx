@@ -49,7 +49,6 @@ const Employees = () => {
     { key: 'position', label: 'Position' },
     { key: 'workSchedule', label: 'Work Schedule' },
     { key: 'joinDate', label: 'Join Date' },
-    { key: 'salary', label: 'Salary' },
     { key: 'status', label: 'Status' },
   ];
 
@@ -70,7 +69,7 @@ const Employees = () => {
     biometricId: "",
     department: "",
     additionalDepartments: [],
-    departmentShifts: [],
+    shifts: [],
     leadingDepartments: [],
     position: "",
     salary: {
@@ -637,35 +636,66 @@ const Employees = () => {
       setLoading(true);
       
       const isSuperAdmin = currentUser?.role?.name === "superAdmin";
-      const departmentShifts = formData.departmentShifts || [];
+
+      // Build shifts array: primary shift + additional shifts
+      const allShifts = [
+        {
+          department: formData.department,
+          isPrimary: true,
+          position: formData.position || "",
+          monthlySalary: formData.salary?.monthlySalary ? parseFloat(formData.salary.monthlySalary) : null,
+          currency: formData.salary?.currency || "PKR",
+          leaveThreshold: formData.salary?.leaveThreshold || 0,
+          joiningDate: formData.joiningDate || null,
+          workSchedule: formData.workSchedule,
+          isActive: true,
+        },
+        ...(formData.shifts || []).filter(s => s.department).map(s => {
+          const allDays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+          const workingDays = s.daysOfWeek && s.daysOfWeek.length > 0
+            ? s.daysOfWeek
+            : allDays.filter(d => !(s.workSchedule?.weeklyOffs || ["Saturday", "Sunday"]).includes(d));
+          const weeklyOffs = allDays.filter(d => !workingDays.includes(d));
+          return {
+            ...s,
+            isPrimary: false,
+            isActive: s.isActive !== false,
+            daysOfWeek: workingDays,
+            workSchedule: {
+              checkInTime: s.startTime || s.workSchedule?.checkInTime || "08:00",
+              checkOutTime: s.endTime || s.workSchedule?.checkOutTime || "14:00",
+              workingDaysPerWeek: workingDays.length,
+              workingHoursPerWeek: s.workSchedule?.workingHoursPerWeek || 40,
+              weeklyOffs: weeklyOffs,
+              daySchedules: s.daySchedules || s.workSchedule?.daySchedules || {},
+            },
+          };
+        })
+      ];
 
       // Ensure department is a valid string (not empty)
       const submitData = {
         ...formData,
         department: formData.department || null,
+        shifts: allShifts,
       };
 
-      delete submitData.departmentShifts;
+      // Remove old individual fields that are now in shifts
+      delete submitData.position;
+      delete submitData.salary;
+      delete submitData.workSchedule;
+      delete submitData.joiningDate;
+      delete submitData.additionalDepartments;
       
-      // Remove empty additional/leading departments arrays if they're empty
-      if (!submitData.additionalDepartments || submitData.additionalDepartments.length === 0) {
-        submitData.additionalDepartments = [];
-      }
       if (!submitData.leadingDepartments || submitData.leadingDepartments.length === 0) {
         submitData.leadingDepartments = [];
       }
       
       let response;
-      let targetEmployeeId = editId;
       if (editMode) {
         response = await employeeAPI.update(editId, submitData);
       } else {
         response = await employeeAPI.create(submitData);
-        targetEmployeeId = response.data?.data?._id || targetEmployeeId;
-      }
-
-      if (isSuperAdmin && targetEmployeeId) {
-        await employeeAPI.updateDepartmentShifts(targetEmployeeId, { departmentShifts });
       }
       
       if (response.data.success) {
@@ -681,7 +711,7 @@ const Employees = () => {
           biometricId: "",
           department: "",
           additionalDepartments: [],
-          departmentShifts: [],
+          shifts: [],
           leadingDepartments: [],
           position: "",
           salary: { monthlySalary: "", currency: "PKR", leaveThreshold: 0 },
@@ -722,6 +752,11 @@ const Employees = () => {
   const handleEdit = (emp) => {
     setEditMode(true);
     setEditId(emp._id);
+    
+    // Extract primary and non-primary shifts
+    const primaryShift = emp.shifts?.find(s => s.isPrimary) || emp.shifts?.[0] || {};
+    const nonPrimaryShifts = (emp.shifts || []).filter(s => !s.isPrimary);
+    
     setFormData({
       name: emp.name,
       email: emp.email,
@@ -729,31 +764,41 @@ const Employees = () => {
       cnic: emp.cnic || "",
       biometricId: emp.biometricId || "",
       department: emp.department?._id || "",
-      additionalDepartments: emp.additionalDepartments?.map(d => d._id || d) || [],
-      departmentShifts: (emp.departmentShifts || []).map(shift => ({
+      additionalDepartments: nonPrimaryShifts.map(s => s.department?._id || s.department).filter(Boolean),
+      shifts: nonPrimaryShifts.map(shift => ({
         department: shift.department?._id || shift.department || "",
-        startTime: shift.startTime || "",
-        endTime: shift.endTime || "",
-        daysOfWeek: shift.daysOfWeek || [],
-        daySchedules: shift.daySchedules || {},
+        startTime: shift.workSchedule?.checkInTime || shift.startTime || "08:00",
+        endTime: shift.workSchedule?.checkOutTime || shift.endTime || "14:00",
+        workSchedule: shift.workSchedule || { checkInTime: "08:00", checkOutTime: "14:00", workingDaysPerWeek: 5, weeklyOffs: ["Saturday", "Sunday"], workingHoursPerWeek: 40 },
+        daysOfWeek: (shift.daysOfWeek && shift.daysOfWeek.length > 0)
+          ? shift.daysOfWeek
+          : (shift.workSchedule?.weeklyOffs
+            ? ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"].filter(d => !shift.workSchedule.weeklyOffs.includes(d))
+            : ["Monday","Tuesday","Wednesday","Thursday","Friday"]),
+        position: shift.position || "",
+        monthlySalary: shift.monthlySalary || 0,
+        currency: shift.currency || "PKR",
+        leaveThreshold: shift.leaveThreshold || 0,
+        joiningDate: shift.joiningDate ? shift.joiningDate.split('T')[0] : "",
         isActive: shift.isActive !== false,
+        daySchedules: shift.workSchedule?.daySchedules || shift.daySchedules || {},
       })),
       leadingDepartments: emp.leadingDepartments?.map(d => d._id || d) || [],
-      position: emp.position,
+      position: primaryShift.position || emp.position || "",
       salary: {
-        monthlySalary: emp.salary.monthlySalary,
-        currency: emp.salary.currency,
-        leaveThreshold: emp.salary.leaveThreshold || 0,
+        monthlySalary: primaryShift.monthlySalary || emp.salary?.monthlySalary || "",
+        currency: primaryShift.currency || emp.salary?.currency || "PKR",
+        leaveThreshold: primaryShift.leaveThreshold || emp.salary?.leaveThreshold || 0,
       },
       workSchedule: {
-        checkInTime: emp.workSchedule.checkInTime,
-        checkOutTime: emp.workSchedule.checkOutTime,
-        workingDaysPerWeek: emp.workSchedule.workingDaysPerWeek,
-        weeklyOffs: emp.workSchedule.weeklyOffs,
-        workingHoursPerWeek: emp.workSchedule.workingHoursPerWeek,
-        daySchedules: emp.workSchedule.daySchedules || {},
+        checkInTime: primaryShift.workSchedule?.checkInTime || emp.workSchedule?.checkInTime || "09:00",
+        checkOutTime: primaryShift.workSchedule?.checkOutTime || emp.workSchedule?.checkOutTime || "17:00",
+        workingDaysPerWeek: primaryShift.workSchedule?.workingDaysPerWeek || emp.workSchedule?.workingDaysPerWeek || 5,
+        weeklyOffs: primaryShift.workSchedule?.weeklyOffs || emp.workSchedule?.weeklyOffs || ["Saturday", "Sunday"],
+        workingHoursPerWeek: primaryShift.workSchedule?.workingHoursPerWeek || emp.workSchedule?.workingHoursPerWeek || 40,
+        daySchedules: primaryShift.workSchedule?.daySchedules || emp.workSchedule?.daySchedules || {},
       },
-      joiningDate: emp.joiningDate ? emp.joiningDate.split('T')[0] : "",
+      joiningDate: primaryShift.joiningDate ? primaryShift.joiningDate.split('T')[0] : (emp.joiningDate ? emp.joiningDate.split('T')[0] : ""),
       password: "",
       isTeamLead: emp.isTeamLead || false,
       role: emp.role?._id || "",
@@ -780,7 +825,7 @@ const Employees = () => {
       biometricId: "",
       department: defaultDepartment,
       additionalDepartments: [],
-      departmentShifts: [],
+      shifts: [],
       leadingDepartments: [],
       position: "",
       salary: { monthlySalary: "", currency: "PKR", leaveThreshold: 0 },
@@ -844,7 +889,7 @@ const Employees = () => {
         ...newDepts
       ].filter(Boolean).map(String));
 
-      updates.departmentShifts = (formData.departmentShifts || []).filter(shift =>
+      updates.shifts = (formData.shifts || []).filter(shift =>
         shift.department && validShiftDeptIds.has(String(shift.department))
       );
     }
@@ -866,31 +911,41 @@ const Employees = () => {
 
     const newShift = {
       department: defaultDept,
-      startTime: "08:00",
-      endTime: "14:00",
-      daysOfWeek: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
+      workSchedule: {
+        checkInTime: "08:00",
+        checkOutTime: "14:00",
+        workingDaysPerWeek: 5,
+        weeklyOffs: ["Saturday", "Sunday"],
+        workingHoursPerWeek: 40,
+        daySchedules: {},
+      },
+      position: "",
+      monthlySalary: 0,
+      currency: "PKR",
+      leaveThreshold: 0,
+      joiningDate: "",
       isActive: true,
     };
 
     setFormData({
       ...formData,
-      departmentShifts: [...(formData.departmentShifts || []), newShift],
+      shifts: [...(formData.shifts || []), newShift],
     });
   };
 
   const handleRemoveShift = (index) => {
-    const updated = (formData.departmentShifts || []).filter((_, i) => i !== index);
-    setFormData({ ...formData, departmentShifts: updated });
+    const updated = (formData.shifts || []).filter((_, i) => i !== index);
+    setFormData({ ...formData, shifts: updated });
   };
 
   const handleShiftChange = (index, field, value) => {
-    const updated = [...(formData.departmentShifts || [])];
+    const updated = [...(formData.shifts || [])];
     updated[index] = { ...updated[index], [field]: value };
-    setFormData({ ...formData, departmentShifts: updated });
+    setFormData({ ...formData, shifts: updated });
   };
 
   const handleAddShiftDaySchedule = (shiftIndex, day) => {
-    const updated = [...(formData.departmentShifts || [])];
+    const updated = [...(formData.shifts || [])];
     const shift = updated[shiftIndex] || {};
     const daySchedules = shift.daySchedules || {};
     
@@ -900,21 +955,21 @@ const Employees = () => {
     };
     
     updated[shiftIndex] = { ...shift, daySchedules };
-    setFormData({ ...formData, departmentShifts: updated });
+    setFormData({ ...formData, shifts: updated });
   };
 
   const handleRemoveShiftDaySchedule = (shiftIndex, day) => {
-    const updated = [...(formData.departmentShifts || [])];
+    const updated = [...(formData.shifts || [])];
     const shift = updated[shiftIndex] || {};
     const daySchedules = { ...(shift.daySchedules || {}) };
     delete daySchedules[day];
     
     updated[shiftIndex] = { ...shift, daySchedules };
-    setFormData({ ...formData, departmentShifts: updated });
+    setFormData({ ...formData, shifts: updated });
   };
 
   const handleShiftDayScheduleChange = (shiftIndex, day, field, value) => {
-    const updated = [...(formData.departmentShifts || [])];
+    const updated = [...(formData.shifts || [])];
     const shift = updated[shiftIndex] || {};
     const daySchedules = { ...(shift.daySchedules || {}) };
     
@@ -924,11 +979,11 @@ const Employees = () => {
     };
     
     updated[shiftIndex] = { ...shift, daySchedules };
-    setFormData({ ...formData, departmentShifts: updated });
+    setFormData({ ...formData, shifts: updated });
   };
 
   const handleShiftDayToggle = (index, day) => {
-    const updated = [...(formData.departmentShifts || [])];
+    const updated = [...(formData.shifts || [])];
     const shift = updated[index] || {};
     const currentDays = shift.daysOfWeek || [];
     const newDays = currentDays.includes(day)
@@ -936,7 +991,7 @@ const Employees = () => {
       : [...currentDays, day];
 
     updated[index] = { ...shift, daysOfWeek: newDays };
-    setFormData({ ...formData, departmentShifts: updated });
+    setFormData({ ...formData, shifts: updated });
   };
 
   const handleWeeklyOffToggle = (day) => {
@@ -1257,7 +1312,6 @@ const Employees = () => {
                 <th>Department</th>
                 <th>Position</th>
                 <th>Role</th>
-                <th>Salary</th>
                 <th>Working Hours</th>
                 <th>Actions</th>
               </tr>
@@ -1284,23 +1338,24 @@ const Employees = () => {
                           <i className="fas fa-star"></i> {dept.name}
                         </span>
                       ))}
-                      {/* Additional Departments (excluding primary and leading) */}
+                      {/* Additional Departments from shifts (excluding primary and leading) */}
                       {(() => {
                         const primaryId = emp.department?._id;
                         const leadingIds = emp.leadingDepartments?.map(d => d._id) || [];
-                        const filteredAdditional = emp.additionalDepartments?.filter(
-                          dept => dept._id !== primaryId && !leadingIds.includes(dept._id)
-                        ) || [];
+                        const shiftDepts = (emp.shifts || [])
+                          .filter(s => !s.isPrimary && s.department)
+                          .map(s => s.department)
+                          .filter(dept => dept?._id !== primaryId && !leadingIds.includes(dept?._id));
                         return (
                           <>
-                            {filteredAdditional.slice(0, 2).map((dept) => (
-                              <span key={`add-${dept._id}`} className="dept-badge-secondary" title={`Also works in ${dept.name}`}>
-                                {dept.name}
+                            {shiftDepts.slice(0, 2).map((dept) => (
+                              <span key={`add-${dept._id}`} className="dept-badge-secondary" title={`Also works in ${dept.name || "Unknown"}`}>
+                                {dept.name || "Unknown"}
                               </span>
                             ))}
-                            {filteredAdditional.length > 2 && (
-                              <span className="more-depts" title={filteredAdditional.slice(2).map(d => d.name).join(', ')}>
-                                +{filteredAdditional.length - 2}
+                            {shiftDepts.length > 2 && (
+                              <span className="more-depts" title={shiftDepts.slice(2).map(d => d.name).join(', ')}>
+                                +{shiftDepts.length - 2}
                               </span>
                             )}
                           </>
@@ -1313,9 +1368,6 @@ const Employees = () => {
                     <span className={`role-badge role-${emp.role?.name || 'employee'}`}>
                       {emp.role?.name || 'Employee'}
                     </span>
-                  </td>
-                  <td>
-                    {emp.salary?.monthlySalary?.toLocaleString() || "0"}/{emp.salary?.currency || "PKR"}
                   </td>
                   <td>
                     {emp.workSchedule?.checkInTime || "0"} - {emp.workSchedule?.checkOutTime || "-"}
@@ -1470,41 +1522,61 @@ const Employees = () => {
                 </div>
                 <div className="form-group">
                   <label>Primary Department *</label>
-                  <select
-                    value={formData.department || ""}
-                    onChange={(e) => {
-                      const newPrimaryDept = e.target.value;
-                      
-                      // When primary changes, we need to:
-                      // 1. Remove it from additional departments
-                      // 2. Clear additional departments (they depend on primary being siblings)
-                      // 3. Clear team lead departments (they depend on primary + additional)
-                      setFormData({ 
-                        ...formData, 
-                        department: newPrimaryDept,
-                        additionalDepartments: [],
-                        leadingDepartments: [],
-                        departmentShifts: []
-                      });
-                    }}
-                    required
-                    disabled={currentUser?.role?.name === "attendanceDepartment" && getFilteredDepartments().length === 1}
-                  >
-                    <option value="">Select Primary Department</option>
-                    {getFilteredDepartments().map((dept) => (
-                      <option key={dept._id} value={String(dept._id)}>
-                        {"—".repeat(dept.level || 0)} {dept.name} ({dept.code})
-                        {dept.parentDepartment ? ` ← ${dept.parentDepartment.name || ''}` : ''}
-                      </option>
-                    ))}
-                  </select>
-                  <small style={{color: '#64748b', fontSize: '12px', marginTop: '4px'}}>
-                    {currentUser?.role?.name === "attendanceDepartment" 
-                      ? getFilteredDepartments().length === 1 
-                        ? "Department is auto-selected based on your assignment"
-                        : "You can only assign employees to your own department or its sub-departments"
-                      : "Used for attendance tracking and salary calculation"}
-                  </small>
+                  {(() => {
+                    // For department heads editing multi-dept employees, show primary dept as read-only
+                    const isAttDeptHead = currentUser?.role?.name === "attendanceDepartment";
+                    const hasShifts = formData.shifts && formData.shifts.length > 0;
+                    const filteredDepts = getFilteredDepartments();
+                    const currentPrimaryDeptId = String(formData.department || "");
+                    const currentPrimaryDept = departments.find(d => String(d._id) === currentPrimaryDeptId);
+                    const isPrimaryInFiltered = filteredDepts.some(d => String(d._id) === currentPrimaryDeptId);
+                    
+                    // Disable if: dept head + employee has shifts (multi-dept employee)
+                    // OR dept head and only one dept available
+                    const shouldDisable = isAttDeptHead && (hasShifts || filteredDepts.length === 1);
+                    
+                    // Build options list: include current primary even if not in filtered list
+                    const deptOptions = isPrimaryInFiltered || !currentPrimaryDeptId
+                      ? filteredDepts
+                      : [currentPrimaryDept, ...filteredDepts].filter(Boolean);
+                    
+                    return (
+                      <>
+                        <select
+                          value={formData.department || ""}
+                          onChange={(e) => {
+                            const newPrimaryDept = e.target.value;
+                            setFormData({ 
+                              ...formData, 
+                              department: newPrimaryDept,
+                              additionalDepartments: [],
+                              leadingDepartments: [],
+                              shifts: []
+                            });
+                          }}
+                          required
+                          disabled={shouldDisable}
+                        >
+                          <option value="">Select Primary Department</option>
+                          {deptOptions.map((dept) => (
+                            <option key={dept._id} value={String(dept._id)}>
+                              {"—".repeat(dept.level || 0)} {dept.name} ({dept.code})
+                              {dept.parentDepartment ? ` ← ${dept.parentDepartment.name || ''}` : ''}
+                            </option>
+                          ))}
+                        </select>
+                        <small style={{color: '#64748b', fontSize: '12px', marginTop: '4px'}}>
+                          {isAttDeptHead 
+                            ? hasShifts
+                              ? "Primary department is managed by superAdmin for multi-department employees"
+                              : filteredDepts.length === 1 
+                                ? "Department is auto-selected based on your assignment"
+                                : "You can only assign employees to your own department or its sub-departments"
+                            : "Used for attendance tracking and salary calculation"}
+                        </small>
+                      </>
+                    );
+                  })()}
                 </div>
 
                 <div className="form-group full-width">
@@ -1540,7 +1612,7 @@ const Employees = () => {
                       </small>
                     ) : (
                       <div style={{marginTop: '8px'}}>
-                        {(formData.departmentShifts || []).map((shift, index) => (
+                        {(formData.shifts || []).map((shift, index) => (
                           <div
                             key={`shift-${index}`}
                             style={{
@@ -1589,6 +1661,58 @@ const Employees = () => {
                                 >
                                   Remove
                                 </button>
+                              </div>
+                            </div>
+
+                            {/* Department-specific fields */}
+                            <div style={{marginTop: '12px', padding: '12px', background: '#fff', borderRadius: '6px', border: '1px solid #e5e7eb'}}>
+                              <label style={{display: 'block', marginBottom: '8px', fontSize: '13px', fontWeight: '600', color: '#374151'}}>
+                                <i className="fas fa-briefcase" style={{marginRight: '6px'}}></i>
+                                Department-Specific Details
+                              </label>
+                              <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px'}}>
+                                <div className="form-group" style={{margin: 0}}>
+                                  <label style={{fontSize: '12px'}}>Position/Role</label>
+                                  <input
+                                    type="text"
+                                    placeholder="e.g., Developer, Manager"
+                                    value={shift.position || ""}
+                                    onChange={(e) => handleShiftChange(index, 'position', e.target.value)}
+                                    style={{fontSize: '13px', padding: '6px 8px'}}
+                                  />
+                                </div>
+                                <div className="form-group" style={{margin: 0}}>
+                                  <label style={{fontSize: '12px'}}>Monthly Salary (PKR)</label>
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    placeholder="e.g., 50000"
+                                    value={shift.monthlySalary || ""}
+                                    onChange={(e) => handleShiftChange(index, 'monthlySalary', parseFloat(e.target.value) || 0)}
+                                    style={{fontSize: '13px', padding: '6px 8px'}}
+                                  />
+                                </div>
+                                <div className="form-group" style={{margin: 0}}>
+                                  <label style={{fontSize: '12px'}}>Leave Threshold (per month)</label>
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    placeholder="e.g., 2"
+                                    value={shift.leaveThreshold || 0}
+                                    onChange={(e) => handleShiftChange(index, 'leaveThreshold', parseInt(e.target.value) || 0)}
+                                    style={{fontSize: '13px', padding: '6px 8px'}}
+                                  />
+                                  <small style={{fontSize: '10px', color: '#6b7280'}}>Allowed leaves before absent</small>
+                                </div>
+                                <div className="form-group" style={{margin: 0}}>
+                                  <label style={{fontSize: '12px'}}>Joining Date (this dept)</label>
+                                  <input
+                                    type="date"
+                                    value={shift.joiningDate ? shift.joiningDate.split('T')[0] : ""}
+                                    onChange={(e) => handleShiftChange(index, 'joiningDate', e.target.value)}
+                                    style={{fontSize: '13px', padding: '6px 8px'}}
+                                  />
+                                </div>
                               </div>
                             </div>
 
@@ -1724,8 +1848,35 @@ const Employees = () => {
                           </div>
                         ))}
 
-                        <button type="button" className="btn-add" onClick={handleAddShift}>
-                          + Add Shift
+                        <button 
+                          type="button" 
+                          onClick={handleAddShift}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            padding: '10px 18px',
+                            background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '8px',
+                            fontSize: '14px',
+                            fontWeight: '500',
+                            cursor: 'pointer',
+                            boxShadow: '0 2px 8px rgba(59, 130, 246, 0.3)',
+                            transition: 'all 0.2s ease',
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.transform = 'translateY(-1px)';
+                            e.currentTarget.style.boxShadow = '0 4px 12px rgba(59, 130, 246, 0.4)';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.transform = 'translateY(0)';
+                            e.currentTarget.style.boxShadow = '0 2px 8px rgba(59, 130, 246, 0.3)';
+                          }}
+                        >
+                          <i className="fas fa-plus-circle"></i>
+                          Add Shift
                         </button>
                         <small style={{color: '#64748b', fontSize: '12px', display: 'block', marginTop: '6px'}}>
                           Shifts split attendance across departments using a single check-in and check-out.
@@ -1735,118 +1886,284 @@ const Employees = () => {
                   </div>
                 )}
 
-                {/* Read-only view of shifts for department heads */}
-                {currentUser?.role?.name === "attendanceDepartment" && formData.departmentShifts && formData.departmentShifts.length > 0 && (
-                  <div className="form-group full-width">
-                    <label>Department Shifts (View Only)</label>
-                    <div style={{marginTop: '8px'}}>
-                      {formData.departmentShifts.map((shift, index) => {
-                        const deptName = shift.department?.name || 
-                          departments.find(d => d._id === shift.department)?.name || 
-                          'Unknown Department';
-                        const deptCode = shift.department?.code || 
-                          departments.find(d => d._id === shift.department)?.code || 
-                          '';
-                        
-                        return (
-                          <div
-                            key={`shift-readonly-${index}`}
-                            style={{
-                              border: '1px solid #e5e7eb',
-                              borderRadius: '8px',
-                              padding: '12px',
-                              marginBottom: '10px',
-                              background: '#f9fafb',
-                              opacity: shift.isActive !== false ? 1 : 0.6,
-                            }}
-                          >
-                            <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px', marginBottom: '8px'}}>
-                              <div>
-                                <label style={{fontSize: '12px', color: '#6b7280', display: 'block', marginBottom: '4px'}}>
+                {/* Editable view of shifts for department heads (only their departments) */}
+                {currentUser?.role?.name === "attendanceDepartment" && formData.shifts && formData.shifts.length > 0 && (() => {
+                  // Get departments the current user manages
+                  const managedDepartmentIds = getFilteredDepartments().map(d => String(d._id));
+                  
+                  // Filter shifts to only show those from departments the user manages
+                  const managedShifts = formData.shifts
+                    .map((shift, originalIndex) => ({...shift, originalIndex}))
+                    .filter(shift => {
+                      const shiftDeptId = String(shift.department?._id || shift.department);
+                      return managedDepartmentIds.includes(shiftDeptId);
+                    });
+
+                  if (managedShifts.length === 0) {
+                    return null; // Don't show section if no managed shifts
+                  }
+
+                  return (
+                    <div className="form-group full-width">
+                      <label>Department Shifts (Your Departments)</label>
+                      <div style={{marginTop: '8px'}}>
+                        {managedShifts.map((shift) => {
+                          const index = shift.originalIndex;
+                          const shiftDeptId = String(shift.department?._id || shift.department);
+                          const dept = departments.find(d => String(d._id) === shiftDeptId);
+                          const deptName = dept?.name || 'Unknown Department';
+                          const deptCode = dept?.code || '';
+                          
+                          return (
+                            <div
+                              key={`shift-editable-${index}`}
+                              style={{
+                                border: '1px solid #e5e7eb',
+                                borderRadius: '8px',
+                                padding: '12px',
+                                marginBottom: '10px',
+                                background: '#f9fafb',
+                                opacity: shift.isActive !== false ? 1 : 0.6,
+                              }}
+                            >
+                              {/* Department Name (readonly) */}
+                              <div style={{marginBottom: '12px', padding: '8px', background: '#dbeafe', borderRadius: '6px'}}>
+                                <label style={{fontSize: '12px', color: '#1e40af', display: 'block', marginBottom: '2px', fontWeight: '600'}}>
                                   Department
                                 </label>
-                                <div style={{fontWeight: '500'}}>
+                                <div style={{fontWeight: '600', color: '#1e3a8a'}}>
                                   {deptName} {deptCode && `(${deptCode})`}
                                 </div>
                               </div>
-                              <div>
-                                <label style={{fontSize: '12px', color: '#6b7280', display: 'block', marginBottom: '4px'}}>
-                                  Start Time
-                                </label>
-                                <div style={{fontWeight: '500'}}>{shift.startTime || 'Not set'}</div>
-                              </div>
-                              <div>
-                                <label style={{fontSize: '12px', color: '#6b7280', display: 'block', marginBottom: '4px'}}>
-                                  End Time
-                                </label>
-                                <div style={{fontWeight: '500'}}>{shift.endTime || 'Not set'}</div>
-                              </div>
-                            </div>
 
-                            <div style={{marginBottom: '8px'}}>
-                              <label style={{fontSize: '12px', color: '#6b7280', display: 'block', marginBottom: '4px'}}>
-                                Days of Week
-                              </label>
-                              <div style={{display: 'flex', gap: '6px', flexWrap: 'wrap'}}>
-                                {(shift.daysOfWeek || []).map((day) => (
-                                  <span
-                                    key={`readonly-${index}-${day}`}
-                                    style={{
-                                      padding: '4px 8px',
-                                      background: '#e0f2fe',
-                                      color: '#0369a1',
-                                      borderRadius: '4px',
-                                      fontSize: '11px',
-                                      fontWeight: '500',
+                              {/* Editable timing fields */}
+                              <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '12px'}}>
+                                <div>
+                                  <label style={{fontSize: '12px', color: '#374151', display: 'block', marginBottom: '4px', fontWeight: '500'}}>
+                                    Start Time *
+                                  </label>
+                                  <input
+                                    type="time"
+                                    value={shift.startTime || ''}
+                                    onChange={(e) => {
+                                      const updated = [...formData.shifts];
+                                      updated[index].startTime = e.target.value;
+                                      setFormData({...formData, shifts: updated});
                                     }}
-                                  >
-                                    {day}
-                                  </span>
-                                ))}
+                                    style={{width: '100%', padding: '6px', fontSize: '13px', borderRadius: '4px', border: '1px solid #d1d5db'}}
+                                  />
+                                </div>
+                                <div>
+                                  <label style={{fontSize: '12px', color: '#374151', display: 'block', marginBottom: '4px', fontWeight: '500'}}>
+                                    End Time *
+                                  </label>
+                                  <input
+                                    type="time"
+                                    value={shift.endTime || ''}
+                                    onChange={(e) => {
+                                      const updated = [...formData.shifts];
+                                      updated[index].endTime = e.target.value;
+                                      setFormData({...formData, shifts: updated});
+                                    }}
+                                    style={{width: '100%', padding: '6px', fontSize: '13px', borderRadius: '4px', border: '1px solid #d1d5db'}}
+                                  />
+                                </div>
                               </div>
-                            </div>
 
-                            {shift.daySchedules && Object.keys(shift.daySchedules).length > 0 && (
-                              <div style={{marginTop: '10px', borderTop: '1px solid #e5e7eb', paddingTop: '10px'}}>
-                                <label style={{fontSize: '12px', color: '#6b7280', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px'}}>
-                                  <i className="fas fa-calendar-day"></i>
-                                  <strong>Day-Specific Schedules</strong>
+                              {/* Department-specific details (editable) */}
+                              <div style={{marginBottom: '12px', padding: '10px', background: '#fefce8', borderRadius: '6px', border: '1px solid #fef08a'}}>
+                                <label style={{fontSize: '12px', color: '#854d0e', display: 'block', marginBottom: '8px', fontWeight: '600'}}>
+                                  <i className="fas fa-briefcase"></i> Department-Specific Details
                                 </label>
-                                <div style={{display: 'grid', gap: '6px'}}>
-                                  {Object.entries(shift.daySchedules).map(([day, schedule]) => (
-                                    <div
-                                      key={`readonly-day-${index}-${day}`}
+                                <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px'}}>
+                                  <div>
+                                    <label style={{fontSize: '11px', color: '#92400e', display: 'block', marginBottom: '4px', fontWeight: '500'}}>Position</label>
+                                    <input
+                                      type="text"
+                                      value={shift.position || ''}
+                                      onChange={(e) => {
+                                        const updated = [...formData.shifts];
+                                        updated[index].position = e.target.value;
+                                        setFormData({...formData, shifts: updated});
+                                      }}
+                                      placeholder="e.g., Teacher"
+                                      style={{width: '100%', padding: '6px', fontSize: '12px', borderRadius: '4px', border: '1px solid #d1d5db'}}
+                                    />
+                                  </div>
+                                  <div>
+                                    <label style={{fontSize: '11px', color: '#92400e', display: 'block', marginBottom: '4px', fontWeight: '500'}}>Monthly Salary</label>
+                                    <input
+                                      type="number"
+                                      value={shift.monthlySalary || ''}
+                                      onChange={(e) => {
+                                        const updated = [...formData.shifts];
+                                        updated[index].monthlySalary = parseFloat(e.target.value) || 0;
+                                        setFormData({...formData, shifts: updated});
+                                      }}
+                                      placeholder="0"
+                                      style={{width: '100%', padding: '6px', fontSize: '12px', borderRadius: '4px', border: '1px solid #d1d5db'}}
+                                    />
+                                  </div>
+                                  <div>
+                                    <label style={{fontSize: '11px', color: '#92400e', display: 'block', marginBottom: '4px', fontWeight: '500'}}>Leave Threshold</label>
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      value={shift.leaveThreshold !== undefined ? shift.leaveThreshold : ''}
+                                      onChange={(e) => {
+                                        const updated = [...formData.shifts];
+                                        updated[index].leaveThreshold = parseInt(e.target.value) || 0;
+                                        setFormData({...formData, shifts: updated});
+                                      }}
+                                      placeholder="0 per month"
+                                      style={{width: '100%', padding: '6px', fontSize: '12px', borderRadius: '4px', border: '1px solid #d1d5db'}}
+                                    />
+                                  </div>
+                                  <div>
+                                    <label style={{fontSize: '11px', color: '#92400e', display: 'block', marginBottom: '4px', fontWeight: '500'}}>Joining Date</label>
+                                    <input
+                                      type="date"
+                                      value={shift.joiningDate ? shift.joiningDate.split('T')[0] : ''}
+                                      onChange={(e) => {
+                                        const updated = [...formData.shifts];
+                                        updated[index].joiningDate = e.target.value;
+                                        setFormData({...formData, shifts: updated});
+                                      }}
+                                      style={{width: '100%', padding: '6px', fontSize: '12px', borderRadius: '4px', border: '1px solid #d1d5db'}}
+                                    />
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Editable days of week */}
+                              <div style={{marginBottom: '12px'}}>
+                                <label style={{fontSize: '12px', color: '#374151', display: 'block', marginBottom: '6px', fontWeight: '500'}}>
+                                  Days of Week
+                                </label>
+                                <div style={{display: 'flex', gap: '6px', flexWrap: 'wrap'}}>
+                                  {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map((day) => (
+                                    <label
+                                      key={`shift-${index}-day-${day}`}
                                       style={{
-                                        display: 'flex',
-                                        justifyContent: 'space-between',
                                         padding: '6px 10px',
-                                        background: '#f0f9ff',
+                                        background: (shift.daysOfWeek || []).includes(day) ? '#0369a1' : '#e5e7eb',
+                                        color: (shift.daysOfWeek || []).includes(day) ? '#fff' : '#6b7280',
                                         borderRadius: '4px',
-                                        fontSize: '12px',
+                                        fontSize: '11px',
+                                        fontWeight: '500',
+                                        cursor: 'pointer',
+                                        userSelect: 'none',
                                       }}
                                     >
-                                      <strong>{day}</strong>
-                                      <span>{schedule.startTime} - {schedule.endTime}</span>
-                                    </div>
+                                      <input
+                                        type="checkbox"
+                                        checked={(shift.daysOfWeek || []).includes(day)}
+                                        onChange={(e) => {
+                                          const updated = [...formData.shifts];
+                                          const currentDays = updated[index].daysOfWeek || [];
+                                          if (e.target.checked) {
+                                            updated[index].daysOfWeek = [...currentDays, day];
+                                          } else {
+                                            updated[index].daysOfWeek = currentDays.filter(d => d !== day);
+                                          }
+                                          setFormData({...formData, shifts: updated});
+                                        }}
+                                        style={{display: 'none'}}
+                                      />
+                                      {day.substring(0, 3)}
+                                    </label>
                                   ))}
                                 </div>
                               </div>
-                            )}
 
-                            {shift.isActive === false && (
-                              <div style={{marginTop: '8px', color: '#ef4444', fontSize: '12px', fontWeight: '500'}}>
-                                <i className="fas fa-info-circle"></i> This shift is inactive
+                              {/* Editable day-specific schedules */}
+                              <div style={{marginTop: '12px', borderTop: '1px solid #e5e7eb', paddingTop: '12px'}}>
+                                <label style={{fontSize: '12px', color: '#374151', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px', fontWeight: '500'}}>
+                                  <i className="fas fa-calendar-day"></i>
+                                  Day-Specific Schedules (Optional)
+                                </label>
+                                {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map((day) => {
+                                  const daySchedule = shift.daySchedules?.[day];
+                                  const hasSchedule = Boolean(daySchedule);
+                                  
+                                  return (
+                                    <div
+                                      key={`shift-${index}-dayschedule-${day}`}
+                                      style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '8px',
+                                        padding: '6px',
+                                        background: hasSchedule ? '#f0f9ff' : 'transparent',
+                                        borderRadius: '4px',
+                                        marginBottom: '4px',
+                                      }}
+                                    >
+                                      <label style={{width: '80px', fontSize: '12px', fontWeight: hasSchedule ? '600' : '400'}}>
+                                        <input
+                                          type="checkbox"
+                                          checked={hasSchedule}
+                                          onChange={(e) => {
+                                            const updated = [...formData.shifts];
+                                            if (!updated[index].daySchedules) {
+                                              updated[index].daySchedules = {};
+                                            }
+                                            if (e.target.checked) {
+                                              updated[index].daySchedules[day] = {startTime: shift.startTime || '', endTime: shift.endTime || ''};
+                                            } else {
+                                              delete updated[index].daySchedules[day];
+                                            }
+                                            setFormData({...formData, shifts: updated});
+                                          }}
+                                          style={{marginRight: '4px'}}
+                                        />
+                                        {day.substring(0, 3)}
+                                      </label>
+                                      {hasSchedule && (
+                                        <>
+                                          <input
+                                            type="time"
+                                            value={daySchedule.startTime || ''}
+                                            onChange={(e) => {
+                                              const updated = [...formData.shifts];
+                                              updated[index].daySchedules[day].startTime = e.target.value;
+                                              setFormData({...formData, shifts: updated});
+                                            }}
+                                            style={{width: '90px', padding: '4px', fontSize: '12px', borderRadius: '4px', border: '1px solid #d1d5db'}}
+                                          />
+                                          <span style={{fontSize: '12px', color: '#6b7280'}}>to</span>
+                                          <input
+                                            type="time"
+                                            value={daySchedule.endTime || ''}
+                                            onChange={(e) => {
+                                              const updated = [...formData.shifts];
+                                              updated[index].daySchedules[day].endTime = e.target.value;
+                                              setFormData({...formData, shifts: updated});
+                                            }}
+                                            style={{width: '90px', padding: '4px', fontSize: '12px', borderRadius: '4px', border: '1px solid #d1d5db'}}
+                                          />
+                                        </>
+                                      )}
+                                    </div>
+                                  );
+                                })}
                               </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                      <small style={{color: '#64748b', fontSize: '12px', display: 'block', marginTop: '6px'}}>
-                        <i className="fas fa-lock"></i> Only superAdmin can modify department shifts.
-                      </small>
+
+                              {shift.isActive === false && (
+                                <div style={{marginTop: '8px', color: '#ef4444', fontSize: '12px', fontWeight: '500'}}>
+                                  <i className="fas fa-info-circle"></i> This shift is inactive
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                        <small style={{color: '#64748b', fontSize: '12px', display: 'block', marginTop: '6px'}}>
+                          <i className="fas fa-info-circle"></i> You can edit all shift details for your departments. Only superAdmin can add/remove shifts or change department assignments.
+                        </small>
+                      </div>
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
 
                 <div className="form-group full-width">
                   <label>Team Lead Of</label>
@@ -1872,58 +2189,62 @@ const Employees = () => {
                   </small>
                 </div>
 
-                <div className="form-group">
-                  <label>Position *</label>
-                  <input
-                    type="text"
-                    value={formData.position}
-                    onChange={(e) =>
-                      setFormData({ ...formData, position: e.target.value })
-                    }
-                    required
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Monthly Salary</label>
-                  <input
-                    type="number"
-                    value={formData.salary.monthlySalary}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        salary: { ...formData.salary, monthlySalary: e.target.value },
-                      })
-                    }
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Leave Threshold (Allowed Leaves per Month)</label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={formData.salary.leaveThreshold}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        salary: { ...formData.salary, leaveThreshold: parseInt(e.target.value) || 0 },
-                      })
-                    }
-                    placeholder="0 = all leaves deducted from salary"
-                  />
-                  <small style={{color: '#64748b', fontSize: '12px', marginTop: '4px'}}>
-                    Leaves exceeding this number will be marked as absent for salary calculation
-                  </small>
-                </div>
-                <div className="form-group">
-                  <label>Joining Date</label>
-                  <input
-                    type="date"
-                    value={formData.joiningDate}
-                    onChange={(e) =>
-                      setFormData({ ...formData, joiningDate: e.target.value })
-                    }
-                  />
-                </div>
+                {(!formData.shifts || formData.shifts.length === 0) && (
+                  <>
+                    <div className="form-group">
+                      <label>Position *</label>
+                      <input
+                        type="text"
+                        value={formData.position}
+                        onChange={(e) =>
+                          setFormData({ ...formData, position: e.target.value })
+                        }
+                        required
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label>Monthly Salary</label>
+                      <input
+                        type="number"
+                        value={formData.salary.monthlySalary}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            salary: { ...formData.salary, monthlySalary: e.target.value },
+                          })
+                        }
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label>Leave Threshold (Allowed Leaves per Month)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={formData.salary.leaveThreshold}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            salary: { ...formData.salary, leaveThreshold: parseInt(e.target.value) || 0 },
+                          })
+                        }
+                        placeholder="0 = all leaves deducted from salary"
+                      />
+                      <small style={{color: '#64748b', fontSize: '12px', marginTop: '4px'}}>
+                        Leaves exceeding this number will be marked as absent for salary calculation
+                      </small>
+                    </div>
+                    <div className="form-group">
+                      <label>Joining Date</label>
+                      <input
+                        type="date"
+                        value={formData.joiningDate}
+                        onChange={(e) =>
+                          setFormData({ ...formData, joiningDate: e.target.value })
+                        }
+                      />
+                    </div>
+                  </>
+                )}
                 <div className="form-group">
                   <label>Employee Role *</label>
                   <select
@@ -1964,55 +2285,55 @@ const Employees = () => {
                 </div>
               </div>
 
-              <h3 className="section-title">Work Schedule</h3>
-              <div className="form-grid">
-                <div className="form-group">
-                  <label>Check-in Time *</label>
-                  <input
-                    type="time"
-                    value={formData.workSchedule.checkInTime}
-                    onChange={(e) => handleWorkScheduleChange('checkInTime', e.target.value)}
-                    required
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Check-out Time *</label>
-                  <input
-                    type="time"
-                    value={formData.workSchedule.checkOutTime}
-                    onChange={(e) => handleWorkScheduleChange('checkOutTime', e.target.value)}
-                    required
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Working Days Per Week *</label>
-                  <input
-                    type="number"
-                    min="1"
-                    max="7"
-                    value={formData.workSchedule.workingDaysPerWeek}
-                    onChange={(e) => handleWorkScheduleChange('workingDaysPerWeek', parseInt(e.target.value))}
-                    required
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Working Hours Per Week (Auto-calculated)</label>
-                  <input
-                    type="number"
-                    min="1"
-                    max="168"
-                    value={formData.workSchedule.workingHoursPerWeek}
-                    readOnly
-                    disabled
-                    style={{ background: '#f3f4f6', cursor: 'not-allowed' }}
-                  />
-                  <small>Automatically calculated from check-in/out times and working days</small>
-                </div>
-              </div>
-
-              {/* Only show Weekly Offs and Day-Specific Schedules if no department shifts are configured */}
-              {(!formData.departmentShifts || formData.departmentShifts.length === 0) && (
+              {/* Only show Work Schedule, Weekly Offs and Day-Specific Schedules if no department shifts are configured */}
+              {(!formData.shifts || formData.shifts.length === 0) && (
                 <>
+                  <h3 className="section-title">Work Schedule</h3>
+                  <div className="form-grid">
+                    <div className="form-group">
+                      <label>Check-in Time *</label>
+                      <input
+                        type="time"
+                        value={formData.workSchedule.checkInTime}
+                        onChange={(e) => handleWorkScheduleChange('checkInTime', e.target.value)}
+                        required
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label>Check-out Time *</label>
+                      <input
+                        type="time"
+                        value={formData.workSchedule.checkOutTime}
+                        onChange={(e) => handleWorkScheduleChange('checkOutTime', e.target.value)}
+                        required
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label>Working Days Per Week *</label>
+                      <input
+                        type="number"
+                        min="1"
+                        max="7"
+                        value={formData.workSchedule.workingDaysPerWeek}
+                        onChange={(e) => handleWorkScheduleChange('workingDaysPerWeek', parseInt(e.target.value))}
+                        required
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label>Working Hours Per Week (Auto-calculated)</label>
+                      <input
+                        type="number"
+                        min="1"
+                        max="168"
+                        value={formData.workSchedule.workingHoursPerWeek}
+                        readOnly
+                        disabled
+                        style={{ background: '#f3f4f6', cursor: 'not-allowed' }}
+                      />
+                      <small>Automatically calculated from check-in/out times and working days</small>
+                    </div>
+                  </div>
+              
                   <div className="form-group" style={{padding: '0 29px'}}>
                     <label >Weekly Offs *</label>
                     <div className="weekdays-grid">
@@ -2150,7 +2471,7 @@ const Employees = () => {
               )}
 
               {/* Info message when department shifts are configured */}
-              {formData.departmentShifts && formData.departmentShifts.length > 0 && (
+              {formData.shifts && formData.shifts.length > 0 && (
                 <div className="form-group" style={{padding: '0 29px'}}>
                   <div style={{
                     background: '#f0f9ff',
@@ -2167,7 +2488,7 @@ const Employees = () => {
                         Multi-Department Schedule Active
                       </strong>
                       <span style={{fontSize: '13px', color: '#0c4a6e'}}>
-                        Working days and schedules are managed within each Department Shift configuration above.
+                        Position, salary, leave policies, working days, and schedules are managed within each Department Shift configuration above.
                       </span>
                     </div>
                   </div>

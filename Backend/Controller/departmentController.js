@@ -627,22 +627,22 @@ export const getDepartmentEmployees = async (req, res) => {
   try {
     const departmentId = req.params.id;
     
-    // Find employees where this dept is primary or additional
+    // Find employees who have a shift in this department
     const employees = await Employee.find({
-      $or: [
-        { department: departmentId },
-        { additionalDepartments: departmentId }
-      ],
+      'shifts.department': departmentId,
       isActive: true,
     })
       .populate("department", "name code")
+      .populate("shifts.department", "name code")
       .populate("role", "name")
-      .select("name employeeId email position phone department role isTeamLead leadingDepartments");
+      .select("name employeeId email phone department shifts role isTeamLead leadingDepartments");
 
-    // Mark which ones are primary vs additional
+    // Mark which ones have this as primary vs additional
     const enrichedEmployees = employees.map(emp => {
       const empObj = emp.toObject();
-      empObj.isPrimaryDepartment = emp.department?._id?.toString() === departmentId;
+      const shift = emp.shifts?.find(s => s.department?._id?.toString() === departmentId || s.department?.toString() === departmentId);
+      empObj.isPrimaryDepartment = shift?.isPrimary || false;
+      empObj.position = shift?.position || emp.position;
       empObj.isLeadingThisDept = emp.leadingDepartments?.some(d => d?.toString() === departmentId);
       return empObj;
     });

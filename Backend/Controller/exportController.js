@@ -73,41 +73,43 @@ export const exportEmployees = async (req, res) => {
   try {
     const { department, isActive = "true", format = 'xlsx', fields } = req.query;
     const filter = { isActive: isActive === "true" };
-    if (department) filter.department = department;
+    if (department) filter['shifts.department'] = department;
 
     const employees = await Employee.find(filter)
       .populate("department", "name")
       .populate("role", "name")
-      .populate("additionalDepartments", "name")
+      .populate("shifts.department", "name")
       .populate("leadingDepartments", "name")
-      .populate("workSchedule")
       .sort({ name: 1 });
 
     // Parse selected fields, default to all if not provided
     let selectedFields = fields ? fields.split(',') : [
       'employeeId', 'name', 'email', 'phone', 'cnic', 'department', 
-      'additionalDepts', 'leadingDepts', 'role', 'position', 'workSchedule', 'joinDate', 'salary', 'status'
+      'shifts', 'leadingDepts', 'role', 'position', 'workSchedule', 'joinDate', 'salary', 'status'
     ];
 
     // Prepare data rows with all possible data
-    const fullDataRows = employees.map((emp) => ({
-      employeeId: emp.employeeId,
-      name: emp.name,
-      email: emp.email || "",
-      phone: emp.phone || "",
-      cnic: emp.cnic || "",
-      department: emp.department?.name || "N/A",
-      additionalDepts: emp.additionalDepartments?.map((d) => d.name).join(", ") || "",
-      leadingDepts: emp.leadingDepartments?.map((d) => d.name).join(", ") || "",
-      role: emp.role?.name || "N/A",
-      position: emp.position || "",
-      workSchedule: emp.workSchedule 
-        ? `${convertTo12HourFormat(emp.workSchedule.checkInTime)} - ${convertTo12HourFormat(emp.workSchedule.checkOutTime)}`
-        : "N/A",
-      joinDate: emp.joiningDate ? new Date(emp.joiningDate).toLocaleDateString() : "",
-      salary: emp.salary?.monthlySalary || 0,
-      status: emp.isActive ? "Active" : "Inactive",
-    }));
+    const fullDataRows = employees.map((emp) => {
+      const primaryShift = emp.shifts?.find(s => s.isPrimary) || emp.shifts?.[0];
+      return {
+        employeeId: emp.employeeId,
+        name: emp.name,
+        email: emp.email || "",
+        phone: emp.phone || "",
+        cnic: emp.cnic || "",
+        department: emp.department?.name || "N/A",
+        shifts: emp.shifts?.map(s => s.department?.name || "N/A").join(", ") || "",
+        leadingDepts: emp.leadingDepartments?.map((d) => d.name).join(", ") || "",
+        role: emp.role?.name || "N/A",
+        position: primaryShift?.position || emp.position || "",
+        workSchedule: primaryShift?.workSchedule 
+          ? `${convertTo12HourFormat(primaryShift.workSchedule.checkInTime)} - ${convertTo12HourFormat(primaryShift.workSchedule.checkOutTime)}`
+          : "N/A",
+        joinDate: primaryShift?.joiningDate ? new Date(primaryShift.joiningDate).toLocaleDateString() : "",
+        salary: primaryShift?.monthlySalary || 0,
+        status: emp.isActive ? "Active" : "Inactive",
+      };
+    });
 
     // Filter to only selected fields
     const dataRows = fullDataRows.map(row => {

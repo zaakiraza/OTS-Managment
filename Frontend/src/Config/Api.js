@@ -103,8 +103,8 @@ export const employeeAPI = {
   create: (data) => api.post("/employees", data),
   update: (id, data) => api.put(`/employees/${id}`, data),
   delete: (id) => api.delete(`/employees/${id}`),
-  getDepartmentShifts: (id) => api.get(`/employees/${id}/shifts`),
-  updateDepartmentShifts: (id, data) => api.put(`/employees/${id}/shifts`, data),
+  getShifts: (id) => api.get(`/employees/${id}/shifts`),
+  updateShifts: (id, data) => api.put(`/employees/${id}/shifts`, data),
   downloadTemplate: () => api.get("/employees/template/download", { responseType: "blob" }),
   importEmployees: (formData) => api.post("/employees/import", formData, {
     headers: {

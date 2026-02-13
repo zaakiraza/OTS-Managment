@@ -12,18 +12,19 @@ function Tasks() {
   const [employees, setEmployees] = useState([]);
   const [departments, setDepartments] = useState([]);
   const [filteredEmployees, setFilteredEmployees] = useState([]);
-  const [stats, setStats] = useState({});
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [selectedTask, setSelectedTask] = useState(null);
   const [newComment, setNewComment] = useState("");
   const [filter, setFilter] = useState({
-    department: "",
+    status: "all", // 'all', 'overdue', 'todo', 'in-progress', 'completed'
+    dateRange: "week", // 'week', 'month', 'range', 'all'
+    customStart: "",
+    customEnd: "",
     priority: "",
+    department: "",
     employee: "",
-    dateRange: "active", // 'active', 'today', 'week', 'month', 'all'
-    groupBy: "status", // 'status', 'week', 'month'
   });
   const [formData, setFormData] = useState({
     title: "",
@@ -52,14 +53,28 @@ function Tasks() {
 
   const priorities = ["Low", "Medium", "High", "Critical"];
 
+  const employeeFilterOptions = filter.department
+    ? employees.filter((emp) => {
+        const empDeptId = emp.department?._id || emp.department;
+        return String(empDeptId) === String(filter.department);
+      })
+    : employees;
+
   useEffect(() => {
     if (canViewTasks) {
       fetchTasks();
-      fetchStats();
       fetchEmployees();
       fetchDepartments();
     }
   }, [filter]);
+
+  useEffect(() => {
+    if (!filter.employee) return;
+    const isStillValid = employeeFilterOptions.some((emp) => String(emp._id) === String(filter.employee));
+    if (!isStillValid) {
+      setFilter((prev) => ({ ...prev, employee: "" }));
+    }
+  }, [filter.department, employees]);
 
   // Update filtered employees when department changes or employees are loaded
   useEffect(() => {
@@ -95,20 +110,6 @@ function Tasks() {
     }
   };
 
-  const fetchStats = async () => {
-    try {
-      const params = {};
-      if (filter.department) params.department = filter.department;
-      
-      const response = await taskAPI.getStats(params);
-      if (response.data.success) {
-        setStats(response.data.data);
-      }
-    } catch (error) {
-      console.error("Error fetching stats:", error);
-    }
-  };
-
   const fetchEmployees = async () => {
     try {
       const params = { isActive: true };
@@ -124,7 +125,7 @@ function Tasks() {
           // Include employees from departments they lead
           empList = empList.filter(emp => 
             leadingDeptIds.includes(emp.department?._id) ||
-            emp.additionalDepartments?.some(d => leadingDeptIds.includes(d._id || d))
+            emp.shifts?.some(s => leadingDeptIds.includes(s.department?._id || s.department))
           );
         }
         
@@ -218,7 +219,6 @@ function Tasks() {
       }
       resetForm();
       fetchTasks();
-      fetchStats();
     } catch (error) {
       console.error("Error submitting task:", error);
       toast.error(error.response?.data?.message || "Failed to submit task");
@@ -270,7 +270,6 @@ function Tasks() {
       await taskAPI.delete(id);
       toast.success("Task deleted successfully!");
       fetchTasks();
-      fetchStats();
     } catch (error) {
       console.error("Error deleting task:", error);
       toast.error(error.response?.data?.message || "Failed to delete task");
@@ -299,7 +298,6 @@ function Tasks() {
       if (response.data.success) {
         setSelectedTask(response.data.data);
         fetchTasks();
-        fetchStats();
         toast.success(`Task status updated to "${newStatus.replace("-", " ")}"`);
       }
     } catch (error) {
@@ -354,25 +352,41 @@ function Tasks() {
 
   const filterTasksByDateRange = (tasksToFilter) => {
     return tasksToFilter.filter((task) => {
-      // Always exclude completed tasks unless viewing 'all'
-      if (task.status === "completed" && filter.dateRange !== "all") {
-        return false;
+      const dateStatus = getTaskDateStatus(task);
+      const hasDueDate = Boolean(dateStatus);
+
+      const isTaskOverdue = hasDueDate
+        ? dateStatus.dueDate < dateStatus.today && task.status !== "completed"
+        : false;
+
+      if (filter.status !== "all") {
+        if (filter.status === "overdue") {
+          if (!isTaskOverdue) return false;
+        } else if (task.status !== filter.status) {
+          return false;
+        }
       }
 
-      const dateStatus = getTaskDateStatus(task);
-      if (!dateStatus) return true; // No due date, show it
+      if (!hasDueDate) return true; // No due date, show it
 
       const { today, dueDate, weekStart, weekEnd, monthStart, monthEnd } = dateStatus;
 
       switch (filter.dateRange) {
-        case "active": // Not completed and not overdue
-          return dueDate >= today;
-        case "today":
-          return dueDate.getTime() === today.getTime();
         case "week":
           return dueDate >= weekStart && dueDate <= weekEnd;
         case "month":
           return dueDate >= monthStart && dueDate <= monthEnd;
+        case "range": {
+          const start = filter.customStart ? new Date(filter.customStart) : null;
+          const end = filter.customEnd ? new Date(filter.customEnd) : null;
+          if (start) start.setHours(0, 0, 0, 0);
+          if (end) end.setHours(23, 59, 59, 999);
+
+          if (start && end) return dueDate >= start && dueDate <= end;
+          if (start) return dueDate >= start;
+          if (end) return dueDate <= end;
+          return true;
+        }
         case "all":
           return true;
         default:
@@ -381,52 +395,28 @@ function Tasks() {
     });
   };
 
-  const getWeekLabel = (date) => {
-    const d = new Date(date);
-    const weekStart = new Date(d);
-    weekStart.setDate(d.getDate() - d.getDay());
-    const weekEnd = new Date(weekStart);
-    weekEnd.setDate(weekStart.getDate() + 6);
-    return `${weekStart.toLocaleDateString()} - ${weekEnd.toLocaleDateString()}`;
-  };
-
-  const getMonthLabel = (date) => {
-    const d = new Date(date);
-    return d.toLocaleDateString("en-US", { month: "long", year: "numeric" });
-  };
-
-  const groupTasksByWeek = (tasksToGroup) => {
-    const grouped = {};
-    tasksToGroup.forEach((task) => {
-      if (!task.dueDate) {
-        if (!grouped["No Due Date"]) grouped["No Due Date"] = [];
-        grouped["No Due Date"].push(task);
-      } else {
-        const label = getWeekLabel(task.dueDate);
-        if (!grouped[label]) grouped[label] = [];
-        grouped[label].push(task);
-      }
-    });
-    return grouped;
-  };
-
-  const groupTasksByMonth = (tasksToGroup) => {
-    const grouped = {};
-    tasksToGroup.forEach((task) => {
-      if (!task.dueDate) {
-        if (!grouped["No Due Date"]) grouped["No Due Date"] = [];
-        grouped["No Due Date"].push(task);
-      } else {
-        const label = getMonthLabel(task.dueDate);
-        if (!grouped[label]) grouped[label] = [];
-        grouped[label].push(task);
-      }
-    });
-    return grouped;
-  };
 
   const isOverdue = (dueDate) => {
     return new Date(dueDate) < new Date() && selectedTask?.status !== "completed";
+  };
+
+  const isTaskOverdue = (task) => {
+    if (!task?.dueDate) return false;
+    return new Date(task.dueDate) < new Date() && task.status !== "completed";
+  };
+
+  const getStatsFromTasks = (taskList) => {
+    return taskList.reduce(
+      (acc, task) => {
+        acc.total += 1;
+        if (task.status === "todo") acc.todo += 1;
+        if (task.status === "in-progress") acc.inProgress += 1;
+        if (task.status === "completed") acc.completed += 1;
+        if (isTaskOverdue(task)) acc.overdue += 1;
+        return acc;
+      },
+      { total: 0, todo: 0, inProgress: 0, completed: 0, overdue: 0 }
+    );
   };
 
   // Helper to render multiple assignees
@@ -504,20 +494,13 @@ function Tasks() {
   };
 
   const filteredTasksList = filterTasksByDateRange(tasks);
+  const displayStats = getStatsFromTasks(filteredTasksList);
   
-  let groupedTasks = {};
-  if (filter.groupBy === "week") {
-    groupedTasks = groupTasksByWeek(filteredTasksList);
-  } else if (filter.groupBy === "month") {
-    groupedTasks = groupTasksByMonth(filteredTasksList);
-  } else {
-    // Default: group by status
-    groupedTasks = {
-      todo: filteredTasksList.filter((t) => t.status === "todo"),
-      "in-progress": filteredTasksList.filter((t) => t.status === "in-progress"),
-      completed: filteredTasksList.filter((t) => t.status === "completed"),
-    };
-  }
+  const groupedTasks = {
+    todo: filteredTasksList.filter((t) => t.status === "todo"),
+    "in-progress": filteredTasksList.filter((t) => t.status === "in-progress"),
+    completed: filteredTasksList.filter((t) => t.status === "completed"),
+  };
 
   return (
     <div className="dashboard-layout">
@@ -582,30 +565,30 @@ function Tasks() {
               <div className="stats-container">
                 <div className="stat-card">
                   <h3>Total Tasks</h3>
-                  <div className="value">{stats.total || 0}</div>
+                  <div className="value">{displayStats.total}</div>
                 </div>
                 <div className="stat-card">
                   <h3>To Do</h3>
                   <div className="value" style={{ color: "#94a3b8" }}>
-                    {stats.todo || 0}
+                    {displayStats.todo}
                   </div>
                 </div>
                 <div className="stat-card">
                   <h3>In Progress</h3>
                   <div className="value" style={{ color: "#f59e0b" }}>
-                    {stats.inProgress || 0}
+                    {displayStats.inProgress}
                   </div>
                 </div>
                 <div className="stat-card">
                   <h3>Completed</h3>
                   <div className="value" style={{ color: "#10b981" }}>
-                    {stats.completed || 0}
+                    {displayStats.completed}
                   </div>
                 </div>
                 <div className="stat-card">
                   <h3>Overdue</h3>
                   <div className="value" style={{ color: "#ef4444" }}>
-                    {stats.overdue || 0}
+                    {displayStats.overdue}
                   </div>
                 </div>
               </div>
@@ -613,27 +596,62 @@ function Tasks() {
               {/* Filters */}
               <div className="filters">
                 <div className="filter-group">
-                  <label>Date Range</label>
+                  <label>Status</label>
+                  <select
+                    value={filter.status}
+                    onChange={(e) => setFilter({ ...filter, status: e.target.value })}
+                  >
+                    <option value="all">All</option>
+                    <option value="overdue">Overdue</option>
+                    <option value="todo">To Do</option>
+                    <option value="in-progress">In Progress</option>
+                    <option value="completed">Completed</option>
+                  </select>
+                </div>
+                <div className="filter-group">
+                  <label>Time Range</label>
                   <select
                     value={filter.dateRange}
                     onChange={(e) => setFilter({ ...filter, dateRange: e.target.value })}
                   >
-                    <option value="active">Active (Not Completed & Not Overdue)</option>
-                    <option value="today">Today</option>
                     <option value="week">This Week</option>
                     <option value="month">This Month</option>
+                    <option value="range">Custom Range</option>
                     <option value="all">All Tasks</option>
                   </select>
                 </div>
+                {filter.dateRange === "range" && (
+                  <>
+                    <div className="filter-group">
+                      <label>Start Date</label>
+                      <input
+                        type="date"
+                        value={filter.customStart}
+                        onChange={(e) => setFilter({ ...filter, customStart: e.target.value })}
+                      />
+                    </div>
+                    <div className="filter-group">
+                      <label>End Date</label>
+                      <input
+                        type="date"
+                        value={filter.customEnd}
+                        onChange={(e) => setFilter({ ...filter, customEnd: e.target.value })}
+                      />
+                    </div>
+                  </>
+                )}
                 <div className="filter-group">
-                  <label>Group By</label>
+                  <label>Priority</label>
                   <select
-                    value={filter.groupBy}
-                    onChange={(e) => setFilter({ ...filter, groupBy: e.target.value })}
+                    value={filter.priority}
+                    onChange={(e) => setFilter({ ...filter, priority: e.target.value })}
                   >
-                    <option value="status">By Status (To Do, In Progress, Completed)</option>
-                    <option value="week">By Week</option>
-                    <option value="month">By Month</option>
+                    <option value="">All Priorities</option>
+                    {priorities.map((priority) => (
+                      <option key={priority} value={priority}>
+                        {priority}
+                      </option>
+                    ))}
                   </select>
                 </div>
                 <div className="filter-group">
@@ -651,27 +669,13 @@ function Tasks() {
                   </select>
                 </div>
                 <div className="filter-group">
-                  <label>Priority</label>
-                  <select
-                    value={filter.priority}
-                    onChange={(e) => setFilter({ ...filter, priority: e.target.value })}
-                  >
-                    <option value="">All Priorities</option>
-                    {priorities.map((priority) => (
-                      <option key={priority} value={priority}>
-                        {priority}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="filter-group">
                   <label>Employee</label>
                   <select
                     value={filter.employee}
                     onChange={(e) => setFilter({ ...filter, employee: e.target.value })}
                   >
                     <option value="">All Employees</option>
-                    {employees.map((emp) => (
+                    {employeeFilterOptions.map((emp) => (
                       <option key={emp._id} value={emp._id}>
                         {emp.name} - {emp.employeeId}
                       </option>
@@ -683,25 +687,16 @@ function Tasks() {
               {/* Kanban Board */}
               <div className="kanban-board">
                 {Object.entries(groupedTasks).map(([columnName, columnTasks]) => {
-                  // Determine column icon and styling based on groupBy type
                   let columnIcon = "fas fa-list";
                   let columnColor = "#94a3b8";
-                  
-                  if (filter.groupBy === "status") {
-                    if (columnName === "todo") columnIcon = "fas fa-list";
-                    else if (columnName === "in-progress") {
-                      columnIcon = "fas fa-spinner";
-                      columnColor = "#f59e0b";
-                    } else if (columnName === "completed") {
-                      columnIcon = "fas fa-check-circle";
-                      columnColor = "#10b981";
-                    }
-                  } else if (filter.groupBy === "week") {
-                    columnIcon = "fas fa-calendar-week";
-                    columnColor = "#8b5cf6";
-                  } else if (filter.groupBy === "month") {
-                    columnIcon = "fas fa-calendar";
-                    columnColor = "#06b6d4";
+
+                  if (columnName === "todo") columnIcon = "fas fa-list";
+                  else if (columnName === "in-progress") {
+                    columnIcon = "fas fa-spinner";
+                    columnColor = "#f59e0b";
+                  } else if (columnName === "completed") {
+                    columnIcon = "fas fa-check-circle";
+                    columnColor = "#10b981";
                   }
 
                   // Format column title
@@ -723,7 +718,7 @@ function Tasks() {
                         columnTasks.map((task) => (
                           <div
                             key={task._id}
-                            className={`task-card priority-${task.priority.toLowerCase()}`}
+                            className={`task-card priority-${task.priority.toLowerCase()}${isTaskOverdue(task) ? " overdue" : ""}`}
                             onClick={() => handleViewTask(task)}
                           >
                             <div className="task-header">
@@ -1000,11 +995,24 @@ function Tasks() {
 
                   {/* Task Meta Grid */}
                   <div className="task-meta-grid">
-                    <div className="meta-card">
+                    <div className="meta-card assignees-card">
                       <div className="meta-icon"><i className="fas fa-user"></i></div>
                       <div className="meta-content">
                         <span className="meta-label">Assigned To</span>
-                        <span className="meta-value">{renderAssignees(selectedTask.assignedTo, true)}</span>
+                        {(() => {
+                          const assignees = Array.isArray(selectedTask.assignedTo) ? selectedTask.assignedTo : [selectedTask.assignedTo];
+                          return (
+                            <div className="assignees-list">
+                              {assignees.map((emp, idx) => (
+                                <div key={idx} className="assignee-item">
+                                  <i className="fas fa-user-circle"></i>
+                                  <span className="assignee-name">{emp?.name || 'Unknown'}</span>
+                                  <span className="assignee-id">{emp?.employeeId || ''}</span>
+                                </div>
+                              ))}
+                            </div>
+                          );
+                        })()}
                       </div>
                     </div>
                     <div className="meta-card">

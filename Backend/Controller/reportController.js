@@ -92,7 +92,10 @@ export const generateAttendanceReport = async (req, res) => {
     // Department filter - apply first if no specific employee selected
     if (departmentId && !employeeId) {
       const employees = await Employee.find({
-        department: departmentId,
+        $or: [
+          { department: departmentId },
+          { "shifts.department": departmentId }
+        ],
         isActive: true,
       });
       const employeeIds = employees.map((emp) => emp._id);
@@ -533,10 +536,13 @@ export const getMonthlyAttendanceSummary = async (req, res) => {
       date: { $gte: startOfMonth, $lte: endOfMonth },
     };
 
-    // Department filter
+    // Department filter (includes employees with shifts in this department)
     if (departmentId) {
       const employees = await Employee.find({
-        department: departmentId,
+        $or: [
+          { department: departmentId },
+          { "shifts.department": departmentId }
+        ],
         isActive: true,
       });
       const employeeIds = employees.map((emp) => emp._id);
@@ -653,7 +659,10 @@ export const exportAttendanceData = async (req, res) => {
 
     if (departmentId) {
       const employees = await Employee.find({
-        department: departmentId,
+        $or: [
+          { department: departmentId },
+          { "shifts.department": departmentId }
+        ],
         isActive: true,
       });
       const employeeIds = employees.map((emp) => emp._id);

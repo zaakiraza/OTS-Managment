@@ -3,9 +3,11 @@ import AttendanceLog from '../Model/AttendanceLog.js';
 import Employee from '../Model/Employee.js';
 import Attendance from '../Model/Attendance.js';
 import Role from '../Model/Role.js';
+import Settings from '../Model/Settings.js';
 import logger from './logger.js';
 import { DEVICE, TIME } from '../Config/constants.js';
 import { parseDeviceTimestamp, getDateAtMidnightUTC } from './timezone.js';
+import { splitAttendanceByDepartments, hasMultipleShifts } from './attendanceSplitter.js';
 
 // Device configuration
 const DEVICE_IP = process.env.DEVICE_IP || DEVICE.DEFAULT_IP;
@@ -16,7 +18,34 @@ let isPolling = false;
 let firstLogShapePrinted = false;
 let lastProcessedSN = 0; // Track last serial number processed
 let pollingInterval = null;
-let isInitialized = false; // Track if we've initialized the lastProcessedSN
+let isInitialized = false; // Track if we've loaded lastProcessedSN from DB
+
+/**
+ * Load last processed SN from database
+ */
+async function loadLastProcessedSN() {
+  try {
+    const savedSN = await Settings.getValue('lastProcessedAttendanceSN', 0);
+    lastProcessedSN = Number(savedSN) || 0;
+    logger.info(`Loaded last processed attendance SN from database: ${lastProcessedSN}`);
+    return lastProcessedSN;
+  } catch (error) {
+    logger.error(`Failed to load last processed SN: ${error.message}`);
+    return 0;
+  }
+}
+
+/**
+ * Save last processed SN to database
+ */
+async function saveLastProcessedSN(sn) {
+  try {
+    await Settings.setValue('lastProcessedAttendanceSN', sn);
+    logger.debug(`Saved last processed attendance SN to database: ${sn}`);
+  } catch (error) {
+    logger.error(`Failed to save last processed SN: ${error.message}`);
+  }
+}
 
 /**
  * Create a fresh device instance to avoid socket reuse issues
@@ -102,10 +131,15 @@ async function processAttendanceLog(doc) {
     
     if (!attendance) {
       // First punch of the day - create new record with check-in
+      // Get department from primary shift or default
+      const primaryShift = employee.shifts?.find(s => s.isPrimary) || employee.shifts?.[0];
+      const deptId = primaryShift?.department || employee.department;
+      
       attendance = await Attendance.create({
         employee: employee._id,
         userId: employee.employeeId,
         date: dateOnly,
+        department: deptId,
         checkIn: punchTime,
         checkOut: null,
         deviceId: doc.deviceIp,
@@ -136,6 +170,30 @@ async function processAttendanceLog(doc) {
       await attendance.save();
       punchType = 'CHECK-OUT';
       logger.debug(`${employee.name} (${employee.employeeId}) - ${punchType}`);
+      
+      // Check if employee has multiple shifts and split attendance if needed
+      const hasShifts = await hasMultipleShifts(employee._id);
+      if (hasShifts) {
+        logger.info(`Multi-shift employee detected: ${employee.employeeId}, splitting attendance`);
+        
+        // Prepare attendance data for splitting
+        const attendanceData = {
+          employee: employee._id,
+          userId: employee.employeeId,
+          date: dateOnly,
+          checkIn: attendance.checkIn,
+          checkOut: attendance.checkOut,
+          deviceId: doc.deviceIp,
+          isManualEntry: false,
+        };
+        
+        // Delete the single attendance record
+        await Attendance.deleteOne({ _id: attendance._id });
+        
+        // Create split records across departments
+        const splitRecords = await splitAttendanceByDepartments(attendanceData);
+        logger.info(`Attendance split into ${splitRecords.length} department records for ${employee.employeeId}`);
+      }
     } else {
       // Already checked in and out today - ignore additional punches
       logger.debug(`${employee.name} (${employee.employeeId}) - Skipped (already complete)`);
@@ -183,51 +241,16 @@ async function pollDeviceOnce() {
     
     logger.debug(`Total logs on device: ${logs.length}`);
 
-    // On first poll, process ALL existing logs (one-time fetch)
-    if (!isInitialized && logs.length > 0) {
+    // On first poll after server restart, initialize from DB
+    if (!isInitialized) {
+      await loadLastProcessedSN();
       isInitialized = true;
-      logger.info(`Processing ${logs.length} existing logs from device (one-time fetch)...`);
       
-      let inserted = 0;
-      let skipped = 0;
-      
-      for (const rawLog of logs) {
-        const doc = mapZkLogToDoc(rawLog);
-        if (!doc) {
-          skipped++;
-          continue;
-        }
-
-        try {
-          // Save to AttendanceLog (raw device data)
-          await AttendanceLog.updateOne(
-            {
-              userId: doc.userId,
-              datetime: doc.datetime,
-              deviceIp: doc.deviceIp,
-            },
-            { $setOnInsert: doc },
-            { upsert: true }
-          );
-          inserted++;
-          
-          // Update last processed SN
-          if (rawLog.sn > lastProcessedSN) {
-            lastProcessedSN = rawLog.sn;
-          }
-          
-          // Process into Attendance record (only if employee exists)
-          await processAttendanceLog(doc);
-        } catch (err) {
-          skipped++;
-        }
+      if (lastProcessedSN > 0) {
+        logger.info(`Resuming from last processed SN: ${lastProcessedSN}`);
+      } else {
+        logger.info(`No saved SN found. Processing ${logs.length} existing logs from device (one-time fetch)...`);
       }
-      
-      logger.info(`Initial fetch complete. Processed: ${inserted}, Skipped: ${skipped}`);
-      logger.info(`Starting from SN: ${lastProcessedSN} - monitoring for new punches`);
-      await device.disconnect();
-      isPolling = false;
-      return;
     }
 
     // Filter to only NEW logs (sn > lastProcessedSN)
@@ -280,6 +303,8 @@ async function pollDeviceOnce() {
 
     if (newLogs.length > 0) {
       logger.debug(`Processed logs. Inserted: ${inserted}, Skipped (existing/invalid): ${skipped}, Last SN: ${lastProcessedSN}`);
+      // Persist the last processed SN to database
+      await saveLastProcessedSN(lastProcessedSN);
     }
 
     await device.disconnect();

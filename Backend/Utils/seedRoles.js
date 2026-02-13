@@ -89,15 +89,24 @@ const seedRoles = async () => {
       password: "12345678",
       role: superAdminRole._id,
       department: adminDept._id,
-      position: "System Administrator",
       isTeamLead: true,
-      workSchedule: {
-        checkInTime: "09:00",
-        checkOutTime: "17:00",
-        workingDaysPerWeek: 5,
-        workingHoursPerWeek: 40,
-        weeklyOffs: ["Saturday", "Sunday"],
-      },
+      shifts: [{
+        department: adminDept._id,
+        isPrimary: true,
+        position: "System Administrator",
+        monthlySalary: null,
+        currency: "PKR",
+        leaveThreshold: 0,
+        joiningDate: new Date(),
+        workSchedule: {
+          checkInTime: "09:00",
+          checkOutTime: "17:00",
+          workingDaysPerWeek: 5,
+          workingHoursPerWeek: 40,
+          weeklyOffs: ["Saturday", "Sunday"],
+        },
+        isActive: true,
+      }],
     });
 
     // Update the department's createdBy to the new admin

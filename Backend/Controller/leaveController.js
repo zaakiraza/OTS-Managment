@@ -16,7 +16,7 @@ const getRoleIdsByName = async (names) => {
 // Apply for leave
 export const applyLeave = async (req, res) => {
   try {
-    const { startDate, endDate, leaveType, reason } = req.body;
+    const { startDate, endDate, leaveType, reason, department: requestedDepartment } = req.body;
     const employeeId = req.user._id;
 
     // Validate dates
@@ -89,8 +89,19 @@ export const applyLeave = async (req, res) => {
       }
     }
 
+    // Determine department for this leave
+    const emp = await Employee.findById(employeeId).select("department shifts");
+    let leaveDepartment = requestedDepartment || null;
+    if (!leaveDepartment && emp) {
+      // If employee specified a department in the request, use it
+      // Otherwise fall back to primary shift or employee.department
+      const primaryShift = emp.shifts?.find(s => s.isPrimary);
+      leaveDepartment = primaryShift?.department || emp.department || null;
+    }
+
     const leave = await Leave.create({
       employee: employeeId,
+      department: leaveDepartment,
       startDate: start,
       endDate: end,
       leaveType,
@@ -128,11 +139,24 @@ export const applyLeave = async (req, res) => {
       recipientsSet.add(employee.createdBy.toString());
     }
 
-    // Add team leads who are leading this employee's department
+    // Add team leads who are leading any of this employee's departments (multi-dept support)
+    const empDeptIds = [];
     if (employee?.department) {
+      empDeptIds.push(employee.department._id || employee.department);
+    }
+    const fullEmployee = await Employee.findById(employeeId).select("shifts");
+    if (fullEmployee?.shifts?.length > 0) {
+      for (const s of fullEmployee.shifts) {
+        const dId = s.department?._id || s.department;
+        if (dId && !empDeptIds.some(id => String(id) === String(dId))) {
+          empDeptIds.push(dId);
+        }
+      }
+    }
+    if (empDeptIds.length > 0) {
       const teamLeads = await Employee.find({
         isActive: true,
-        leadingDepartments: employee.department._id,
+        leadingDepartments: { $in: empDeptIds },
         role: { $in: await getRoleIdsByName(["teamLead"]) },
       }).select("_id");
       
@@ -282,6 +306,7 @@ export const updateLeaveStatus = async (req, res) => {
     const { id } = req.params;
     const { status, rejectionReason } = req.body;
     const approverId = req.user._id;
+    const approverRole = req.user?.role?.name || req.user?.role;
 
     if (!["approved", "rejected"].includes(status)) {
       return res.status(400).json({
@@ -323,6 +348,10 @@ export const updateLeaveStatus = async (req, res) => {
 
       // Get employee's details including userId and weekly offs
       const employeeDetails = await Employee.findById(leave.employee._id).select("employeeId workSchedule");
+      const employeeDeptInfo = await Employee.findById(leave.employee._id).select("department shifts");
+      const primaryShift = employeeDeptInfo?.shifts?.find((s) => s.isPrimary);
+      const leaveDepartmentId =
+        leave.department || primaryShift?.department || employeeDeptInfo?.department || null;
       const weeklyOffs = employeeDetails?.workSchedule?.weeklyOffs || ["Saturday", "Sunday"];
       const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
@@ -350,12 +379,23 @@ export const updateLeaveStatus = async (req, res) => {
           // Update existing record
           existingAttendance.status = "leave";
           existingAttendance.remarks = `Approved leave: ${leave.leaveType}`;
+          if (!existingAttendance.department && leaveDepartmentId) {
+            existingAttendance.department = leaveDepartmentId;
+          }
           await existingAttendance.save();
         } else {
+          if (!leaveDepartmentId) {
+            console.warn(
+              "[Leave Approval] Missing department for attendance record, skipping create:",
+              leave._id
+            );
+            continue;
+          }
           // Create new record with all required fields
           await Attendance.create({
             employee: leave.employee._id,
             userId: employeeDetails.employeeId,
+            department: leaveDepartmentId,
             date: dateOnly,
             status: "leave",
             remarks: `Approved leave: ${leave.leaveType}`,
@@ -390,6 +430,30 @@ export const updateLeaveStatus = async (req, res) => {
       });
     } catch (notifError) {
       console.error("Error creating notification:", notifError);
+    }
+
+    // If a team lead approved, notify the attendance department head who created the employee
+    if (status === "approved" && approverRole === "teamLead") {
+      try {
+        const employeeWithCreator = await Employee.findById(leave.employee._id).select("createdBy");
+        const attendanceHeadId = employeeWithCreator?.createdBy?.toString();
+
+        if (attendanceHeadId && attendanceHeadId !== approverId.toString()) {
+          await createNotification({
+            recipient: attendanceHeadId,
+            type: "leave_approved",
+            title: "Leave Approved by Team Lead",
+            message: `${leave.employee.name} (${leave.employee.employeeId}) leave from ${new Date(leave.startDate).toLocaleDateString()} to ${new Date(leave.endDate).toLocaleDateString()} was approved by their Team Lead.`,
+            data: {
+              referenceId: leave._id,
+              referenceType: "Leave",
+            },
+            sender: approverId,
+          });
+        }
+      } catch (notifError) {
+        console.error("Error notifying attendance department head:", notifError);
+      }
     }
 
     const updatedLeave = await Leave.findById(id)

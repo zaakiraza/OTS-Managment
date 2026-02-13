@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import SideBar from "../../Components/SideBar/SideBar";
-import { attendanceAPI, leaveAPI } from "../../Config/Api";
+import { attendanceAPI, leaveAPI, authAPI } from "../../Config/Api";
 import { useToast } from "../../Components/Common/Toast/Toast";
 import "../Attendance/Attendance.css";
 import "./MyAttendance.css";
@@ -36,6 +36,7 @@ function MyAttendance() {
     leaveType: "sick",
     reason: "",
     isSingleDate: true,
+    department: "",
   });
   const [activeTab, setActiveTab] = useState("attendance");
   const [attachments, setAttachments] = useState([]);
@@ -47,6 +48,9 @@ function MyAttendance() {
   const [selectedAttendance, setSelectedAttendance] = useState(null);
   const [justificationReason, setJustificationReason] = useState("");
   const [submittingJustification, setSubmittingJustification] = useState(false);
+  const [employeeShifts, setEmployeeShifts] = useState([]);
+  const [selectedDepartment, setSelectedDepartment] = useState("all");
+  const hasMultipleShifts = employeeShifts.length > 1;
 
   const user = (() => {
     try {
@@ -60,10 +64,78 @@ function MyAttendance() {
     "July", "August", "September", "October", "November", "December"
   ];
 
+  // Fetch employee shift info on mount
+  useEffect(() => {
+    const fetchShifts = async () => {
+      try {
+        const response = await authAPI.getMe();
+        if (response.data.success && response.data.data?.shifts?.length > 0) {
+          const shifts = response.data.data.shifts;
+          setEmployeeShifts(shifts);
+        }
+      } catch (error) {
+        console.error("Error fetching shift info:", error);
+      }
+    };
+    fetchShifts();
+  }, []);
+
+  // Enrich department names from attendance records (fallback if populate didn't work)
+  useEffect(() => {
+    if (employeeShifts.length > 0 && attendance.length > 0) {
+      // Check if any shift has missing department name
+      const needsEnrichment = employeeShifts.some(s => {
+        const dept = s.department;
+        return !dept?.name && (typeof dept === 'string' || !dept?._id);
+      });
+
+      if (needsEnrichment) {
+        // Build department map from attendance records (which have populated department)
+        const deptMap = new Map();
+        attendance.forEach(record => {
+          if (record.department?._id && record.department?.name) {
+            deptMap.set(String(record.department._id), record.department);
+          }
+        });
+
+        if (deptMap.size > 0) {
+          const enriched = employeeShifts.map(shift => {
+            const deptId = String(shift.department?._id || shift.department);
+            const deptInfo = deptMap.get(deptId);
+            if (deptInfo && !shift.department?.name) {
+              return { ...shift, department: deptInfo };
+            }
+            return shift;
+          });
+          setEmployeeShifts(enriched);
+        }
+      }
+    }
+  }, [attendance]);
+
   useEffect(() => {
     fetchMyAttendance();
     fetchMyLeaves();
   }, [selectedMonth, selectedYear]);
+
+  useEffect(() => {
+    if (!hasMultipleShifts && selectedDepartment !== "all") {
+      setSelectedDepartment("all");
+    }
+  }, [hasMultipleShifts, selectedDepartment]);
+
+  // Recalculate stats when shifts load or department filter changes
+  useEffect(() => {
+    if (attendance.length > 0) {
+      const filtered = selectedDepartment === "all"
+        ? attendance
+        : attendance.filter(r => {
+            const recordDeptId = r.department?._id || r.department;
+            return String(recordDeptId) === String(selectedDepartment);
+          });
+      calculateStats(filtered);
+    }
+  }, [employeeShifts, selectedDepartment]);
 
   const fetchMyAttendance = async () => {
     try {
@@ -79,8 +151,16 @@ function MyAttendance() {
       const response = await attendanceAPI.getAllAttendance(params);
       
       if (response.data.success) {
-        setAttendance(response.data.data);
-        calculateStats(response.data.data);
+        const allRecords = response.data.data;
+        setAttendance(allRecords);
+        // Apply department filter to stats
+        const filtered = selectedDepartment === "all"
+          ? allRecords
+          : allRecords.filter(r => {
+              const recordDeptId = r.department?._id || r.department;
+              return String(recordDeptId) === String(selectedDepartment);
+            });
+        calculateStats(filtered);
       }
     } catch (error) {
       console.error("Error fetching attendance:", error);
@@ -112,6 +192,7 @@ function MyAttendance() {
       leaveType: leave.leaveType,
       reason: leave.reason,
       isSingleDate: isSingleDate,
+      department: leave.department?._id || leave.department || "",
     });
     setExistingAttachments(leave.attachments || []);
     setAttachments([]);
@@ -128,6 +209,7 @@ function MyAttendance() {
       leaveType: "sick",
       reason: "",
       isSingleDate: true,
+      department: "",
     });
     setAttachments([]);
     setCompressedImages([]);
@@ -154,6 +236,7 @@ function MyAttendance() {
         leaveType: leaveForm.leaveType,
         reason: leaveForm.reason,
         totalDays: totalDays,
+        ...(leaveForm.department ? { department: leaveForm.department } : {}),
       };
 
       let response;
@@ -347,16 +430,61 @@ function MyAttendance() {
   };
 
   const calculateStats = (records) => {
-    const stats = {
-      totalDays: records.length,
-      present: records.filter((r) => r.status === "present" || r.status === "early-departure").length,
-      absent: records.filter((r) => r.status === "absent" || r.status === "missing").length,
-      late: records.filter((r) => r.status === "late" || r.status === "late-early-departure").length,
-      halfDay: records.filter((r) => r.status === "half-day").length,
-      onLeave: records.filter((r) => r.status === "leave").length,
-      missing: records.filter((r) => r.status === "missing").length,
-    };
-    setStats(stats);
+    // For shift-based employees, group by date to avoid double-counting
+    // Use the "worst" status per date for overall stats
+    const hasShifts = employeeShifts.length > 0;
+    
+    if (hasShifts) {
+      // Group records by date
+      const dateMap = new Map();
+      records.forEach(r => {
+        const dateStr = new Date(r.date).toLocaleDateString();
+        if (!dateMap.has(dateStr)) {
+          dateMap.set(dateStr, []);
+        }
+        dateMap.get(dateStr).push(r);
+      });
+
+      // For each date, determine overall status (worst status wins)
+      const statusPriority = { absent: 0, missing: 1, late: 2, "late-early-departure": 3, "half-day": 4, "early-departure": 5, present: 6, leave: 7, pending: 8 };
+      
+      let present = 0, absent = 0, late = 0, halfDay = 0, onLeave = 0;
+      
+      dateMap.forEach((dayRecords) => {
+        // Get the worst status for the day
+        const worstStatus = dayRecords.reduce((worst, r) => {
+          const currentPriority = statusPriority[r.status] ?? 99;
+          const worstPriority = statusPriority[worst] ?? 99;
+          return currentPriority < worstPriority ? r.status : worst;
+        }, "present");
+
+        if (worstStatus === "present" || worstStatus === "early-departure") present++;
+        else if (worstStatus === "absent" || worstStatus === "missing") absent++;
+        else if (worstStatus === "late" || worstStatus === "late-early-departure") late++;
+        else if (worstStatus === "half-day") halfDay++;
+        else if (worstStatus === "leave") onLeave++;
+      });
+
+      setStats({
+        totalDays: dateMap.size,
+        present,
+        absent,
+        late,
+        halfDay,
+        onLeave,
+      });
+    } else {
+      const stats = {
+        totalDays: records.length,
+        present: records.filter((r) => r.status === "present" || r.status === "early-departure").length,
+        absent: records.filter((r) => r.status === "absent" || r.status === "missing").length,
+        late: records.filter((r) => r.status === "late" || r.status === "late-early-departure").length,
+        halfDay: records.filter((r) => r.status === "half-day").length,
+        onLeave: records.filter((r) => r.status === "leave").length,
+        missing: records.filter((r) => r.status === "missing").length,
+      };
+      setStats(stats);
+    }
   };
 
   const getStatusColor = (status) => {
@@ -482,6 +610,66 @@ function MyAttendance() {
                 </div>
               </div>
 
+              {/* Department filter for shift-based employees */}
+              {hasMultipleShifts && (
+                <div style={{
+                  marginBottom: '16px',
+                  padding: '12px 16px',
+                  background: '#f0f9ff',
+                  borderRadius: '8px',
+                  border: '1px solid #bae6fd',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px',
+                  flexWrap: 'wrap'
+                }}>
+                  <span style={{ fontSize: '13px', color: '#0369a1', fontWeight: '600' }}>
+                    <i className="fas fa-building" style={{ marginRight: '6px' }}></i>
+                    View by Department:
+                  </span>
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                    <button
+                      onClick={() => setSelectedDepartment("all")}
+                      style={{
+                        padding: '5px 14px',
+                        borderRadius: '20px',
+                        border: selectedDepartment === "all" ? '2px solid #0369a1' : '1px solid #cbd5e1',
+                        background: selectedDepartment === "all" ? '#0369a1' : '#fff',
+                        color: selectedDepartment === "all" ? '#fff' : '#475569',
+                        fontSize: '12px',
+                        fontWeight: '500',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      All Departments
+                    </button>
+                    {employeeShifts.map((shift) => {
+                      const deptId = shift.department?._id || shift.department;
+                      const deptName = shift.department?.name || 'Unknown';
+                      const deptCode = shift.department?.code || '';
+                      return (
+                        <button
+                          key={deptId}
+                          onClick={() => setSelectedDepartment(deptId)}
+                          style={{
+                            padding: '5px 14px',
+                            borderRadius: '20px',
+                            border: selectedDepartment === deptId ? '2px solid #0369a1' : '1px solid #cbd5e1',
+                            background: selectedDepartment === deptId ? '#0369a1' : '#fff',
+                            color: selectedDepartment === deptId ? '#fff' : '#475569',
+                            fontSize: '12px',
+                            fontWeight: '500',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          {deptName} {deptCode && `(${deptCode})`}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               {/* Stats */}
               <div className="stats-grid">
                 <div className="stat-card">
@@ -539,30 +727,43 @@ function MyAttendance() {
                     <tr>
                       <th>Date</th>
                       <th>Day</th>
+                      {employeeShifts.length > 0 && <th>Department</th>}
+                      {employeeShifts.length > 0 && <th>Shift</th>}
                       <th>Status</th>
                       <th>Check In</th>
                       <th>Check Out</th>
                       <th>Work Hours</th>
                       <th>Extra Hours</th>
                       <th>Remarks</th>
-                        <th>Actions</th>
+                      <th>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {loading ? (
-                      <tr>
-                          <td colSpan="9" style={{ textAlign: "center" }}>
-                          Loading...
-                        </td>
-                      </tr>
-                    ) : attendance.length === 0 ? (
-                      <tr>
-                          <td colSpan="9" style={{ textAlign: "center" }}>
-                          No attendance records found for selected period
-                        </td>
-                      </tr>
-                    ) : (
-                      attendance.map((record) => (
+                    {(() => {
+                      const colSpan = employeeShifts.length > 0 ? 11 : 9;
+                      // Filter records by selected department
+                      const filteredRecords = selectedDepartment === "all"
+                        ? attendance
+                        : attendance.filter(r => {
+                            const recordDeptId = r.department?._id || r.department;
+                            return String(recordDeptId) === String(selectedDepartment);
+                          });
+                      
+                      if (loading) return (
+                        <tr>
+                          <td colSpan={colSpan} style={{ textAlign: "center" }}>
+                            Loading...
+                          </td>
+                        </tr>
+                      );
+                      if (filteredRecords.length === 0) return (
+                        <tr>
+                          <td colSpan={colSpan} style={{ textAlign: "center" }}>
+                            No attendance records found for selected period
+                          </td>
+                        </tr>
+                      );
+                      return filteredRecords.map((record) => (
                         <tr key={record._id}>
                           <td>{new Date(record.date).toLocaleDateString()}</td>
                           <td>
@@ -570,6 +771,32 @@ function MyAttendance() {
                               weekday: "short",
                             })}
                           </td>
+                          {employeeShifts.length > 0 && (
+                            <td>
+                              {record.department?.name ? (
+                                <span style={{
+                                  padding: '3px 8px',
+                                  background: '#e0f2fe',
+                                  color: '#0369a1',
+                                  borderRadius: '4px',
+                                  fontSize: '0.8rem',
+                                  fontWeight: '500'
+                                }}>
+                                  {record.department.name}
+                                  {record.department.code && ` (${record.department.code})`}
+                                </span>
+                              ) : (
+                                <span style={{ color: '#9ca3af', fontSize: '0.85rem' }}>—</span>
+                              )}
+                            </td>
+                          )}
+                          {employeeShifts.length > 0 && (
+                            <td style={{ fontSize: '0.85rem', whiteSpace: 'nowrap' }}>
+                              {record.shiftStartTime && record.shiftEndTime
+                                ? `${record.shiftStartTime} - ${record.shiftEndTime}`
+                                : '—'}
+                            </td>
+                          )}
                           <td>
                             <span
                               className="status-badge"
@@ -662,8 +889,8 @@ function MyAttendance() {
                               )}
                             </td>
                         </tr>
-                      ))
-                    )}
+                      ));
+                    })()}
                   </tbody>
                 </table>
               </div>
@@ -845,6 +1072,28 @@ function MyAttendance() {
               </button>
             </div>
             <form onSubmit={handleApplyLeave}>
+              {/* Department selector — shown when employee has multiple shifts */}
+              {employeeShifts.length > 1 && (
+                <div className="form-group">
+                  <label>Apply Leave For Department *</label>
+                  <select
+                    required
+                    value={leaveForm.department}
+                    onChange={(e) => setLeaveForm({ ...leaveForm, department: e.target.value })}
+                  >
+                    <option value="">-- Select Department --</option>
+                    {employeeShifts.map((shift, idx) => {
+                      const deptId = shift.department?._id || shift.department;
+                      const deptName = shift.department?.name || `Department ${idx + 1}`;
+                      return (
+                        <option key={deptId || idx} value={deptId}>
+                          {deptName}{shift.isPrimary ? " (Primary)" : ""}
+                        </option>
+                      );
+                    })}
+                  </select>
+                </div>
+              )}
               <div className="form-group">
                 <label>Date Selection</label>
                 <div className="date-type-selector">

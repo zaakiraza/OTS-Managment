@@ -554,20 +554,22 @@ export const getEmployeeAssets = async (req, res) => {
       .sort({ assignedDate: -1 });
 
     // Transform the data to include asset details with assignment quantity
-    const employeeAssets = assignments.map((assignment) => ({
-      _id: assignment.asset._id,
-      assetId: assignment.asset.assetId,
-      name: assignment.asset.name,
-      category: assignment.asset.category,
-      condition: assignment.asset.condition,
-      status: assignment.asset.status,
-      quantity: assignment.quantity, // Quantity assigned to this employee
-      totalQuantity: assignment.asset.quantity,
-      assignedDate: assignment.assignedDate,
-      assignedBy: assignment.assignedBy?.name,
-      conditionAtAssignment: assignment.conditionAtAssignment,
-      notes: assignment.notes,
-    }));
+    const employeeAssets = assignments
+      .filter((assignment) => assignment.asset)
+      .map((assignment) => ({
+        _id: assignment.asset._id,
+        assetId: assignment.asset.assetId,
+        name: assignment.asset.name,
+        category: assignment.asset.category,
+        condition: assignment.asset.condition,
+        status: assignment.asset.status,
+        quantity: assignment.quantity, // Quantity assigned to this employee
+        totalQuantity: assignment.asset.quantity,
+        assignedDate: assignment.assignedDate,
+        assignedBy: assignment.assignedBy?.name,
+        conditionAtAssignment: assignment.conditionAtAssignment,
+        notes: assignment.notes,
+      }));
 
     res.status(200).json({
       success: true,

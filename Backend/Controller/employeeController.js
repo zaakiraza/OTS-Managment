@@ -27,13 +27,8 @@ export const createEmployee = async (req, res) => {
       cnic,
       biometricId,
       department,
-      additionalDepartments,
+      shifts,
       leadingDepartments,
-      departmentShifts,
-      position,
-      salary,
-      workSchedule,
-      joiningDate,
       address,
       emergencyContact,
       password,
@@ -54,13 +49,6 @@ export const createEmployee = async (req, res) => {
 
     const requestingUserRole = req.user?.role?.name || req.user?.role;
 
-    if (departmentShifts && requestingUserRole !== "superAdmin") {
-      return res.status(403).json({
-        success: false,
-        message: "Only superAdmin can configure department shifts",
-      });
-    }
-
     // Verify department exists
     const deptExists = await Department.findById(department);
     if (!deptExists) {
@@ -70,54 +58,38 @@ export const createEmployee = async (req, res) => {
       });
     }
 
-    if (departmentShifts && Array.isArray(departmentShifts) && departmentShifts.length > 0) {
-      const allowedDeptIds = new Set([String(department)]);
-      if (additionalDepartments?.length) {
-        additionalDepartments.forEach(d => allowedDeptIds.add(String(d)));
+    // Validate shifts if provided
+    if (shifts && Array.isArray(shifts) && shifts.length > 0) {
+      // Only superAdmin can create multi-shift employees
+      if (shifts.length > 1 && requestingUserRole !== "superAdmin") {
+        return res.status(403).json({
+          success: false,
+          message: "Only superAdmin can configure multiple department shifts",
+        });
       }
 
-      for (const shift of departmentShifts) {
-        if (!shift.department || !allowedDeptIds.has(String(shift.department))) {
+      const timeRegex = /^([01]\d|2[0-3]):([0-5]\d)$/;
+      for (const shift of shifts) {
+        if (!shift.department) {
           return res.status(400).json({
             success: false,
-            message: "Shift department must be in primary or additional departments",
+            message: "Each shift must have a department",
           });
         }
-
-        if (!shift.startTime || !shift.endTime) {
-          return res.status(400).json({
-            success: false,
-            message: "Each shift must have startTime and endTime",
-          });
-        }
-
-        const timeRegex = /^([01]\d|2[0-3]):([0-5]\d)$/;
-        if (!timeRegex.test(shift.startTime) || !timeRegex.test(shift.endTime)) {
-          return res.status(400).json({
-            success: false,
-            message: "Time must be in HH:MM format (24-hour)",
-          });
-        }
-
-        // Validate day-specific schedules if present
-        if (shift.daySchedules) {
-          const daySchedules = shift.daySchedules instanceof Map 
-            ? shift.daySchedules 
-            : new Map(Object.entries(shift.daySchedules || {}));
-          
-          for (const [day, schedule] of daySchedules) {
-            if (schedule.startTime && !timeRegex.test(schedule.startTime)) {
-              return res.status(400).json({
-                success: false,
-                message: `Day-specific start time for ${day} must be in HH:MM format (24-hour)`,
-              });
-            }
-            if (schedule.endTime && !timeRegex.test(schedule.endTime)) {
-              return res.status(400).json({
-                success: false,
-                message: `Day-specific end time for ${day} must be in HH:MM format (24-hour)`,
-              });
-            }
+        // Validate workSchedule times
+        const ws = shift.workSchedule;
+        if (ws) {
+          if (ws.checkInTime && !timeRegex.test(ws.checkInTime)) {
+            return res.status(400).json({
+              success: false,
+              message: "Check-in time must be in HH:MM format (24-hour)",
+            });
+          }
+          if (ws.checkOutTime && !timeRegex.test(ws.checkOutTime)) {
+            return res.status(400).json({
+              success: false,
+              message: "Check-out time must be in HH:MM format (24-hour)",
+            });
           }
         }
       }
@@ -192,39 +164,6 @@ export const createEmployee = async (req, res) => {
         }
       }
 
-      // Also validate additional departments - they must be user's department or sub-departments
-      if (additionalDepartments && additionalDepartments.length > 0) {
-        const invalidDepts = [];
-        for (const deptId of additionalDepartments) {
-          if (!deptId) continue;
-          const addDeptId = String(deptId);
-          const addDept = await Department.findById(addDeptId);
-          if (!addDept) {
-            invalidDepts.push(deptId);
-            continue;
-          }
-          
-          const addDeptParentId = addDept.parentDepartment 
-            ? String(addDept.parentDepartment._id || addDept.parentDepartment) 
-            : null;
-          const addDeptPath = addDept.path || "";
-          
-          const isAllowed = addDeptId === userDeptId || 
-                           addDeptParentId === userDeptId || 
-                           addDeptPath.includes(userDeptId);
-          
-          if (!isAllowed) {
-            invalidDepts.push(deptId);
-          }
-        }
-        
-        if (invalidDepts.length > 0) {
-          return res.status(403).json({
-            success: false,
-            message: "Access denied. You can only assign employees to your own department or its sub-departments.",
-          });
-        }
-      }
     }
 
     // Verify role exists (role is now required)
@@ -259,37 +198,60 @@ export const createEmployee = async (req, res) => {
       newEmployeeId = `${deptCode}0001`;
     }
 
-    // Prepare employee data, excluding empty optional fields
+    // Prepare employee data
     const employeeData = {
       employeeId: newEmployeeId,
       name,
       department,
-      position,
       role,
-      salary,
-      workSchedule,
       createdBy: req.user._id,
       isTeamLead: isTeamLead || false,
     };
+
+    // Build shifts array
+    if (shifts && Array.isArray(shifts) && shifts.length > 0) {
+      // Ensure at least one shift is marked primary
+      const hasPrimary = shifts.some(s => s.isPrimary);
+      if (!hasPrimary) {
+        // Mark the first shift matching primary department, or the first one
+        const primaryIdx = shifts.findIndex(s => String(s.department) === String(department));
+        if (primaryIdx >= 0) shifts[primaryIdx].isPrimary = true;
+        else shifts[0].isPrimary = true;
+      }
+      employeeData.shifts = shifts;
+    } else {
+      // Single-department employee - create one shift from the provided data or defaults
+      const shiftData = req.body;
+      employeeData.shifts = [{
+        department,
+        isPrimary: true,
+        position: shiftData.position || "",
+        monthlySalary: shiftData.monthlySalary || shiftData.salary?.monthlySalary || 0,
+        currency: shiftData.currency || shiftData.salary?.currency || "PKR",
+        leaveThreshold: shiftData.leaveThreshold || shiftData.salary?.leaveThreshold || 0,
+        joiningDate: shiftData.joiningDate || null,
+        workSchedule: shiftData.workSchedule || {
+          checkInTime: "09:00",
+          checkOutTime: "17:00",
+          workingDaysPerWeek: 5,
+          workingHoursPerWeek: 40,
+          weeklyOffs: ["Saturday", "Sunday"],
+        },
+        isActive: true,
+      }];
+    }
 
     // Only add optional fields if they have values
     if (email && email.trim()) employeeData.email = email;
     if (phone && phone.trim()) employeeData.phone = phone;
     if (cnic && cnic.trim()) employeeData.cnic = cnic;
     if (biometricId && biometricId.trim()) employeeData.biometricId = biometricId;
-    if (joiningDate) employeeData.joiningDate = joiningDate;
     if (address) employeeData.address = address;
     if (emergencyContact) employeeData.emergencyContact = emergencyContact;
-    
-    // Handle multiple departments
-    if (additionalDepartments && additionalDepartments.length > 0) {
-      employeeData.additionalDepartments = additionalDepartments.filter(d => d && d !== department);
-    }
     
     // Handle leading departments
     if (leadingDepartments && leadingDepartments.length > 0) {
       employeeData.leadingDepartments = leadingDepartments;
-      // Auto-set isTeamLead if leading any department
       employeeData.isTeamLead = true;
     }
     
@@ -311,8 +273,9 @@ export const createEmployee = async (req, res) => {
     const employee = await Employee.create(employeeData);
 
     const populatedEmployee = await Employee.findById(employee._id)
+      .select("-salary -shifts.monthlySalary") // Exclude salary fields
       .populate("department", "name code")
-      .populate("additionalDepartments", "name code")
+      .populate("shifts.department", "name code")
       .populate("leadingDepartments", "name code")
       .populate("role", "name description");
 
@@ -377,164 +340,85 @@ export const createEmployee = async (req, res) => {
   }
 };
 
-  // Update department shifts for an employee
-  export const updateDepartmentShifts = async (req, res) => {
+  // Update shifts for an employee
+  export const updateShifts = async (req, res) => {
     try {
       const { employeeId } = req.params;
-      const { departmentShifts } = req.body;
+      const { shifts } = req.body;
 
-      // Validate input
-      if (!departmentShifts || !Array.isArray(departmentShifts)) {
-        return res.status(400).json({
-          success: false,
-          message: "Department shifts must be an array",
-        });
+      if (!shifts || !Array.isArray(shifts)) {
+        return res.status(400).json({ success: false, message: "Shifts must be an array" });
       }
 
-      // Find employee
-      const employee = await Employee.findById(employeeId)
-        .populate("department", "name")
-        .populate("additionalDepartments", "name")
-        .populate("role", "name");
-
+      const employee = await Employee.findById(employeeId).populate("role", "name");
       if (!employee) {
-        return res.status(404).json({
-          success: false,
-          message: "Employee not found",
-        });
+        return res.status(404).json({ success: false, message: "Employee not found" });
       }
-
-      // Prevent modifying superAdmin
       if (employee.role?.name === "superAdmin") {
-        return res.status(403).json({
-          success: false,
-          message: "Cannot configure shifts for superAdmin",
-        });
+        return res.status(403).json({ success: false, message: "Cannot configure shifts for superAdmin" });
       }
 
-      // Authorization check
       const requestingUserRole = req.user?.role?.name || req.user?.role;
+      
       if (requestingUserRole !== "superAdmin") {
-        return res.status(403).json({
-          success: false,
-          message: "Only superAdmin can configure department shifts",
-        });
-      }
-
-      // Validate that employee has additional departments if shifts are being configured
-      if (departmentShifts.length > 0) {
-        const allDepartments = [employee.department._id || employee.department];
-        if (employee.additionalDepartments) {
-          allDepartments.push(...employee.additionalDepartments.map(d => d._id || d));
+        const currentShifts = employee.shifts || [];
+        if (shifts.length !== currentShifts.length) {
+          return res.status(403).json({ success: false, message: "Only superAdmin can add or remove shifts." });
         }
+        if (requestingUserRole === "attendanceDepartment") {
+          const currentUser = await Employee.findById(req.user._id).populate("leadingDepartments", "_id");
+          const managedDeptIds = new Set();
+          if (currentUser.department) managedDeptIds.add(String(currentUser.department));
+          currentUser.leadingDepartments?.forEach(d => managedDeptIds.add(String(d._id || d)));
+          const userCreatedDepts = await Department.find({ createdBy: req.user._id, isActive: true });
+          userCreatedDepts.forEach(d => managedDeptIds.add(String(d._id)));
 
-        // Verify all shift departments are in employee's departments
-        for (const shift of departmentShifts) {
-          if (!shift.department) {
-            return res.status(400).json({
-              success: false,
-              message: "Each shift must have a department",
-            });
-          }
-
-          const shiftDeptStr = shift.department.toString();
-          const isValidDept = allDepartments.some(d => d.toString() === shiftDeptStr);
-
-          if (!isValidDept) {
-            return res.status(400).json({
-              success: false,
-              message: `Department ${shift.department} is not assigned to this employee`,
-            });
-          }
-
-          // Validate time format
-          if (!shift.startTime || !shift.endTime) {
-            return res.status(400).json({
-              success: false,
-              message: "Each shift must have startTime and endTime",
-            });
-          }
-
-          const timeRegex = /^([01]\d|2[0-3]):([0-5]\d)$/;
-          if (!timeRegex.test(shift.startTime) || !timeRegex.test(shift.endTime)) {
-            return res.status(400).json({
-              success: false,
-              message: "Time must be in HH:MM format (24-hour)",
-            });
-          }
-
-          // Validate day-specific schedules if present
-          if (shift.daySchedules) {
-            const daySchedules = shift.daySchedules instanceof Map 
-              ? shift.daySchedules 
-              : new Map(Object.entries(shift.daySchedules || {}));
-            
-            for (const [day, schedule] of daySchedules) {
-              if (schedule.startTime && !timeRegex.test(schedule.startTime)) {
-                return res.status(400).json({
-                  success: false,
-                  message: `Day-specific start time for ${day} must be in HH:MM format (24-hour)`,
-                });
-              }
-              if (schedule.endTime && !timeRegex.test(schedule.endTime)) {
-                return res.status(400).json({
-                  success: false,
-                  message: `Day-specific end time for ${day} must be in HH:MM format (24-hour)`,
-                });
-              }
+          const updatedShifts = shifts.map((updatedShift, i) => {
+            const original = currentShifts[i];
+            if (!original) return updatedShift;
+            const deptId = String(updatedShift.department?._id || updatedShift.department || original.department?._id || original.department);
+            if (managedDeptIds.has(deptId)) {
+              return { ...updatedShift, department: original.department, isPrimary: original.isPrimary };
             }
-          }
+            return original;
+          });
+          employee.shifts = updatedShifts;
+        } else {
+          return res.status(403).json({ success: false, message: "Only superAdmin can configure shifts." });
         }
+      } else {
+        if (shifts.length > 0 && !shifts.some(s => s.isPrimary)) shifts[0].isPrimary = true;
+        employee.shifts = shifts;
       }
 
-      // Update employee with new department shifts
-      employee.departmentShifts = departmentShifts;
       employee.modifiedBy = req.user._id;
       await employee.save();
 
-      // Populate and return updated employee
       const updatedEmployee = await Employee.findById(employeeId)
         .populate("department", "name code")
-        .populate("additionalDepartments", "name code")
-        .populate("departmentShifts.department", "name code")
+        .populate("shifts.department", "name code")
         .populate("role", "name");
 
-      // Audit log
-      await logEmployeeAction(req, "UPDATE_SHIFTS", updatedEmployee, {
-        shiftsCount: departmentShifts.length,
-        departments: departmentShifts.map(s => s.department),
-      });
+      await logEmployeeAction(req, "UPDATE_SHIFTS", updatedEmployee, { shiftsCount: employee.shifts.length });
 
-      res.status(200).json({
-        success: true,
-        message: "Department shifts updated successfully",
-        data: updatedEmployee,
-      });
+      res.status(200).json({ success: true, message: "Shifts updated successfully", data: updatedEmployee });
     } catch (error) {
-      logger.error(`Update department shifts error: ${error.message}`, { stack: error.stack });
-      res.status(500).json({
-        success: false,
-        message: error.message,
-      });
+      logger.error(`Update shifts error: ${error.message}`, { stack: error.stack });
+      res.status(500).json({ success: false, message: error.message });
     }
   };
 
-  // Get department shifts for an employee
-  export const getDepartmentShifts = async (req, res) => {
+  // Get shifts for an employee  
+  export const getShifts = async (req, res) => {
     try {
       const { employeeId } = req.params;
-
       const employee = await Employee.findById(employeeId)
         .populate("department", "name code")
-        .populate("additionalDepartments", "name code")
-        .populate("departmentShifts.department", "name code")
-        .select("employeeId name department additionalDepartments departmentShifts");
+        .populate("shifts.department", "name code")
+        .select("employeeId name department shifts");
 
       if (!employee) {
-        return res.status(404).json({
-          success: false,
-          message: "Employee not found",
-        });
+        return res.status(404).json({ success: false, message: "Employee not found" });
       }
 
       res.status(200).json({
@@ -543,16 +427,12 @@ export const createEmployee = async (req, res) => {
           employeeId: employee.employeeId,
           name: employee.name,
           primaryDepartment: employee.department,
-          additionalDepartments: employee.additionalDepartments || [],
-          departmentShifts: employee.departmentShifts || [],
+          shifts: employee.shifts || [],
         },
       });
     } catch (error) {
-      logger.error(`Get department shifts error: ${error.message}`, { stack: error.stack });
-      res.status(500).json({
-        success: false,
-        message: error.message,
-      });
+      logger.error(`Get shifts error: ${error.message}`, { stack: error.stack });
+      res.status(500).json({ success: false, message: error.message });
     }
   };
 // Get all employees with pagination
@@ -571,19 +451,32 @@ export const getAllEmployees = async (req, res) => {
     } = req.query;
     
     const filter = {};
+    const requestedDepartment = department || null; // Track requested department for role validation
 
-    if (department) filter.department = department;
+    // Filter by department - all department assignments live in shifts[]
+    if (department) {
+      filter['shifts.department'] = department;
+    }
     if (isActive !== undefined) filter.isActive = isActive === "true";
     else filter.isActive = true;
 
     // Search functionality
     if (search) {
-      filter.$or = [
-        { name: { $regex: search, $options: "i" } },
-        { email: { $regex: search, $options: "i" } },
-        { employeeId: { $regex: search, $options: "i" } },
-        { phone: { $regex: search, $options: "i" } },
-      ];
+      const searchFilter = {
+        $or: [
+          { name: { $regex: search, $options: "i" } },
+          { email: { $regex: search, $options: "i" } },
+          { employeeId: { $regex: search, $options: "i" } },
+          { phone: { $regex: search, $options: "i" } },
+        ]
+      };
+      // Combine with existing $or (department filter) using $and
+      if (filter.$or) {
+        filter.$and = [{ $or: filter.$or }, searchFilter];
+        delete filter.$or;
+      } else {
+        filter.$or = searchFilter.$or;
+      }
     }
 
     // Get the superAdmin role ID to exclude superAdmin employees for non-superAdmin users
@@ -631,8 +524,8 @@ export const getAllEmployees = async (req, res) => {
       
       if (allowedDeptIds.size > 0) {
         // If a specific department filter was already applied, validate it's in allowed list
-        if (filter.department) {
-          const requestedDeptId = String(filter.department);
+        if (requestedDepartment) {
+          const requestedDeptId = String(requestedDepartment);
           if (!allowedDeptIds.has(requestedDeptId)) {
             // Requested department is not in allowed list, return no results
             filter._id = null;
@@ -641,20 +534,7 @@ export const getAllEmployees = async (req, res) => {
         } else {
           // Show employees from allowed departments (including those with shifts in these departments)
           const allowedDeptObjectIds = Array.from(allowedDeptIds).map(id => new mongoose.Types.ObjectId(id));
-          const deptFilter = {
-            $or: [
-              { department: { $in: allowedDeptObjectIds } },
-              { additionalDepartments: { $in: allowedDeptObjectIds } },
-              { 'departmentShifts.department': { $in: allowedDeptObjectIds } }
-            ]
-          };
-          
-          if (filter.$or) {
-            filter.$and = [{ $or: filter.$or }, deptFilter];
-            delete filter.$or;
-          } else {
-            filter.$or = deptFilter.$or;
-          }
+          filter['shifts.department'] = { $in: allowedDeptObjectIds };
         }
       } else {
         // If user has no accessible departments, show nothing
@@ -671,8 +551,8 @@ export const getAllEmployees = async (req, res) => {
         const leadingDeptIds = currentEmployee.leadingDepartments.map(d => d._id);
         
         // If a specific department filter was already applied, validate it's in allowed list
-        if (filter.department) {
-          const requestedDeptId = String(filter.department);
+        if (requestedDepartment) {
+          const requestedDeptId = String(requestedDepartment);
           const isAllowed = leadingDeptIds.some(id => String(id) === requestedDeptId);
           if (!isAllowed) {
             // Requested department is not in allowed list, return no results
@@ -680,21 +560,7 @@ export const getAllEmployees = async (req, res) => {
           }
           // else: keep the existing department filter as is
         } else {
-          // Use $and to combine with existing $or from search (include departmentShifts)
-          const deptFilter = {
-            $or: [
-              { department: { $in: leadingDeptIds } },
-              { additionalDepartments: { $in: leadingDeptIds } },
-              { 'departmentShifts.department': { $in: leadingDeptIds } }
-            ]
-          };
-          
-          if (filter.$or) {
-            filter.$and = [{ $or: filter.$or }, deptFilter];
-            delete filter.$or;
-          } else {
-            filter.$or = deptFilter.$or;
-          }
+          filter['shifts.department'] = { $in: leadingDeptIds };
         }
       } else {
         filter._id = req.user._id;
@@ -708,10 +574,10 @@ export const getAllEmployees = async (req, res) => {
     // If noPagination is true, return all results
     if (noPagination === "true") {
       const employees = await Employee.find(filter)
+        .select("-salary -shifts.monthlySalary") // Exclude salary fields
         .populate("department", "name code")
-        .populate("additionalDepartments", "name code")
+        .populate("shifts.department", "name code")
         .populate("leadingDepartments", "name code")
-        .populate("departmentShifts.department", "name code")
         .populate("role", "name description")
         .populate("createdBy", "name")
         .sort(sort);
@@ -731,10 +597,10 @@ export const getAllEmployees = async (req, res) => {
     // Execute query with pagination
     const [employees, total] = await Promise.all([
       Employee.find(filter)
+        .select("-salary -shifts.monthlySalary") // Exclude salary fields
         .populate("department", "name code")
-        .populate("additionalDepartments", "name code")
+        .populate("shifts.department", "name code")
         .populate("leadingDepartments", "name code")
-        .populate("departmentShifts.department", "name code")
         .populate("role", "name description")
         .populate("createdBy", "name")
         .sort(sort)
@@ -769,10 +635,10 @@ export const getAllEmployees = async (req, res) => {
 export const getEmployeeById = async (req, res) => {
   try {
     const employee = await Employee.findById(req.params.id)
+      .select("-salary -shifts.monthlySalary") // Exclude salary fields
       .populate("department", "name code description")
-      .populate("additionalDepartments", "name code")
+      .populate("shifts.department", "name code")
       .populate("leadingDepartments", "name code")
-      .populate("departmentShifts.department", "name code")
       .populate("role", "name description")
       .populate("createdBy", "name")
       .populate("modifiedBy", "name");
@@ -820,26 +686,10 @@ export const getEmployeeById = async (req, res) => {
         });
       }
       
-      // Collect all departments the employee belongs to
+      // Collect all departments the employee belongs to from shifts
       const employeeDepartmentIds = new Set();
-      
-      // Add primary department
-      const empDeptId = employee.department?._id || employee.department;
-      if (empDeptId) {
-        employeeDepartmentIds.add(empDeptId.toString());
-      }
-      
-      // Add additional departments
-      if (employee.additionalDepartments) {
-        employee.additionalDepartments.forEach(dept => {
-          const deptId = dept._id || dept;
-          if (deptId) employeeDepartmentIds.add(deptId.toString());
-        });
-      }
-      
-      // Add departments from shifts
-      if (employee.departmentShifts) {
-        employee.departmentShifts.forEach(shift => {
+      if (employee.shifts) {
+        employee.shifts.forEach(shift => {
           const deptId = shift.department?._id || shift.department;
           if (deptId) employeeDepartmentIds.add(deptId.toString());
         });
@@ -877,7 +727,7 @@ export const updateEmployee = async (req, res) => {
     const targetEmployee = await Employee.findById(req.params.id)
       .populate("role", "name")
       .populate("department", "_id")
-      .populate("additionalDepartments", "_id");
+      .populate("shifts.department", "_id");
     
     if (!targetEmployee) {
       return res.status(404).json({
@@ -910,33 +760,16 @@ export const updateEmployee = async (req, res) => {
 
       const userDeptId = currentEmployee.department._id || currentEmployee.department;
       
-      // For multi-department employees (with additionalDepartments or departmentShifts),
+      // For multi-department employees (with multiple shifts),
       // allow editing by department heads of ANY of their departments
       const hasMultipleDepartments = 
-        (targetEmployee.additionalDepartments && targetEmployee.additionalDepartments.length > 0) ||
-        (targetEmployee.departmentShifts && targetEmployee.departmentShifts.length > 0);
+        (targetEmployee.shifts && targetEmployee.shifts.length > 1);
       
       if (hasMultipleDepartments) {
-        // Collect all departments the target employee belongs to
+        // Collect all departments the target employee belongs to from shifts
         const employeeDepartmentIds = new Set();
-        
-        // Add primary department
-        const empDeptId = targetEmployee.department?._id || targetEmployee.department;
-        if (empDeptId) {
-          employeeDepartmentIds.add(empDeptId.toString());
-        }
-        
-        // Add additional departments
-        if (targetEmployee.additionalDepartments) {
-          targetEmployee.additionalDepartments.forEach(dept => {
-            const deptId = dept._id || dept;
-            if (deptId) employeeDepartmentIds.add(deptId.toString());
-          });
-        }
-        
-        // Add departments from shifts
-        if (targetEmployee.departmentShifts) {
-          targetEmployee.departmentShifts.forEach(shift => {
+        if (targetEmployee.shifts) {
+          targetEmployee.shifts.forEach(shift => {
             const deptId = shift.department?._id || shift.department;
             if (deptId) employeeDepartmentIds.add(deptId.toString());
           });
@@ -968,11 +801,14 @@ export const updateEmployee = async (req, res) => {
           });
         }
       } else {
-        // For single-department employees, use the old logic
-        const empDeptId = targetEmployee.department?._id || targetEmployee.department;
-        const isInAdditionalDepts = targetEmployee.additionalDepartments?.some(
-          dept => (dept._id || dept).toString() === userDeptId.toString()
-        );
+        // For single-department employees, check if user manages their department
+        const employeeDepartmentIds = new Set();
+        if (targetEmployee.shifts) {
+          targetEmployee.shifts.forEach(shift => {
+            const deptId = shift.department?._id || shift.department;
+            if (deptId) employeeDepartmentIds.add(deptId.toString());
+          });
+        }
 
         // Get all departments created by the user
         const userCreatedDepts = await Department.find({
@@ -981,16 +817,12 @@ export const updateEmployee = async (req, res) => {
         });
         const userCreatedDeptIds = new Set(userCreatedDepts.map(d => d._id.toString()));
 
-        // Check if employee is from a department the user created
-        const empDeptIdStr = empDeptId?.toString();
-        const isFromUserDept = userCreatedDeptIds.has(empDeptIdStr) || 
-                               empDeptIdStr === userDeptId.toString();
-        
-        const isInUserAdditionalDepts = targetEmployee.additionalDepartments?.some(
-          dept => userCreatedDeptIds.has((dept._id || dept).toString())
-        ) || isInAdditionalDepts;
+        // Check if employee is from a department the user manages
+        const isFromUserDept = [...employeeDepartmentIds].some(deptId => 
+          userCreatedDeptIds.has(deptId) || deptId === userDeptId.toString()
+        );
 
-        if (!isFromUserDept && !isInUserAdditionalDepts) {
+        if (!isFromUserDept) {
           return res.status(403).json({
             success: false,
             message: "Access denied. You can only edit employees from departments you created.",
@@ -998,44 +830,28 @@ export const updateEmployee = async (req, res) => {
         }
       }
 
-      // For multi-department employees, department heads can view but not change department assignments
+      // For multi-department employees, department heads can view but not change shift assignments
       if (hasMultipleDepartments) {
-        if (req.body.department || req.body.additionalDepartments) {
+        if (req.body.shifts) {
           return res.status(403).json({
             success: false,
-            message: "Access denied. Only superAdmin can change department assignments for multi-department employees.",
+            message: "Access denied. Only superAdmin can change shift assignments for multi-department employees.",
           });
         }
       } else {
         // For single-department employees, verify new department was created by the user
-        if (req.body.department) {
+        if (req.body.shifts) {
           const userCreatedDepts = await Department.find({
             createdBy: req.user._id,
             isActive: true
           });
           const userCreatedDeptIds = new Set(userCreatedDepts.map(d => d._id.toString()));
           
-          const newDeptIdStr = req.body.department.toString();
-          if (!userCreatedDeptIds.has(newDeptIdStr) && newDeptIdStr !== userDeptId.toString()) {
-            return res.status(403).json({
-              success: false,
-              message: "Access denied. You can only assign employees to departments you created.",
-            });
-          }
-        }
-
-        // Verify additional departments are also created by the user
-        if (req.body.additionalDepartments) {
-          const userCreatedDepts = await Department.find({
-            createdBy: req.user._id,
-            isActive: true
+          const invalidShifts = req.body.shifts.filter(shift => {
+            const deptId = shift.department?.toString();
+            return deptId && !userCreatedDeptIds.has(deptId) && deptId !== userDeptId.toString();
           });
-          const userCreatedDeptIds = new Set(userCreatedDepts.map(d => d._id.toString()));
-          
-          const invalidDepts = req.body.additionalDepartments.filter(
-            dept => dept && !userCreatedDeptIds.has(dept.toString()) && dept.toString() !== userDeptId.toString()
-          );
-          if (invalidDepts.length > 0) {
+          if (invalidShifts.length > 0) {
             return res.status(403).json({
               success: false,
               message: "Access denied. You can only assign employees to departments you created.",
@@ -1045,12 +861,83 @@ export const updateEmployee = async (req, res) => {
       }
     }
 
-    // Department heads cannot edit shift configurations - only superAdmin can
-    if (req.body.departmentShifts && requestingUserRole !== "superAdmin") {
-      return res.status(403).json({
-        success: false,
-        message: "Access denied. Only superAdmin can configure department shifts.",
+    // Handle shifts updates for non-superAdmin
+    if (req.body.shifts && requestingUserRole !== "superAdmin") {
+      // Department heads can update workSchedule, position, salary
+      // for shifts in departments they manage, but cannot add/remove shifts
+      
+      if (requestingUserRole !== "attendanceDepartment") {
+        return res.status(403).json({
+          success: false,
+          message: "Access denied. Only superAdmin can configure shifts.",
+        });
+      }
+
+      // Get current employee's shifts
+      const currentShifts = targetEmployee.shifts || [];
+      
+      // Department heads cannot add or remove shifts
+      if (req.body.shifts.length !== currentShifts.length) {
+        return res.status(403).json({
+          success: false,
+          message: "Access denied. Only superAdmin can add or remove shifts.",
+        });
+      }
+
+      // Get departments the user manages
+      const currentUser = await Employee.findById(req.user._id)
+        .populate("department", "_id")
+        .populate("leadingDepartments", "_id");
+      
+      const managedDepartmentIds = new Set();
+      if (currentUser.department) {
+        managedDepartmentIds.add((currentUser.department._id || currentUser.department).toString());
+      }
+      if (currentUser.leadingDepartments) {
+        currentUser.leadingDepartments.forEach(dept => {
+          managedDepartmentIds.add((dept._id || dept).toString());
+        });
+      }
+
+      // Also add departments created by the user
+      const userCreatedDepts = await Department.find({
+        createdBy: req.user._id,
+        isActive: true
       });
+      userCreatedDepts.forEach(dept => {
+        managedDepartmentIds.add(dept._id.toString());
+      });
+
+      // Validate and filter shift updates
+      const updatedShifts = req.body.shifts.map((updatedShift, index) => {
+        const originalShift = currentShifts[index];
+        if (!originalShift) {
+          throw new Error("Shift mismatch");
+        }
+
+        const shiftDeptId = (updatedShift.department?._id || updatedShift.department || originalShift.department?._id || originalShift.department).toString();
+        
+        // If this shift belongs to a department the user manages, allow updates
+        if (managedDepartmentIds.has(shiftDeptId)) {
+          return {
+            department: originalShift.department, // Keep original department (cannot change)
+            isPrimary: originalShift.isPrimary, // Keep primary status
+            position: updatedShift.position,
+            monthlySalary: updatedShift.monthlySalary,
+            currency: updatedShift.currency || originalShift.currency,
+            leaveThreshold: updatedShift.leaveThreshold,
+            joiningDate: updatedShift.joiningDate || originalShift.joiningDate,
+            workSchedule: updatedShift.workSchedule || originalShift.workSchedule,
+            isActive: originalShift.isActive, // Preserve active status (only superAdmin can change)
+          };
+        } else {
+          // For departments they don't manage, keep the shift completely unchanged
+          return originalShift;
+        }
+      });
+
+      // Replace the shifts in the update with the filtered version
+      req.body.shifts = updatedShifts;
     }
 
     const updateData = { ...req.body, modifiedBy: req.user._id };
@@ -1061,13 +948,6 @@ export const updateEmployee = async (req, res) => {
     if (updateData.phone === '') updateData.phone = undefined;
     if (updateData.cnic === '') updateData.cnic = undefined;
     if (updateData.biometricId === '') updateData.biometricId = undefined;
-    
-    // Handle additional departments - filter out primary department and empty values
-    if (updateData.additionalDepartments) {
-      updateData.additionalDepartments = updateData.additionalDepartments.filter(
-        d => d && d !== updateData.department
-      );
-    }
     
     // Handle leading departments - auto-set isTeamLead
     if (updateData.leadingDepartments && updateData.leadingDepartments.length > 0) {
@@ -1091,8 +971,9 @@ export const updateEmployee = async (req, res) => {
       updateData,
       { new: true, runValidators: true }
     )
+      .select("-salary -shifts.monthlySalary") // Exclude salary fields
       .populate("department", "name code")
-      .populate("additionalDepartments", "name code")
+      .populate("shifts.department", "name code")
       .populate("leadingDepartments", "name code")
       .populate("role", "name description");
 
@@ -1170,7 +1051,7 @@ export const deleteEmployee = async (req, res) => {
     const targetEmployee = await Employee.findById(req.params.id)
       .populate("role", "name")
       .populate("department", "_id")
-      .populate("additionalDepartments", "_id");
+      .populate("shifts.department", "_id");
     
     if (!targetEmployee) {
       return res.status(404).json({
@@ -1215,19 +1096,11 @@ export const deleteEmployee = async (req, res) => {
         });
       }
       
-      // Collect all departments the employee belongs to
+      // Collect all departments the employee belongs to from shifts
       const employeeDepartmentIds = new Set();
-      
-      // Add primary department
-      const empDeptId = targetEmployee.department?._id || targetEmployee.department;
-      if (empDeptId) {
-        employeeDepartmentIds.add(empDeptId.toString());
-      }
-      
-      // Add additional departments
-      if (targetEmployee.additionalDepartments) {
-        targetEmployee.additionalDepartments.forEach(dept => {
-          const deptId = dept._id || dept;
+      if (targetEmployee.shifts) {
+        targetEmployee.shifts.forEach(shift => {
+          const deptId = shift.department?._id || shift.department;
           if (deptId) employeeDepartmentIds.add(deptId.toString());
         });
       }
@@ -1695,21 +1568,25 @@ export const importEmployees = async (req, res) => {
           employeeId: newEmployeeId,
           name,
           department: department._id,
-          position,
           role: role._id,
-          salary: {
+          shifts: [{
+            department: department._id,
+            isPrimary: true,
+            position,
             monthlySalary: monthlySalary ? parseFloat(monthlySalary) : null,
             currency: "PKR",
             leaveThreshold: 0,
-          },
-          workSchedule: {
-            checkInTime,
-            checkOutTime,
-            workingDaysPerWeek,
-            weeklyOffs,
-            workingHoursPerWeek,
-            daySchedules: {},
-          },
+            joiningDate: null,
+            workSchedule: {
+              checkInTime,
+              checkOutTime,
+              workingDaysPerWeek,
+              weeklyOffs,
+              workingHoursPerWeek,
+              daySchedules: {},
+            },
+            isActive: true,
+          }],
           createdBy: req.user._id,
           isTeamLead,
         };
@@ -1782,7 +1659,7 @@ export const importEmployees = async (req, res) => {
         
         // Only add daySchedules to workSchedule if at least one day has custom schedule
         if (Object.keys(daySchedules).length > 0) {
-          employeeData.workSchedule.daySchedules = daySchedules;
+          employeeData.shifts[0].workSchedule.daySchedules = daySchedules;
         }
 
         if (email) employeeData.email = email;
@@ -1810,7 +1687,7 @@ export const importEmployees = async (req, res) => {
           if (!dateRegex.test(joiningDate)) {
             throw new Error(`Invalid joining date format "${joiningDate}". Use format: YYYY-MM-DD`);
           }
-          employeeData.joiningDate = joiningDate;
+          employeeData.shifts[0].joiningDate = joiningDate;
         }
 
         // Password will be auto-generated by the Employee model's pre-save hook (Emp@{last4digits})

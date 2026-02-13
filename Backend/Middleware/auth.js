@@ -28,6 +28,22 @@ export const verifyToken = async (req, res, next) => {
     }
 
     req.user = employee;
+
+    // Expose all departments from shifts (for multi-department support)
+    const allDeptIds = [];
+    if (employee.department) {
+      allDeptIds.push(String(employee.department._id || employee.department));
+    }
+    if (employee.shifts && employee.shifts.length > 0) {
+      for (const s of employee.shifts) {
+        const dId = s.department?._id || s.department;
+        if (dId && !allDeptIds.includes(String(dId))) {
+          allDeptIds.push(String(dId));
+        }
+      }
+    }
+    req.user.departments = allDeptIds; // array of all department ID strings
+
     next();
   } catch (error) {
     return res.status(401).json({

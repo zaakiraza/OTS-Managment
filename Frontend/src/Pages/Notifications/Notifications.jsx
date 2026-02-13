@@ -145,7 +145,11 @@ const Notifications = () => {
     };
 
     if (routeMap[type]) {
-      navigate(routeMap[type]);
+      if (type === "leave_approved") {
+        navigate(routeMap[type], { state: { defaultStatus: "approved" } });
+      } else {
+        navigate(routeMap[type]);
+      }
     }
   };
 

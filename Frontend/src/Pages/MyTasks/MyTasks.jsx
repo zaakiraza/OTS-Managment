@@ -11,15 +11,32 @@ function MyTasks() {
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [newComment, setNewComment] = useState("");
   const [loading, setLoading] = useState(false);
+  const [departmentFilter, setDepartmentFilter] = useState("");
+
+  // Get user shifts for department filter
+  const user = (() => {
+    try {
+      const stored = localStorage.getItem("user");
+      if (!stored || stored === "undefined") return {};
+      return JSON.parse(stored);
+    } catch { return {}; }
+  })();
+  
+  const userShifts = user?.shifts || [];
+  const hasMultipleShifts = userShifts.length > 1;
 
   useEffect(() => {
     fetchMyTasks();
-  }, []);
+  }, [departmentFilter]);
 
   const fetchMyTasks = async () => {
     try {
       setLoading(true);
-      const response = await taskAPI.getMyTasks();
+      const params = {};
+      if (departmentFilter) {
+        params.department = departmentFilter;
+      }
+      const response = await taskAPI.getMyTasks(params);
       if (response.data.success) {
         setTasks(response.data.data);
       }
@@ -56,13 +73,6 @@ function MyTasks() {
   };
 
   // Check if current user is one of the assignees
-  const user = (() => {
-    try {
-      const stored = localStorage.getItem("user");
-      if (!stored || stored === "undefined") return {};
-      return JSON.parse(stored);
-    } catch { return {}; }
-  })();
   const isSuperAdmin = user?.role?.name === "superAdmin";
   
   const isAssignedToMe = (task) => {
@@ -127,6 +137,11 @@ function MyTasks() {
 
   const isOverdue = (dueDate) => {
     return new Date(dueDate) < new Date() && selectedTask?.status !== "completed";
+  };
+
+  const isTaskOverdue = (task) => {
+    if (!task?.dueDate) return false;
+    return new Date(task.dueDate) < new Date() && task.status !== "completed";
   };
 
   const groupedTasks = {
@@ -195,6 +210,27 @@ function MyTasks() {
             </div>
           </div>
 
+          {/* Department Filter for Multi-Shift Employees */}
+          {hasMultipleShifts && (
+            <div className="filters-section" style={{ marginBottom: '20px' }}>
+              <div className="filter-group">
+                <label>Filter by Department:</label>
+                <select
+                  value={departmentFilter}
+                  onChange={(e) => setDepartmentFilter(e.target.value)}
+                  className="filter-select"
+                >
+                  <option value="">All My Departments</option>
+                  {userShifts.map((shift) => (
+                    <option key={shift.department?._id || shift.department} value={shift.department?._id || shift.department}>
+                      {shift.department?.name || `Department ${shift.department}`}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          )}
+
           {/* Kanban Board */}
           {loading ? (
             <div style={{ textAlign: "center", padding: "40px" }}>Loading...</div>
@@ -214,7 +250,7 @@ function MyTasks() {
                   groupedTasks.todo.map((task) => (
                     <div
                       key={task._id}
-                      className={`task-card priority-${task.priority.toLowerCase()}`}
+                      className={`task-card priority-${task.priority.toLowerCase()}${isTaskOverdue(task) ? " overdue" : ""}`}
                       onClick={() => handleViewTask(task)}
                     >
                       <div className="task-header">
@@ -267,7 +303,7 @@ function MyTasks() {
                   groupedTasks["in-progress"].map((task) => (
                     <div
                       key={task._id}
-                      className={`task-card priority-${task.priority.toLowerCase()}`}
+                      className={`task-card priority-${task.priority.toLowerCase()}${isTaskOverdue(task) ? " overdue" : ""}`}
                       onClick={() => handleViewTask(task)}
                     >
                       <div className="task-header">
@@ -320,7 +356,7 @@ function MyTasks() {
                   groupedTasks.completed.map((task) => (
                     <div
                       key={task._id}
-                      className={`task-card priority-${task.priority.toLowerCase()}`}
+                      className={`task-card priority-${task.priority.toLowerCase()}${isTaskOverdue(task) ? " overdue" : ""}`}
                       onClick={() => handleViewTask(task)}
                     >
                       <div className="task-header">
@@ -423,14 +459,25 @@ function MyTasks() {
 
                   {/* Task Meta Grid */}
                   <div className="task-meta-grid">
-                    <div className="meta-card">
+                    <div className="meta-card assignees-card">
                       <div className="meta-icon"><i className="fas fa-user"></i></div>
                       <div className="meta-content">
                         <span className="meta-label">Assigned To</span>
-                        <span className="meta-value">
-                          {renderAssignees(selectedTask.assignedTo, true)}
-                          {isAssignedToMe(selectedTask) && <span className="you-badge">(You)</span>}
-                        </span>
+                        {(() => {
+                          const assignees = Array.isArray(selectedTask.assignedTo) ? selectedTask.assignedTo : [selectedTask.assignedTo];
+                          return (
+                            <div className="assignees-list">
+                              {assignees.map((emp, idx) => (
+                                <div key={idx} className="assignee-item">
+                                  <i className="fas fa-user-circle"></i>
+                                  <span className="assignee-name">{emp?.name || 'Unknown'}</span>
+                                  <span className="assignee-id">{emp?.employeeId || ''}</span>
+                                  {emp._id === user?._id && <span className="you-badge">(You)</span>}
+                                </div>
+                              ))}
+                            </div>
+                          );
+                        })()}
                       </div>
                     </div>
                     <div className="meta-card">

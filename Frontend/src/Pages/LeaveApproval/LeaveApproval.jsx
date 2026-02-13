@@ -1,9 +1,13 @@
 import { useState, useEffect } from "react";
+import { useLocation } from "react-router-dom";
 import SideBar from "../../Components/SideBar/SideBar";
 import { leaveAPI, employeeAPI } from "../../Config/Api";
+import { useToast } from "../../Components/Common/Toast/Toast";
 import "./LeaveApproval.css";
 
 function LeaveApproval() {
+  const location = useLocation();
+  const toast = useToast();
   const [leaves, setLeaves] = useState([]);
   const [loading, setLoading] = useState(false);
   const [filterStatus, setFilterStatus] = useState("pending");
@@ -12,6 +16,12 @@ function LeaveApproval() {
   const [selectedLeave, setSelectedLeave] = useState(null);
   const [rejectionReason, setRejectionReason] = useState("");
   const [lightboxImage, setLightboxImage] = useState(null);
+
+  useEffect(() => {
+    if (location.state?.defaultStatus) {
+      setFilterStatus(location.state.defaultStatus);
+    }
+  }, [location.state]);
 
   useEffect(() => {
     fetchLeaves();
@@ -41,11 +51,11 @@ function LeaveApproval() {
       });
       
       if (response.data.success) {
-        alert("Leave request approved successfully!");
+        toast.success("Leave request approved successfully!");
         fetchLeaves();
       }
     } catch (error) {
-      alert(error.response?.data?.message || "Error approving leave");
+      toast.error(error.response?.data?.message || "Error approving leave");
     }
   };
 
@@ -69,14 +79,14 @@ function LeaveApproval() {
       });
       
       if (response.data.success) {
-        alert("Leave request rejected successfully!");
+        toast.success("Leave request rejected successfully!");
         setShowRejectModal(false);
         setSelectedLeave(null);
         setRejectionReason("");
         fetchLeaves();
       }
     } catch (error) {
-      alert(error.response?.data?.message || "Error rejecting leave");
+      toast.error(error.response?.data?.message || "Error rejecting leave");
     }
   };
 

@@ -27,7 +27,7 @@ export const login = async (req, res) => {
       .select("+password")
       .populate("role", "name description permissions")
       .populate("department", "name code")
-      .populate("additionalDepartments", "name code")
+      .populate("shifts.department", "name code")
       .populate("leadingDepartments", "name code");
 
     if (!employee) {
@@ -92,7 +92,7 @@ export const login = async (req, res) => {
       email: employee.email,
       phone: employee.phone,
       department: employee.department,
-      additionalDepartments: employee.additionalDepartments || [],
+      shifts: employee.shifts || [],
       leadingDepartments: employee.leadingDepartments || [],
       position: employee.position,
       role: employee.role,
@@ -122,7 +122,7 @@ export const getMe = async (req, res) => {
     const employee = await Employee.findById(req.user._id)
       .populate("role", "name description permissions")
       .populate("department", "name code")
-      .populate("additionalDepartments", "name code")
+      .populate("shifts.department", "name code")
       .populate("leadingDepartments", "name code");
 
     if (!employee) {

@@ -33,7 +33,7 @@ export const markAbsentEmployees = async (targetDate = null) => {
       employeeQuery.role = { $ne: superAdminRole._id };
     }
     
-    const activeEmployees = await Employee.find(employeeQuery).select('_id employeeId name workSchedule');
+    const activeEmployees = await Employee.find(employeeQuery).select('_id employeeId name shifts department');
     logger.info(`Total active employees (excluding superAdmin): ${activeEmployees.length}`);
     
     let markedAbsent = 0;
@@ -42,8 +42,9 @@ export const markAbsentEmployees = async (targetDate = null) => {
     
     // Check each employee for attendance
     for (const employee of activeEmployees) {
-      // Check if today is a weekly off for this employee
-      const weeklyOffs = employee.workSchedule?.weeklyOffs || ["Saturday", "Sunday"];
+      // Check if today is a weekly off for this employee (from primary shift)
+      const primaryShift = employee.shifts?.find(s => s.isPrimary) || employee.shifts?.[0];
+      const weeklyOffs = primaryShift?.workSchedule?.weeklyOffs || ["Saturday", "Sunday"];
       if (weeklyOffs.includes(dayName)) {
         weeklyOffSkipped++;
         continue; // Skip marking absent on weekly offs
@@ -60,9 +61,13 @@ export const markAbsentEmployees = async (targetDate = null) => {
       
       if (!existingAttendance) {
         // No attendance record - mark as absent
+        // Get department from primary shift or default
+        const deptId = primaryShift?.department || employee.department;
+        
         await Attendance.create({
           employee: employee._id,
           userId: employee.employeeId,
+          department: deptId,
           date: checkDate,
           checkIn: null,
           checkOut: null,

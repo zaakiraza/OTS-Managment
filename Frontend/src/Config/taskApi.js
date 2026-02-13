@@ -2,7 +2,7 @@ import api from "./Api";
 
 const taskAPI = {
   getAll: (params) => api.get("/tasks", { params }),
-  getMyTasks: () => api.get("/tasks/my-tasks"),
+  getMyTasks: (params) => api.get("/tasks/my-tasks", { params }),
   getById: (id) => api.get(`/tasks/${id}`),
   create: (data) => api.post("/tasks", data),
   update: (id, data) => api.put(`/tasks/${id}`, data),

@@ -1,11 +1,13 @@
+import mongoose from "mongoose";
 import Attendance from "../Model/Attendance.js";
 import Employee from "../Model/Employee.js";
+import Department from "../Model/Department.js";
 import Role from "../Model/Role.js";
 import Settings from "../Model/Settings.js";
 import logger from "../Utils/logger.js";
 import { TIME } from "../Config/constants.js";
 import { logAttendanceAction } from "../Utils/auditLogger.js";
-import { splitAttendanceByDepartments, hasMultiDepartmentShifts } from "../Utils/attendanceSplitter.js";
+import { splitAttendanceByDepartments, hasMultipleShifts } from "../Utils/attendanceSplitter.js";
 import { markOldPendingAsMissing } from "../Utils/markMissingAttendance.js";
 import { 
   getDateAtMidnightUTC, 
@@ -41,7 +43,6 @@ export const deviceCheckIn = async (req, res) => {
       biometricId: biometricId.toString().trim(),
       isActive: true 
     }).populate('department', 'name leverageTime')
-      .populate('workSchedule')
       .populate('role', 'name');
 
     if (!employee) {
@@ -172,7 +173,7 @@ export const markAttendance = async (req, res) => {
       const now = new Date();
     
       // Check if employee has multiple department shifts configured
-      const hasShifts = await hasMultiDepartmentShifts(employee._id);
+      const hasShifts = await hasMultipleShifts(employee._id);
 
       if (hasShifts) {
         // Employee works in multiple departments - split attendance by shifts
@@ -201,7 +202,7 @@ export const markAttendance = async (req, res) => {
           )
         );
 
-        const hasShiftRecords = splitRecords.some(r => r.isShiftBased);
+        const hasShiftRecords = splitRecords.length > 1;
 
         return res.status(200).json({
           success: true,
@@ -219,7 +220,7 @@ export const markAttendance = async (req, res) => {
             $gte: today,
             $lt: new Date(today.getTime() + TIME.ONE_DAY),
           },
-          isShiftBased: false, // Only find non-shift-based records
+          department: employee.department, // Find record for primary department
         });
 
         if (!attendance) {
@@ -232,7 +233,7 @@ export const markAttendance = async (req, res) => {
             checkOut: type === "checkOut" ? now : null,
             deviceId: deviceId || "",
             isManualEntry: false,
-            isShiftBased: false,
+            department: employee.department,
           });
         } else {
           // Update existing record
@@ -318,26 +319,10 @@ export const getAllAttendance = async (req, res) => {
       filter.status = status;
     }
 
-    // Filter by department
+    // Filter by department - all attendance records now have department field
     const hasDepartmentFilter = req.query.department ? true : false;
     if (hasDepartmentFilter) {
-        // Find all employees in the selected department (primary or additional)
-        const employeesInDept = await Employee.find({
-          $or: [
-            { department: req.query.department, isActive: true },
-            { additionalDepartments: req.query.department, isActive: true }
-          ]
-        }).select('_id');
-      
-        const deptEmployeeIds = employeesInDept.map(emp => emp._id);
-      
-        // Include both:
-        // 1. Regular attendance for employees in this department
-        // 2. Shift-based attendance records specifically tagged for this department
-        filter.$or = [
-          { employee: { $in: deptEmployeeIds }, isShiftBased: false },
-          { department: req.query.department, isShiftBased: true }
-        ];
+        filter.department = req.query.department;
     }
 
     // For attendanceDepartment role, only show attendance of employees they created + their own attendance
@@ -371,12 +356,11 @@ export const getAllAttendance = async (req, res) => {
 
       const roleFilter = deptIds.length > 0 ? {
         $or: [
-          { employee: { $in: employeeIds }, isShiftBased: false },
-          { department: { $in: deptIds }, isShiftBased: true }
+          { employee: { $in: employeeIds } },
+          { department: { $in: deptIds } }
         ]
       } : {
-        employee: { $in: employeeIds },
-        isShiftBased: false
+        employee: { $in: employeeIds }
       };
 
       if (filter.$or || filter.$and) {
@@ -768,7 +752,7 @@ export const createManualAttendance = async (req, res) => {
       attendanceData.workingHours = workingHours;
     }
 
-    const hasShifts = await hasMultiDepartmentShifts(employee._id);
+    const hasShifts = await hasMultipleShifts(employee._id);
     if (hasShifts) {
       delete attendanceData.workingHours;
     }
@@ -796,7 +780,7 @@ export const createManualAttendance = async (req, res) => {
         after: { userId, date: attendanceDate, checkIn: checkInDate, checkOut: checkOutDate, isManualEntry: true }
       }, `Manual attendance created for ${employee.name} (${userId}) across ${splitRecords.length} departments`);
 
-      const hasShiftRecords = splitRecords.some(r => r.isShiftBased);
+      const hasShiftRecords = splitRecords.length > 1;
 
       responseData = populatedRecords;
       responseMessage = hasShiftRecords

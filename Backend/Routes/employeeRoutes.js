@@ -7,8 +7,8 @@ import {
   deleteEmployee,
   downloadEmployeeTemplate,
   importEmployees,
-  updateDepartmentShifts,
-  getDepartmentShifts,
+  updateShifts,
+  getShifts,
 } from "../Controller/employeeController.js";
 import { verifyToken, hasRole } from "../Middleware/auth.js";
 import { employeeValidation, paginationValidation, validateMongoId } from "../Middleware/validators.js";
@@ -29,9 +29,9 @@ router.post("/", hasRole("superAdmin", "attendanceDepartment"), employeeValidati
 router.put("/:id", hasRole("superAdmin", "attendanceDepartment"), employeeValidation.update, updateEmployee);
 router.delete("/:id", hasRole("superAdmin", "attendanceDepartment"), validateMongoId(), deleteEmployee);
 
-// Department shift configuration - superAdmin only
-router.get("/:employeeId/shifts", hasRole("superAdmin"), validateMongoId(), getDepartmentShifts);
-router.put("/:employeeId/shifts", hasRole("superAdmin"), validateMongoId(), updateDepartmentShifts);
+// Shift configuration - superAdmin only
+router.get("/:employeeId/shifts", hasRole("superAdmin"), validateMongoId("employeeId"), getShifts);
+router.put("/:employeeId/shifts", hasRole("superAdmin"), validateMongoId("employeeId"), updateShifts);
 
 // Read operations - Allow ITAssetManager and teamLead as well
 router.get("/", hasRole("superAdmin", "attendanceDepartment", "ITAssetManager", "teamLead"), paginationValidation, getAllEmployees);

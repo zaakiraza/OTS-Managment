@@ -7,13 +7,6 @@ import logger from "./logger.js";
  * for employees working in multiple departments with defined shifts
  * 
  * @param {Object} attendanceData - The original attendance data
- * @param {String} attendanceData.userId - Employee ID
- * @param {ObjectId} attendanceData.employee - Employee ObjectId
- * @param {Date} attendanceData.date - Attendance date
- * @param {Date} attendanceData.checkIn - Check-in timestamp
- * @param {Date} attendanceData.checkOut - Check-out timestamp
- * @param {String} attendanceData.deviceId - Device ID (optional)
- * @param {Boolean} attendanceData.isManualEntry - Manual entry flag
  * @returns {Promise<Array>} Array of created/updated attendance records
  */
 export const splitAttendanceByDepartments = async (attendanceData) => {
@@ -32,37 +25,27 @@ export const splitAttendanceByDepartments = async (attendanceData) => {
       modifiedBy,
     } = attendanceData;
 
-    // Fetch employee with department shifts
+    // Fetch employee with shifts
     const employee = await Employee.findById(employeeId)
-      .populate('department')
-      .populate('departmentShifts.department');
+      .populate('shifts.department');
 
     if (!employee) {
       logger.error(`Employee not found for splitting attendance: ${userId}`);
       return [];
     }
 
-    // If no department shifts configured, return single attendance record
-    if (!employee.departmentShifts || employee.departmentShifts.length === 0) {
-      logger.info(`No department shifts configured for ${userId}, creating single attendance record`);
-      return [attendanceData];
-    }
-
-    // Get active shifts for the current day
-    const dayOfWeek = date.toLocaleDateString("en-US", { weekday: "long" });
-    const activeShifts = employee.departmentShifts.filter(
-      shift => shift.isActive && shift.daysOfWeek.includes(dayOfWeek)
-    );
-
-    if (activeShifts.length === 0) {
-      logger.info(`No active shifts for ${userId} on ${dayOfWeek}, creating single attendance record`);
+    // If only one shift, create single attendance record
+    if (!employee.shifts || employee.shifts.length <= 1) {
+      const shift = employee.shifts?.[0];
       const singleAttendance = await Attendance.create({
         employee: employeeId,
         userId: userId,
         date: date,
+        department: shift?.department?._id || employee.department,
+        shiftStartTime: shift?.workSchedule?.checkInTime || "09:00",
+        shiftEndTime: shift?.workSchedule?.checkOutTime || "17:00",
         checkIn: checkIn || null,
         checkOut: checkOut || null,
-        isShiftBased: false,
         deviceId: deviceId || "",
         isManualEntry: isManualEntry || false,
         remarks: remarks || "",
@@ -73,14 +56,48 @@ export const splitAttendanceByDepartments = async (attendanceData) => {
       return [singleAttendance];
     }
 
-    // Sort shifts by start time to process them in order
+    // Get active shifts for the current day
+    const dayOfWeek = date.toLocaleDateString("en-US", { weekday: "long" });
+    const activeShifts = employee.shifts.filter(shift => {
+      if (!shift.isActive) return false;
+      const ws = shift.workSchedule;
+      // Check if this day is NOT a weekly off
+      const weeklyOffs = ws?.weeklyOffs || ["Saturday", "Sunday"];
+      return !weeklyOffs.includes(dayOfWeek);
+    });
+
+    if (activeShifts.length === 0) {
+      logger.info(`No active shifts for ${userId} on ${dayOfWeek}, creating single attendance record`);
+      const primaryShift = employee.shifts.find(s => s.isPrimary) || employee.shifts[0];
+      const singleAttendance = await Attendance.create({
+        employee: employeeId,
+        userId: userId,
+        date: date,
+        department: primaryShift.department._id || employee.department,
+        shiftStartTime: primaryShift.workSchedule?.checkInTime || "09:00",
+        shiftEndTime: primaryShift.workSchedule?.checkOutTime || "17:00",
+        checkIn: checkIn || null,
+        checkOut: checkOut || null,
+        deviceId: deviceId || "",
+        isManualEntry: isManualEntry || false,
+        remarks: remarks || "",
+        modifiedBy: modifiedBy || null,
+        status: status || undefined,
+        workingHours: workingHours !== undefined ? workingHours : undefined,
+      });
+      return [singleAttendance];
+    }
+
+    // Sort shifts by check-in time
     activeShifts.sort((a, b) => {
-      // Get effective start time (day-specific or default)
-      const aStartTime = (a.daySchedules && a.daySchedules.get(dayOfWeek))?.startTime || a.startTime;
-      const bStartTime = (b.daySchedules && b.daySchedules.get(dayOfWeek))?.startTime || b.startTime;
+      const ws_a = a.workSchedule;
+      const ws_b = b.workSchedule;
+      // Check for day-specific schedule
+      const aStart = ws_a?.daySchedules?.get?.(dayOfWeek)?.checkInTime || ws_a?.checkInTime || "09:00";
+      const bStart = ws_b?.daySchedules?.get?.(dayOfWeek)?.checkInTime || ws_b?.checkInTime || "09:00";
       
-      const [aHour, aMin] = aStartTime.split(':').map(Number);
-      const [bHour, bMin] = bStartTime.split(':').map(Number);
+      const [aHour, aMin] = aStart.split(':').map(Number);
+      const [bHour, bMin] = bStart.split(':').map(Number);
       return (aHour * 60 + aMin) - (bHour * 60 + bMin);
     });
 
@@ -90,44 +107,41 @@ export const splitAttendanceByDepartments = async (attendanceData) => {
     const todayStart = new Date(date);
     todayStart.setHours(0, 0, 0, 0);
 
-    // Create attendance records for each department shift
     for (const shift of activeShifts) {
-      // Check if there's a day-specific schedule for this day
-      let startTime = shift.startTime;
-      let endTime = shift.endTime;
+      const ws = shift.workSchedule;
+      let startTime = ws?.checkInTime || "09:00";
+      let endTime = ws?.checkOutTime || "17:00";
       
-      if (shift.daySchedules && shift.daySchedules.get(dayOfWeek)) {
-        const daySchedule = shift.daySchedules.get(dayOfWeek);
-        startTime = daySchedule.startTime || startTime;
-        endTime = daySchedule.endTime || endTime;
-        logger.info(`Using day-specific schedule for ${userId} on ${dayOfWeek}: ${startTime}-${endTime}`);
+      // Day-specific schedule override
+      if (ws?.daySchedules?.get?.(dayOfWeek)) {
+        const daySchedule = ws.daySchedules.get(dayOfWeek);
+        if (!daySchedule.isOff) {
+          startTime = daySchedule.checkInTime || startTime;
+          endTime = daySchedule.checkOutTime || endTime;
+        }
       }
 
       const [startHour, startMin] = startTime.split(':').map(Number);
       const [endHour, endMin] = endTime.split(':').map(Number);
 
-      // Create shift time boundaries for today
       const shiftStart = new Date(todayStart);
       shiftStart.setHours(startHour, startMin, 0, 0);
 
       const shiftEnd = new Date(todayStart);
       shiftEnd.setHours(endHour, endMin, 0, 0);
 
-      // Determine check-in and check-out times for this shift
       let shiftCheckIn = null;
       let shiftCheckOut = null;
 
-      // If employee checked in before or during this shift
       if (checkIn && checkIn <= shiftEnd) {
-        // Use actual check-in if it's before shift end, otherwise use shift start
         shiftCheckIn = checkIn < shiftStart ? shiftStart : checkIn;
       }
 
-      // If employee checked out during or after this shift
       if (checkOut && checkOut >= shiftStart) {
-        // Use actual check-out if it's after shift start, otherwise use shift end
         shiftCheckOut = checkOut > shiftEnd ? shiftEnd : checkOut;
       }
+
+      const deptId = shift.department._id || shift.department;
 
       // Find or create attendance record for this department
       let deptAttendance = await Attendance.findOne({
@@ -137,22 +151,19 @@ export const splitAttendanceByDepartments = async (attendanceData) => {
           $gte: todayStart,
           $lt: new Date(todayStart.getTime() + 24 * 60 * 60 * 1000),
         },
-        department: shift.department._id,
-        isShiftBased: true,
+        department: deptId,
       });
 
       if (!deptAttendance) {
-        // Create new department-specific attendance record
         deptAttendance = await Attendance.create({
           employee: employeeId,
           userId: userId,
           date: date,
           checkIn: shiftCheckIn,
           checkOut: shiftCheckOut,
-          department: shift.department._id,
+          department: deptId,
           shiftStartTime: startTime,
           shiftEndTime: endTime,
-          isShiftBased: true,
           deviceId: deviceId || "",
           isManualEntry: isManualEntry || false,
           remarks: remarks || "",
@@ -161,36 +172,24 @@ export const splitAttendanceByDepartments = async (attendanceData) => {
           workingHours: workingHours !== undefined ? workingHours : undefined,
         });
 
-        logger.info(`Created shift attendance for ${userId} - ${shift.department.name} (${startTime}-${endTime})`);
+        logger.info(`Created shift attendance for ${userId} - ${shift.department.name || deptId} (${startTime}-${endTime})`);
       } else {
-        // Update existing record
         if (shiftCheckIn && !deptAttendance.checkIn) {
           deptAttendance.checkIn = shiftCheckIn;
         }
         if (shiftCheckOut) {
           deptAttendance.checkOut = shiftCheckOut;
         }
-        // Update shift times (in case day-specific schedule changed)
         deptAttendance.shiftStartTime = startTime;
         deptAttendance.shiftEndTime = endTime;
-        if (isManualEntry) {
-          deptAttendance.isManualEntry = true;
-        }
-        if (remarks !== undefined) {
-          deptAttendance.remarks = remarks;
-        }
-        if (modifiedBy) {
-          deptAttendance.modifiedBy = modifiedBy;
-        }
-        if (status) {
-          deptAttendance.status = status;
-        }
-        if (workingHours !== undefined) {
-          deptAttendance.workingHours = workingHours;
-        }
+        if (isManualEntry) deptAttendance.isManualEntry = true;
+        if (remarks !== undefined) deptAttendance.remarks = remarks;
+        if (modifiedBy) deptAttendance.modifiedBy = modifiedBy;
+        if (status) deptAttendance.status = status;
+        if (workingHours !== undefined) deptAttendance.workingHours = workingHours;
         await deptAttendance.save();
 
-        logger.info(`Updated shift attendance for ${userId} - ${shift.department.name} (${startTime}-${endTime})`);
+        logger.info(`Updated shift attendance for ${userId} - ${shift.department.name || deptId} (${startTime}-${endTime})`);
       }
 
       attendanceRecords.push(deptAttendance);
@@ -205,8 +204,6 @@ export const splitAttendanceByDepartments = async (attendanceData) => {
 
 /**
  * Helper function to convert time string (HH:MM) to minutes since midnight
- * @param {String} timeStr - Time in HH:MM format
- * @returns {Number} Minutes since midnight
  */
 export const timeToMinutes = (timeStr) => {
   const [hours, minutes] = timeStr.split(':').map(Number);
@@ -214,16 +211,16 @@ export const timeToMinutes = (timeStr) => {
 };
 
 /**
- * Check if employee has department shifts configured
+ * Check if employee has multiple shifts configured
  * @param {ObjectId} employeeId - Employee ObjectId
  * @returns {Promise<Boolean>}
  */
-export const hasMultiDepartmentShifts = async (employeeId) => {
+export const hasMultipleShifts = async (employeeId) => {
   try {
-    const employee = await Employee.findById(employeeId).select('departmentShifts');
-    return employee && employee.departmentShifts && employee.departmentShifts.length > 0;
+    const employee = await Employee.findById(employeeId).select('shifts');
+    return employee && employee.shifts && employee.shifts.length > 1;
   } catch (error) {
-    logger.error(`Error checking department shifts: ${error.message}`);
+    logger.error(`Error checking shifts: ${error.message}`);
     return false;
   }
 };

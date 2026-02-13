@@ -41,6 +41,18 @@ const departmentSchema = new mongoose.Schema(
       ref: "Employee",
       default: null,
     },
+    hrManager: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Employee",
+      default: null,
+      description: "HR manager responsible for this department",
+    },
+    attendanceManager: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Employee",
+      default: null,
+      description: "Attendance manager responsible for this department",
+    },
     teamLead: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Employee",
