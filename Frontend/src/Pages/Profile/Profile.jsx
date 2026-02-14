@@ -14,13 +14,13 @@ function Profile() {
 
   useEffect(() => {
     fetchUserProfile();
-    fetchAttendanceStats();
   }, []);
 
-  // Fetch attendance when user is loaded
+  // Fetch attendance and stats when user is loaded
   useEffect(() => {
     if (user?._id) {
       fetchRecentAttendance();
+      fetchAttendanceStats();
     }
   }, [user]);
 
@@ -57,13 +57,38 @@ function Profile() {
   };
 
   const fetchAttendanceStats = async () => {
+    if (!user?._id) return;
+    
     try {
-      const currentMonth = new Date().toISOString().slice(0, 7);
-      const response = await attendanceAPI.getAttendanceStats({
-        month: currentMonth,
+      // Get attendance for current month for this employee
+      const now = new Date();
+      const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+      const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      
+      const response = await attendanceAPI.getAllAttendance({
+        startDate: firstDay.toISOString().split("T")[0],
+        endDate: lastDay.toISOString().split("T")[0],
       });
+      
       if (response.data.success) {
-        setStats(response.data.data || {});
+        // Filter only current user's attendance
+        const myAttendance = response.data.data.filter(
+          (a) => a.employee?._id === user._id || a.employee === user._id
+        );
+        
+        // Calculate stats
+        const calculatedStats = {
+          present: myAttendance.filter(a => 
+            a.status === "present" || 
+            a.status === "early-departure" || 
+            a.status === "half-day"
+          ).length,
+          absent: myAttendance.filter(a => a.status === "absent" || a.status === "missing").length,
+          late: myAttendance.filter(a => a.status === "late" || a.status === "late-early-departure").length,
+          leave: myAttendance.filter(a => a.status === "leave").length,
+        };
+        
+        setStats(calculatedStats);
       }
     } catch (error) {
       console.error("Error fetching attendance stats:", error);
@@ -293,7 +318,7 @@ function Profile() {
                       <div className="schedule-details">
                         <span className="schedule-label">Check-In Time</span>
                         <span className="schedule-value">
-                          {user?.workSchedule?.checkInTime || "09:00"}
+                          {user?.shifts?.[0]?.workSchedule?.checkInTime || user?.workSchedule?.checkInTime || "09:00"}
                         </span>
                       </div>
                     </div>
@@ -302,7 +327,7 @@ function Profile() {
                       <div className="schedule-details">
                         <span className="schedule-label">Check-Out Time</span>
                         <span className="schedule-value">
-                          {user?.workSchedule?.checkOutTime || "17:00"}
+                          {user?.shifts?.[0]?.workSchedule?.checkOutTime || user?.workSchedule?.checkOutTime || "17:00"}
                         </span>
                       </div>
                     </div>
@@ -311,7 +336,7 @@ function Profile() {
                       <div className="schedule-details">
                         <span className="schedule-label">Working Days/Week</span>
                         <span className="schedule-value">
-                          {user?.workSchedule?.workingDaysPerWeek || 5} days
+                          {user?.shifts?.[0]?.workSchedule?.workingDaysPerWeek || user?.workSchedule?.workingDaysPerWeek || 5} days
                         </span>
                       </div>
                     </div>
@@ -320,34 +345,46 @@ function Profile() {
                       <div className="schedule-details">
                         <span className="schedule-label">Working Hours/Week</span>
                         <span className="schedule-value">
-                          {user?.workSchedule?.workingHoursPerWeek || 40} hours
+                          {user?.shifts?.[0]?.workSchedule?.workingHoursPerWeek || user?.workSchedule?.workingHoursPerWeek || 40} hours
                         </span>
                       </div>
                     </div>
                   </div>
 
-                  {user?.workSchedule?.weeklyOffs?.length > 0 && (
-                    <div className="weekly-offs">
-                      <h4>Weekly Off Days</h4>
-                      <div className="off-days">
-                        {user.workSchedule.weeklyOffs.map((day) => (
-                          <span key={day} className="off-day-badge">
-                            {day}
-                          </span>
-                        ))}
+                  {(() => {
+                    const weeklyOffs = user?.shifts?.[0]?.workSchedule?.weeklyOffs || user?.workSchedule?.weeklyOffs || [];
+                    return weeklyOffs.length > 0 && (
+                      <div className="weekly-offs">
+                        <h4>Weekly Off Days</h4>
+                        <div className="off-days">
+                          {weeklyOffs.map((day) => (
+                            <span key={day} className="off-day-badge">
+                              {day}
+                            </span>
+                          ))}
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    );
+                  })()}
 
                   {/* Day-Specific Schedules */}
-                  {user?.workSchedule?.daySchedules && Object.keys(user.workSchedule.daySchedules).length > 0 && (
+                  {user?.workSchedule && (
                     <div className="day-schedules">
                       <h4><i className="fas fa-calendar-day"></i> Day-Specific Schedules</h4>
                       <div className="day-schedules-list">
                         {["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"].map((day) => {
-                          const daySchedule = user.workSchedule.daySchedules[day];
-                          const isWeeklyOff = user.workSchedule.weeklyOffs?.includes(day);
+                          // Check both locations for day schedules - shifts array takes priority
+                          const shiftsSchedule = user.shifts?.[0]?.workSchedule;
+                          const daySchedule = shiftsSchedule?.daySchedules?.[day] || user.workSchedule.daySchedules?.[day];
+                          
+                          // Check both locations for weekly offs
+                          const weeklyOffs = shiftsSchedule?.weeklyOffs || user.workSchedule.weeklyOffs || [];
+                          const isWeeklyOff = weeklyOffs.includes(day);
                           const hasCustomSchedule = daySchedule && Object.keys(daySchedule).length > 0;
+                          
+                          // Get default times from shifts or main workSchedule
+                          const defaultCheckIn = shiftsSchedule?.checkInTime || user.workSchedule?.checkInTime || "09:00";
+                          const defaultCheckOut = shiftsSchedule?.checkOutTime || user.workSchedule?.checkOutTime || "17:00";
                           
                           return (
                             <div 
@@ -375,7 +412,7 @@ function Profile() {
                                 ) : (
                                   !isWeeklyOff && (
                                     <span className="timing-default">
-                                      {user?.workSchedule?.checkInTime || "09:00"} - {user?.workSchedule?.checkOutTime || "17:00"}
+                                      {defaultCheckIn} - {defaultCheckOut}
                                     </span>
                                   )
                                 )}
@@ -432,9 +469,19 @@ function Profile() {
                         {attendance.map((record) => (
                           <tr key={record._id}>
                             <td>{formatDate(record.date)}</td>
-                            <td className="time">{formatTime(record.checkIn)}</td>
-                            <td className="time">{formatTime(record.checkOut)}</td>
-                            <td>{record.workingHours?.toFixed(2) || "0"} hrs</td>
+                            <td>
+                              <span className="time-badge check-in">
+                                <i className="fas fa-sign-in-alt"></i>
+                                {formatTime(record.checkIn)}
+                              </span>
+                            </td>
+                            <td>
+                              <span className="time-badge check-out">
+                                <i className="fas fa-sign-out-alt"></i>
+                                {formatTime(record.checkOut)}
+                              </span>
+                            </td>
+                            <td><span className="hours-badge">{record.workingHours?.toFixed(2) || "0"} hrs</span></td>
                             <td>
                               <span
                                 className="status-badge"

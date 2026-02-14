@@ -37,11 +37,12 @@ export const calculateSalary = async (req, res) => {
       });
     }
 
-    // Check if employee has salary information
-    if (!employee.salary || !employee.salary.monthlySalary || employee.salary.monthlySalary <= 0) {
+    // Check if employee has salary information (check shifts first, then legacy salary field)
+    const monthlySalary = employee.shifts?.[0]?.monthlySalary || employee.salary?.monthlySalary;
+    if (!monthlySalary || monthlySalary <= 0) {
       return res.status(400).json({
         success: false,
-        message: `Employee ${employeeId} has no salary set (${employee.salary?.monthlySalary || 0}). Please update employee salary first.`,
+        message: `Employee ${employeeId} has no salary set (${monthlySalary || 0}). Please update employee salary first.`,
       });
     }
 
@@ -180,7 +181,7 @@ export const calculateSalary = async (req, res) => {
 
     let totalDeductions = 0;
     let bonus = 0;
-    const baseSalary = employee.salary.monthlySalary;
+    const baseSalary = monthlySalary;
 
     // Calculate based on attendance marking method
     if (criteria.attendanceMarkingMethod === 'weeklyHours') {
@@ -384,11 +385,12 @@ export const calculateAllSalaries = async (req, res) => {
 
     for (const employee of employees) {
       try {
-        // Check if employee has salary information
-        if (!employee.salary || !employee.salary.monthlySalary || employee.salary.monthlySalary <= 0) {
+        // Check if employee has salary information (check shifts first, then legacy salary field)
+        const monthlySalary = employee.shifts?.[0]?.monthlySalary || employee.salary?.monthlySalary;
+        if (!monthlySalary || monthlySalary <= 0) {
           errors.push({
             employeeId: employee.employeeId,
-            message: `No salary set (${employee.salary?.monthlySalary || 0}). Update employee record first.`,
+            message: `No salary set (${monthlySalary || 0}). Update employee record first.`,
           });
           continue;
         }
@@ -513,7 +515,7 @@ export const calculateAllSalaries = async (req, res) => {
 
         let totalDeductions = 0;
         let bonus = 0;
-        const baseSalary = employee.salary.monthlySalary;
+        const baseSalary = monthlySalary;
 
         // Calculate based on attendance marking method
         if (criteria.attendanceMarkingMethod === 'weeklyHours') {
@@ -734,11 +736,12 @@ export const previewSalary = async (req, res) => {
       });
     }
 
-    // Check if employee has salary information
-    if (!employee.salary || !employee.salary.monthlySalary || employee.salary.monthlySalary <= 0) {
+    // Check if employee has salary information (check shifts first, then legacy salary field)
+    const monthlySalary = employee.shifts?.[0]?.monthlySalary || employee.salary?.monthlySalary;
+    if (!monthlySalary || monthlySalary <= 0) {
       return res.status(400).json({
         success: false,
-        message: `Employee ${employeeId} has no salary set (${employee.salary?.monthlySalary || 0}). Please update employee salary first.`,
+        message: `Employee ${employeeId} has no salary set (${monthlySalary || 0}). Please update employee salary first.`,
       });
     }
 
@@ -872,7 +875,7 @@ export const previewSalary = async (req, res) => {
 
     let totalDeductions = 0;
     let bonus = 0;
-    const baseSalary = employee.salary.monthlySalary;
+    const baseSalary = monthlySalary;
     
     // Initialize variables that may be used in response
     let earlyDepartureDays = 0;
@@ -1091,12 +1094,13 @@ export const previewAllSalaries = async (req, res) => {
 
     for (const employee of employees) {
       try {
-        // Check if employee has salary information
-        if (!employee.salary || !employee.salary.monthlySalary || employee.salary.monthlySalary <= 0) {
+        // Check if employee has salary information (check shifts first, then legacy salary field)
+        const monthlySalary = employee.shifts?.[0]?.monthlySalary || employee.salary?.monthlySalary;
+        if (!monthlySalary || monthlySalary <= 0) {
           errors.push({
             employeeId: employee.employeeId,
             name: employee.name,
-            message: `No salary set (${employee.salary?.monthlySalary || 0})`,
+            message: `No salary set (${monthlySalary || 0})`,
           });
           continue;
         }
@@ -1212,7 +1216,7 @@ export const previewAllSalaries = async (req, res) => {
 
         let totalDeductions = 0;
         let bonus = 0;
-        const baseSalary = employee.salary.monthlySalary;
+        const baseSalary = monthlySalary;
 
         if (criteria.attendanceMarkingMethod === 'weeklyHours') {
           const expectedWeeklyHours = 40;

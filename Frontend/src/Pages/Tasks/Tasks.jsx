@@ -192,7 +192,6 @@ function Tasks() {
         return String(empDeptId) === deptIdStr;
       });
       setFilteredEmployees(filtered);
-      console.log(`[Tasks] Department changed to: ${departmentId}, Found ${filtered.length} employees`);
     } else {
       setFilteredEmployees([]);
     }

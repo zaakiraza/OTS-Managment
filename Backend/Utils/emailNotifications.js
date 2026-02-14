@@ -10,18 +10,11 @@ const createTransporter = async () => {
     const emailPassword = process.env.EMAIL_PASSWORD;
 
     // Debug: Log all email-related env variables
-    console.log("[Email Debug] Checking environment variables:");
-    console.log(`  EMAIL_SERVICE: ${process.env.EMAIL_SERVICE || 'not set (using default: gmail)'}`);
-    console.log(`  EMAIL_USER: ${emailUser ? 'SET (length: ' + emailUser.length + ')' : 'NOT SET'}`);
-    console.log(`  EMAIL_PASSWORD: ${emailPassword ? 'SET (length: ' + emailPassword.length + ')' : 'NOT SET'}`);
-
     if (!emailUser || !emailPassword) {
       console.warn("Email credentials not configured in environment variables");
       console.warn("Make sure EMAIL_USER and EMAIL_PASSWORD are set in Backend/.env file");
       return null;
     }
-
-    console.log(`[Email Config] Using email service: ${emailService}, user: ${emailUser}`);
 
     return nodemailer.createTransport({
       service: emailService,
@@ -114,7 +107,6 @@ const sendEmail = async (to, subject, htmlContent) => {
     };
 
     const info = await transporter.sendMail(mailOptions);
-    console.log("Email sent:", info.messageId);
     return { success: true, messageId: info.messageId };
   } catch (error) {
     console.error("Email sending failed:", error);

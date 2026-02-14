@@ -597,7 +597,6 @@ export const exportDepartments = async (req, res) => {
  */
 export const exportSalaries = async (req, res) => {
   try {
-    console.log("Export salaries called with query:", req.query);
     const { month, year, departmentId, format = 'xlsx' } = req.query;
     const filter = {};
 

@@ -47,7 +47,6 @@ export const createDepartment = async (req, res) => {
       const parentIsRoot = (parent.level === 0 || !parent.level);
       const userCreatedParent = String(parent.createdBy) === String(req.user._id);
       
-      console.log(`[Create Department] User: ${req.user.name}, Parent: ${parent.name}, ParentIsRoot: ${parentIsRoot}, UserCreatedParent: ${userCreatedParent}`);
       
       if (!parentIsRoot && !userCreatedParent) {
         return res.status(403).json({
@@ -238,8 +237,6 @@ export const getAllDepartments = async (req, res) => {
           ];
         }
       }
-      
-      console.log(`[getAllDepartments] User: ${req.user.name} (${userRole}), Allowed departments: ${query._id ? query._id.$in?.length || 'all' : 'filtered by other criteria'}`);
     }
     
     const departments = await Department.find(query)
@@ -353,14 +350,6 @@ export const updateDepartment = async (req, res) => {
   try {
     const { name, code, description, head, isActive, leverageTime, teamLead, parentDepartment } = req.body;
 
-    console.log("[Department Update] Received data:", { 
-      name, 
-      code, 
-      leverageTime, 
-      teamLead, 
-      head 
-    });
-
     const currentDept = await Department.findById(req.params.id);
     if (!currentDept) {
       return res.status(404).json({
@@ -368,8 +357,6 @@ export const updateDepartment = async (req, res) => {
         message: "Department not found",
       });
     }
-
-    console.log("[Department Update] Current department leverageTime:", currentDept.leverageTime);
 
     // For attendanceDepartment role, only allow editing departments they created
     const requestingUserRole = req.user?.role?.name || req.user?.role;
@@ -384,8 +371,6 @@ export const updateDepartment = async (req, res) => {
 
     const updateData = { name, description, head, isActive, leverageTime, teamLead };
     if (code) updateData.code = code.toUpperCase();
-
-    console.log("[Department Update] Update data prepared:", updateData);
 
     // Get current parent ID as string for comparison
     const currentParentId = currentDept.parentDepartment 
@@ -455,12 +440,6 @@ export const updateDepartment = async (req, res) => {
       .populate("head", "name email")
       .populate("teamLead", "name employeeId email position")
       .populate("parentDepartment", "name code");
-
-    console.log("[Department Update] Updated department:", {
-      name: department.name,
-      leverageTime: department.leverageTime,
-      teamLead: department.teamLead
-    });
 
     // Audit log
     await logDepartmentAction(req, "UPDATE", department, {

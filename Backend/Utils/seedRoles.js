@@ -10,12 +10,9 @@ dotenv.config();
 const seedRoles = async () => {
   try {
     await mongoose.connect(process.env.MONGOURI);
-    console.log("Database connected");
-
     // Check if roles already exist
     const existingRoles = await Role.find();
     if (existingRoles.length > 0) {
-      console.log("Roles already exist. Skipping role seed...");
     } else {
       // Create roles
       const roles = await Role.insertMany([
@@ -52,7 +49,6 @@ const seedRoles = async () => {
           permissions: ["view_own_tasks", "update_own_tasks"],
         },
       ]);
-      console.log("Roles created successfully");
     }
 
     // Check if superAdmin already exists
@@ -62,7 +58,6 @@ const seedRoles = async () => {
     });
 
     if (existingAdmin) {
-      console.log("SuperAdmin already exists. Skipping admin seed...");
       process.exit(0);
     }
 
@@ -77,7 +72,6 @@ const seedRoles = async () => {
         description: "System administrators and management",
         createdBy: tempId, // Will be updated after admin is created
       });
-      console.log("Administration department created");
     }
 
     // Create a default superAdmin employee
@@ -113,12 +107,6 @@ const seedRoles = async () => {
     await Department.findByIdAndUpdate(adminDept._id, {
       createdBy: superAdmin._id,
     });
-
-    console.log("\n✅ SuperAdmin employee created successfully:");
-    console.log("   Employee ID: SADM0001");
-    console.log("   Email: admin@organization.com");
-    console.log("   Password: 12345678");
-    console.log("\n⚠️  Please change this password after first login!");
 
     process.exit(0);
   } catch (error) {

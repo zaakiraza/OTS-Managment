@@ -88,7 +88,10 @@ const Salaries = () => {
 
   const fetchEmployees = async () => {
     try {
-      const params = { isActive: true };
+      const params = { 
+        isActive: true,
+        includeSalary: true // Request salary data for display
+      };
       if (selectedDepartment) {
         params.department = selectedDepartment;
       }
@@ -525,7 +528,11 @@ const Salaries = () => {
                   <td>
                     {item.salary
                       ? `PKR ${item.salary.baseSalary.toLocaleString()}`
-                      : `PKR ${item.employee.salary?.monthlySalary?.toLocaleString() || 0}`}
+                      : `PKR ${
+                          item.employee.shifts?.[0]?.monthlySalary?.toLocaleString() || 
+                          item.employee.salary?.monthlySalary?.toLocaleString() || 
+                          0
+                        }`}
                   </td>
                   <td>
                     {item.salary?.calculations?.totalWorkingDays || item.workingDays}

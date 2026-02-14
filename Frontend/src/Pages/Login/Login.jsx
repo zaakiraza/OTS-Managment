@@ -33,9 +33,7 @@ function Login() {
       setError("");
       setLoading(true);
 
-      console.log("Attempting login with:", formData.email);
       const response = await authAPI.login(formData);
-      console.log("Login response:", response.data);
 
       if (response.data.success) {
         // Store token and user data
@@ -49,7 +47,6 @@ function Login() {
 
         // Navigate based on role
         const userRole = response.data.data?.role?.name;
-        console.log("User role:", userRole); // Debug log
         const redirectMap = {
           superAdmin: "/dashboard",
           attendanceDepartment: "/attendance",

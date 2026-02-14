@@ -11,13 +11,6 @@ const router = express.Router();
 
 // Test endpoint to see raw data
 router.all("/test", (req, res) => {
-  // console.log("=".repeat(60));
-  // console.log("🧪 TEST ENDPOINT HIT!");
-  // console.log("Method:", req.method);
-  // console.log("Headers:", JSON.stringify(req.headers, null, 2));
-  // console.log("Body:", JSON.stringify(req.body, null, 2));
-  // console.log("Query:", JSON.stringify(req.query, null, 2));
-  // console.log("=".repeat(60));
   res.status(200).send("OK");
 });
 

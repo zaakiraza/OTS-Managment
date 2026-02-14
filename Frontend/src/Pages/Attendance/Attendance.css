@@ -303,33 +303,33 @@
 }
 
 .status-badge.present {
-  background: #d1fae5;
-  color: #059669;
+  background: #10b981;
+  color: white;
 }
 
 .status-badge.absent {
-  background: #fee2e2;
-  color: #dc2626;
+  background: #ef4444;
+  color: white;
 }
 
 .status-badge.late {
-  background: #fff4e6;
-  color: #e07a2a;
+  background: #F49040;
+  color: white;
 }
 
 .status-badge.half-day {
-  background: #f3e8ff;
-  color: #7c3aed;
+  background: #9333ea;
+  color: white;
 }
 
 .status-badge.leave {
-  background: var(--bg-light, #f0f4f3);
-  color: var(--text-light, #6b7280);
+  background: #8b5cf6;
+  color: white;
 }
 
 .status-badge.early-departure {
-  background: #e0f2f4;
-  color: #1F6A75;
+  background: #0d9488;
+  color: white;
 }
 
 /* Status Classes */
@@ -343,53 +343,53 @@
 }
 
 .status.status-present {
-  background: #d1fae5;
-  color: #059669;
+  background: #10b981;
+  color: white;
 }
 
 .status.status-absent {
   background: #fee2e2;
-  color: #dc2626;
+  color: #b91c1c;
 }
 
 .status.status-late {
-  background: #fff4e6;
-  color: #e07a2a;
+  background: #F49040;
+  color: white;
 }
 
 .status.status-half-day {
-  background: #f3e8ff;
-  color: #7c3aed;
+  background: #9333ea;
+  color: white;
 }
 
 .status.status-leave {
   background: var(--bg-light, #f0f4f3);
-  color: var(--text-light, #6b7280);
+  color: #4b5563;
 }
 
 .status.status-early-departure {
   background: #e0f2f4;
-  color: #1F6A75;
+  color: #0f4c54;
 }
 
 .status.status-early {
   background: #e0f2f4;
-  color: #1F6A75;
+  color: #0f4c54;
 }
 
 .status.status-pending {
   background: #f3f4f6;
-  color: #6b7280;
+  color: #4b5563;
 }
 
 .status.status-late-early {
   background: #fff4e6;
-  color: #e07a2a;
+  color: #c2410c;
 }
 
 .status.status-missing {
   background: #fee2e2;
-  color: #dc2626;
+  color: #b91c1c;
 }
 
 /* Action Buttons */

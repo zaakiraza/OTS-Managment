@@ -330,7 +330,6 @@ export const createEmployee = async (req, res) => {
 
     // Send email notification if email is provided
     if (populatedEmployee.email) {
-      console.log(`[Employee Created] Attempting to send welcome email to: ${populatedEmployee.email}`);
       notifyEmployeeCreated(populatedEmployee.email, {
         name: populatedEmployee.name,
         email: populatedEmployee.email,
@@ -339,9 +338,7 @@ export const createEmployee = async (req, res) => {
         tempPassword: plainPassword,
       })
       .then((result) => {
-        if (result.success) {
-          console.log(`[Employee Created] Welcome email sent successfully to ${populatedEmployee.email}. Message ID: ${result.messageId}`);
-        } else {
+        if(result.success) {
           console.error(`[Employee Created] Failed to send email to ${populatedEmployee.email}:`, result.error);
         }
       })
@@ -349,8 +346,6 @@ export const createEmployee = async (req, res) => {
         console.error(`[Employee Created] Error sending email to ${populatedEmployee.email}:`, err);
         // Don't fail the request if email fails
       });
-    } else {
-      console.log(`[Employee Created] No email provided for employee ${populatedEmployee.employeeId} (${populatedEmployee.name}). Skipping email notification.`);
     }
 
     // Audit log
@@ -496,7 +491,8 @@ export const getAllEmployees = async (req, res) => {
       sortBy = "employeeId",
       sortOrder = "asc",
       noPagination, // If true, returns all results (for dropdowns)
-      forAssignment // If true, ITAssetManager can see all employees for asset assignment
+      forAssignment, // If true, ITAssetManager can see all employees for asset assignment
+      includeSalary // If true and user is superAdmin/attendanceDepartment, include salary fields
     } = req.query;
     
     const filter = {};
@@ -620,16 +616,35 @@ export const getAllEmployees = async (req, res) => {
     const sort = {};
     sort[sortBy] = sortOrder === "desc" ? -1 : 1;
 
+    // Determine if salary should be included (requestingUserRole already declared above)
+    const canViewSalary = includeSalary === 'true' && 
+                         (requestingUserRole === 'superAdmin' || requestingUserRole === 'attendanceDepartment');
+    const selectFields = canViewSalary ? "" : "-salary";
+
     // If noPagination is true, return all results
     if (noPagination === "true") {
-      const employees = await Employee.find(filter)
-        .select("-salary -shifts.monthlySalary") // Exclude salary fields
+      let employees = await Employee.find(filter)
+        .select(selectFields) // Conditionally exclude salary fields
         .populate("department", "name code")
         .populate("shifts.department", "name code")
         .populate("leadingDepartments", "name code")
         .populate("role", "name description")
         .populate("createdBy", "name")
         .sort(sort);
+
+      // Remove monthlySalary from shifts if salary not included
+      if (!canViewSalary) {
+        employees = employees.map(emp => {
+          const empObj = emp.toObject();
+          if (empObj.shifts) {
+            empObj.shifts = empObj.shifts.map(shift => {
+              const { monthlySalary, ...shiftWithoutSalary } = shift;
+              return shiftWithoutSalary;
+            });
+          }
+          return empObj;
+        });
+      }
 
       return res.status(200).json({
         success: true,
@@ -644,9 +659,9 @@ export const getAllEmployees = async (req, res) => {
     const skip = (pageNum - 1) * limitNum;
 
     // Execute query with pagination
-    const [employees, total] = await Promise.all([
+    let [employees, total] = await Promise.all([
       Employee.find(filter)
-        .select("-salary -shifts.monthlySalary") // Exclude salary fields
+        .select(selectFields) // Conditionally exclude salary fields
         .populate("department", "name code")
         .populate("shifts.department", "name code")
         .populate("leadingDepartments", "name code")
@@ -657,6 +672,20 @@ export const getAllEmployees = async (req, res) => {
         .limit(limitNum),
       Employee.countDocuments(filter),
     ]);
+
+    // Remove monthlySalary from shifts if salary not included
+    if (!canViewSalary) {
+      employees = employees.map(emp => {
+        const empObj = emp.toObject();
+        if (empObj.shifts) {
+          empObj.shifts = empObj.shifts.map(shift => {
+            const { monthlySalary, ...shiftWithoutSalary } = shift;
+            return shiftWithoutSalary;
+          });
+        }
+        return empObj;
+      });
+    }
 
     res.status(200).json({
       success: true,

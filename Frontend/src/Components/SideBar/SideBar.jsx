@@ -231,11 +231,6 @@ function SideBar() {
               <span className="nav-icon"><i className="fas fa-tasks"></i></span>
               {!isCollapsed && <span className="nav-text">Task Board</span>}
             </NavLink>
-
-            <NavLink to="/my-tasks" className="nav-item">
-              <span className="nav-icon"><i className="fas fa-check-circle"></i></span>
-              {!isCollapsed && <span className="nav-text">My Tasks</span>}
-            </NavLink>
           </>
         )}
 

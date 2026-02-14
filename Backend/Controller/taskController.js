@@ -46,9 +46,6 @@ export const getAllTasks = async (req, res) => {
         isActive: true,
       }).select("employeeId name department");
 
-      console.log("[AttendanceDepartment] User ID:", req.user._id);
-      console.log("[AttendanceDepartment] Employees created:", employeesCreatedByUser.length);
-
       // Collect all unique PRIMARY department IDs from employees they created
       const departmentIds = new Set();
       employeesCreatedByUser.forEach(emp => {
@@ -59,8 +56,6 @@ export const getAllTasks = async (req, res) => {
       });
 
       const allowedDepts = Array.from(departmentIds);
-      console.log("[AttendanceDepartment] Allowed departments (primary only):", allowedDepts);
-      
       if (department) {
         // Validate the requested department is in their allowed list
         if (allowedDepts.includes(department.toString())) {
@@ -74,7 +69,6 @@ export const getAllTasks = async (req, res) => {
           const mongoose = (await import('mongoose')).default;
           departmentFilter.department = { $in: allowedDepts.map(id => new mongoose.Types.ObjectId(id)) };
         } else {
-          console.log("[AttendanceDepartment] No allowed departments, returning no tasks");
           departmentFilter._id = null;
         }
       }
@@ -277,12 +271,9 @@ export const createTask = async (req, res) => {
     if (populatedTask.assignedTo && Array.isArray(populatedTask.assignedTo)) {
       for (const assignee of populatedTask.assignedTo) {
         if (assignee && assignee.email && typeof assignee.email === 'string' && assignee.email.includes('@')) {
-          console.log(`[Task Email] Sending email to: ${assignee.email}`);
           notifyTaskAssigned(assignee.email, populatedTask).catch((err) =>
             console.error(`[Task Email] Failed to send email to ${assignee.email}:`, err.message)
           );
-        } else {
-          console.log(`[Task Email] Skipping email for assignee - invalid or missing email:`, assignee?.email);
         }
       }
     }

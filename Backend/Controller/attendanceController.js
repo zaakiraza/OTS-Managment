@@ -270,7 +270,6 @@ export const getAllAttendance = async (req, res) => {
 
     const { date, userId, employee, status, startDate, endDate, month, year } = req.query;
     
-    // console.log("📋 Fetching attendance with params:", { date, userId, employee, status, startDate, endDate, month, year });
     
     let filter = {};
 
@@ -304,7 +303,6 @@ export const getAllAttendance = async (req, res) => {
         $gte: targetDate,
         $lt: nextDate
       };
-      // console.log("📅 Date filter:", filter.date);
     }
     // Filter by date range
     else if (startDate && endDate) {
@@ -382,9 +380,6 @@ export const getAllAttendance = async (req, res) => {
       .populate("department", "name code")
       .populate("modifiedBy", "name")
       .sort({ date: -1, createdAt: -1 });
-
-    // console.log(`✅ Found ${attendanceRecords.length} attendance records`);
-    // console.log("Sample record:", attendanceRecords[0]);
 
     res.status(200).json({
       success: true,

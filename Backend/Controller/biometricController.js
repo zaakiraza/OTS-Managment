@@ -6,16 +6,6 @@ import { PAGINATION } from "../Config/constants.js";
 // Receive attendance data from ZKTeco biometric device
 export const receiveBiometricData = async (req, res) => {
   try {
-    // console.log("=".repeat(60));
-    // console.log("🔵 BIOMETRIC DATA RECEIVED");
-    // console.log("Timestamp:", new Date().toISOString());
-    // console.log("Method:", req.method);
-    // console.log("Body:", JSON.stringify(req.body, null, 2));
-    // console.log("Headers:", JSON.stringify(req.headers, null, 2));
-    // console.log("Query:", JSON.stringify(req.query, null, 2));
-    // console.log("Raw Body:", req.body);
-    // console.log("=".repeat(60));
-    
     // Just respond OK for now - no validation
     return res.status(200).json({
       success: true,
@@ -83,10 +73,6 @@ export const getBiometricLogs = async (req, res) => {
 // Alternative endpoint for different ZKTeco protocols
 export const receiveBiometricDataAlt = async (req, res) => {
   try {
-    // Log raw body for debugging
-    // console.log("Alternative biometric endpoint - Raw body:", req.body);
-    // console.log("Content-Type:", req.headers['content-type']);
-    
     // Some ZKTeco devices send data as query parameters or different format
     const data = req.body || req.query;
     
@@ -96,7 +82,6 @@ export const receiveBiometricDataAlt = async (req, res) => {
     const deviceId = data.deviceId || data.sn || data.serialNumber;
     
     if (!employeeId || !checkTime) {
-      // console.log("Missing data - employeeId:", employeeId, "checkTime:", checkTime);
       return res.status(200).send("OK"); // Some devices expect 200 OK
     }
     

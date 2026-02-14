@@ -40,7 +40,6 @@ export const deleteFromS3 = async (key) => {
       Key: key,
     });
     await s3Client.send(command);
-    console.log(`Deleted from S3: ${key}`);
     return true;
   } catch (error) {
     console.error("Error deleting from S3:", error);
