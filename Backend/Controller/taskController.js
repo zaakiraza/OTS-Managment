@@ -9,11 +9,11 @@ import { createNotification, createBulkNotifications } from "./notificationContr
 export const getAllTasks = async (req, res) => {
   try {
     const { status, department, assignedTo, priority, startDate, endDate } = req.query;
-    const filter = { isActive: true };
+    const departmentFilter = { isActive: true };
 
     const roleName = req.user.role?.name || req.user.role;
 
-    // Role-based filtering
+    // Role-based department filtering
     if (roleName === "teamLead") {
       // For teamLead, filter by departments they are leading
       const currentEmployee = await Employee.findById(req.user._id)
@@ -26,17 +26,17 @@ export const getAllTasks = async (req, res) => {
         if (department) {
           const isAllowed = leadingDeptIds.some(id => String(id) === String(department));
           if (isAllowed) {
-            filter.department = department;
+            departmentFilter.department = department;
           } else {
             // Requested department not allowed, return no results
-            filter._id = null;
+            departmentFilter._id = null;
           }
         } else {
-          filter.department = { $in: leadingDeptIds };
+          departmentFilter.department = { $in: leadingDeptIds };
         }
       } else {
         // If no leading departments, team lead cannot see any tasks
-        filter._id = null;
+        departmentFilter._id = null;
       }
     } else if (roleName === "attendanceDepartment") {
       // For attendanceDepartment, show only tasks from PRIMARY departments of employees they created
@@ -64,18 +64,18 @@ export const getAllTasks = async (req, res) => {
       if (department) {
         // Validate the requested department is in their allowed list
         if (allowedDepts.includes(department.toString())) {
-          filter.department = department;
+          departmentFilter.department = department;
         } else {
-          filter._id = null;
+          departmentFilter._id = null;
         }
       } else {
         if (allowedDepts.length > 0) {
           // Convert string IDs to ObjectIds for MongoDB query
           const mongoose = (await import('mongoose')).default;
-          filter.department = { $in: allowedDepts.map(id => new mongoose.Types.ObjectId(id)) };
+          departmentFilter.department = { $in: allowedDepts.map(id => new mongoose.Types.ObjectId(id)) };
         } else {
           console.log("[AttendanceDepartment] No allowed departments, returning no tasks");
-          filter._id = null;
+          departmentFilter._id = null;
         }
       }
     } else if (roleName !== "superAdmin") {
@@ -83,29 +83,39 @@ export const getAllTasks = async (req, res) => {
       const userDepts = req.user.departments || [];
       if (department) {
         if (userDepts.includes(String(department))) {
-          filter.department = department;
+          departmentFilter.department = department;
         } else {
-          filter._id = null;
+          departmentFilter._id = null;
         }
       } else {
-        filter.department = { $in: userDepts };
+        departmentFilter.department = { $in: userDepts };
       }
     } else {
       // superAdmin can see all tasks and filter by any department
-      if (department) filter.department = department;
+      if (department) departmentFilter.department = department;
     }
 
-    if (status) filter.status = status;
-    if (assignedTo) filter.assignedTo = assignedTo;
-    if (priority) filter.priority = priority;
+    // Build final filter: (department-based access OR created by user) AND other filters
+    const finalFilter = {
+      isActive: true,
+      $or: [
+        departmentFilter,  // Department-based access
+        { assignedBy: req.user._id }  // Tasks created by current user
+      ]
+    };
+
+    // Apply additional filters globally
+    if (status) finalFilter.status = status;
+    if (assignedTo) finalFilter.assignedTo = assignedTo;
+    if (priority) finalFilter.priority = priority;
     
     if (startDate || endDate) {
-      filter.dueDate = {};
-      if (startDate) filter.dueDate.$gte = new Date(startDate);
-      if (endDate) filter.dueDate.$lte = new Date(endDate);
+      finalFilter.dueDate = {};
+      if (startDate) finalFilter.dueDate.$gte = new Date(startDate);
+      if (endDate) finalFilter.dueDate.$lte = new Date(endDate);
     }
 
-    const tasks = await Task.find(filter)
+    const tasks = await Task.find(finalFilter)
       .populate("assignedTo", "name employeeId email position")
       .populate("assignedBy", "name email employeeId")
       .populate("department", "name code")
@@ -264,11 +274,16 @@ export const createTask = async (req, res) => {
       .populate("department", "name");
 
     // Send email notifications to all assignees
-    for (const emp of employees) {
-      if (emp.email) {
-        notifyTaskAssigned(emp, populatedTask, req.user).catch((err) =>
-          console.error("Email notification failed:", err)
-        );
+    if (populatedTask.assignedTo && Array.isArray(populatedTask.assignedTo)) {
+      for (const assignee of populatedTask.assignedTo) {
+        if (assignee && assignee.email && typeof assignee.email === 'string' && assignee.email.includes('@')) {
+          console.log(`[Task Email] Sending email to: ${assignee.email}`);
+          notifyTaskAssigned(assignee.email, populatedTask).catch((err) =>
+            console.error(`[Task Email] Failed to send email to ${assignee.email}:`, err.message)
+          );
+        } else {
+          console.log(`[Task Email] Skipping email for assignee - invalid or missing email:`, assignee?.email);
+        }
       }
     }
 

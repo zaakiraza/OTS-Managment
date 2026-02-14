@@ -741,6 +741,11 @@ function Tasks() {
                               <div className="task-assignee">
                                 <i className="fas fa-user"></i> {renderAssignees(task.assignedTo)}
                               </div>
+                              {task.assignedBy && (
+                                <div className="task-assignee" style={{ fontSize: '0.85em', color: '#64748b' }}>
+                                  <i className="fas fa-user-check"></i> Assigned by: {task.assignedBy.name}
+                                </div>
+                              )}
                               <div
                                 className={`task-due-date ${
                                   isOverdue(task.dueDate) ? "overdue" : ""

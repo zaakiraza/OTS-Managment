@@ -217,6 +217,11 @@ function SideBar() {
               {!isCollapsed && <span className="nav-text">My Assets</span>}
             </NavLink>
 
+            <NavLink to="/resources" className="nav-item">
+              <span className="nav-icon"><i className="fas fa-box"></i></span>
+              {!isCollapsed && <span className="nav-text">Resources</span>}
+            </NavLink>
+
             <NavLink to="/tickets" className="nav-item">
               <span className="nav-icon"><i className="fas fa-ticket-alt"></i></span>
               {!isCollapsed && <span className="nav-text">Tickets</span>}

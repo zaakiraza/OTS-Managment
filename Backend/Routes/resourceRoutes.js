@@ -14,12 +14,12 @@ const router = express.Router();
 // All routes require authentication
 router.use(verifyToken);
 
-// Team leads and above can manage resources
-router.post("/", hasRole("superAdmin", "teamLead"), createResource);
-router.get("/", hasRole("superAdmin", "teamLead"), getAllResources);
-router.get("/stats", hasRole("superAdmin", "teamLead"), getResourceStats);
-router.get("/:id", hasRole("superAdmin", "teamLead"), getResourceById);
-router.put("/:id", hasRole("superAdmin", "teamLead"), updateResource);
-router.delete("/:id", hasRole("superAdmin", "teamLead"), deleteResource);
+// Resources access
+router.post("/", hasRole("superAdmin", "attendanceDepartment"), createResource);
+router.get("/", hasRole("superAdmin", "attendanceDepartment", "teamLead"), getAllResources);
+router.get("/stats", hasRole("superAdmin", "attendanceDepartment", "teamLead"), getResourceStats);
+router.get("/:id", hasRole("superAdmin", "attendanceDepartment", "teamLead"), getResourceById);
+router.put("/:id", hasRole("superAdmin", "attendanceDepartment"), updateResource);
+router.delete("/:id", hasRole("superAdmin", "attendanceDepartment"), deleteResource);
 
 export default router;

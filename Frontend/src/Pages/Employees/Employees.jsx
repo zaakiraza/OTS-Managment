@@ -680,8 +680,7 @@ const Employees = () => {
         shifts: allShifts,
       };
 
-      // Remove old individual fields that are now in shifts
-      delete submitData.position;
+      // Remove old individual fields that are now in shifts (but keep position at top level for validation)
       delete submitData.salary;
       delete submitData.workSchedule;
       delete submitData.joiningDate;
@@ -1730,6 +1729,28 @@ const Employees = () => {
                             </div>
 
                             <div style={{marginTop: '10px', borderTop: '1px solid #e5e7eb', paddingTop: '10px'}}>
+                              {/* Warning if day-specific schedules exist */}
+                              {shift.daySchedules && Object.keys(shift.daySchedules).length > 0 && (
+                                <div style={{
+                                  marginBottom: '12px',
+                                  padding: '10px 12px',
+                                  background: '#fef3c7',
+                                  border: '1px solid #fbbf24',
+                                  borderRadius: '6px',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '10px',
+                                  fontSize: '12px',
+                                  color: '#92400e'
+                                }}>
+                                  <i className="fas fa-info-circle" style={{color: '#f59e0b', fontSize: '16px'}}></i>
+                                  <div>
+                                    <strong>Note:</strong> This shift has {Object.keys(shift.daySchedules).length} day-specific schedule(s) for: <strong>{Object.keys(shift.daySchedules).join(', ')}</strong>. 
+                                    These override the default start/end times for those days.
+                                  </div>
+                                </div>
+                              )}
+                              
                               <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px'}}>
                                 <label style={{display: 'flex', alignItems: 'center', gap: '8px', marginBottom: 0}}>
                                   <i className="fas fa-calendar-day"></i>
@@ -2078,6 +2099,28 @@ const Employees = () => {
 
                               {/* Editable day-specific schedules */}
                               <div style={{marginTop: '12px', borderTop: '1px solid #e5e7eb', paddingTop: '12px'}}>
+                                {/* Warning if day-specific schedules exist */}
+                                {shift.daySchedules && Object.keys(shift.daySchedules).length > 0 && (
+                                  <div style={{
+                                    marginBottom: '12px',
+                                    padding: '10px 12px',
+                                    background: '#fef3c7',
+                                    border: '1px solid #fbbf24',
+                                    borderRadius: '6px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '10px',
+                                    fontSize: '12px',
+                                    color: '#92400e'
+                                  }}>
+                                    <i className="fas fa-info-circle" style={{color: '#f59e0b', fontSize: '16px'}}></i>
+                                    <div>
+                                      <strong>Note:</strong> This shift has {Object.keys(shift.daySchedules).length} day-specific schedule(s) for: <strong>{Object.keys(shift.daySchedules).join(', ')}</strong>. 
+                                      These override the default start/end times for those days.
+                                    </div>
+                                  </div>
+                                )}
+                                
                                 <label style={{fontSize: '12px', color: '#374151', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px', fontWeight: '500'}}>
                                   <i className="fas fa-calendar-day"></i>
                                   Day-Specific Schedules (Optional)
@@ -2289,6 +2332,29 @@ const Employees = () => {
               {(!formData.shifts || formData.shifts.length === 0) && (
                 <>
                   <h3 className="section-title">Work Schedule</h3>
+                  
+                  {/* Warning if day-specific schedules exist */}
+                  {formData.workSchedule.daySchedules && Object.keys(formData.workSchedule.daySchedules).length > 0 && (
+                    <div style={{
+                      margin: '0 29px 16px',
+                      padding: '12px 16px',
+                      background: '#fef3c7',
+                      border: '1px solid #fbbf24',
+                      borderRadius: '8px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '12px',
+                      fontSize: '14px',
+                      color: '#92400e'
+                    }}>
+                      <i className="fas fa-info-circle" style={{color: '#f59e0b', fontSize: '18px'}}></i>
+                      <div>
+                        <strong>Note:</strong> This employee has {Object.keys(formData.workSchedule.daySchedules).length} day-specific schedule(s) defined for: <strong>{Object.keys(formData.workSchedule.daySchedules).join(', ')}</strong>. 
+                        These will override the default work schedule times for those specific days.
+                      </div>
+                    </div>
+                  )}
+                  
                   <div className="form-grid">
                     <div className="form-group">
                       <label>Check-in Time *</label>

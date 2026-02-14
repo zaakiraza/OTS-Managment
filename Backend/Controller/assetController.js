@@ -309,7 +309,8 @@ export const deleteAsset = async (req, res) => {
 // Assign asset to employee
 export const assignAsset = async (req, res) => {
   try {
-    const { assetId, employeeId, conditionAtAssignment, notes, quantityToAssign } = req.body;
+    const { assetId, employeeId, conditionAtAssignment, notes, quantityToAssign, room } = req.body;
+    const trimmedRoom = room?.trim();
 
     const asset = await Asset.findById(assetId);
     if (!asset) {
@@ -338,21 +339,32 @@ export const assignAsset = async (req, res) => {
       });
     }
 
-    const employee = await Employee.findById(employeeId);
-    if (!employee) {
-      return res.status(404).json({
+    if (!employeeId && !trimmedRoom) {
+      return res.status(400).json({
         success: false,
-        message: "Employee not found",
+        message: "Assign to an employee or provide a room.",
       });
+    }
+
+    let employee = null;
+    if (employeeId) {
+      employee = await Employee.findById(employeeId);
+      if (!employee) {
+        return res.status(404).json({
+          success: false,
+          message: "Employee not found",
+        });
+      }
     }
 
     // Create assignment record
     const assignment = await AssetAssignment.create({
       asset: assetId,
-      employee: employeeId,
+      employee: employee ? employee._id : undefined,
       quantity: assignQuantity,
       assignedBy: req.user._id,
       conditionAtAssignment: conditionAtAssignment || asset.condition,
+      room: trimmedRoom,
       notes,
       status: "Active",
     });
@@ -379,29 +391,32 @@ export const assignAsset = async (req, res) => {
     // Audit log
     await logAssetAction(req, "ASSIGN", asset, {
       after: { 
-        assignedTo: employee.name, 
-        employeeId: employee.employeeId,
+        assignedTo: employee?.name || null, 
+        employeeId: employee?.employeeId || null,
+        room: trimmedRoom || null,
         quantity: assignQuantity,
         availableQuantity: newAvailable
       }
     });
 
     // Send notification to employee
-    try {
-      await createNotification({
-        recipient: employeeId,
-        type: "asset_assigned",
-        title: "Asset Assigned",
-        message: `You have been assigned ${assignQuantity} unit(s) of ${asset.name} (${asset.assetId})`,
-        data: {
-          referenceId: asset._id,
-          referenceType: "Asset",
-          extra: { assetId: asset.assetId, assetName: asset.name, quantity: assignQuantity },
-        },
-        sender: req.user._id,
-      });
-    } catch (notifError) {
-      console.error("Error creating asset notification:", notifError);
+    if (employeeId) {
+      try {
+        await createNotification({
+          recipient: employeeId,
+          type: "asset_assigned",
+          title: "Asset Assigned",
+          message: `You have been assigned ${assignQuantity} unit(s) of ${asset.name} (${asset.assetId})`,
+          data: {
+            referenceId: asset._id,
+            referenceType: "Asset",
+            extra: { assetId: asset.assetId, assetName: asset.name, quantity: assignQuantity },
+          },
+          sender: req.user._id,
+        });
+      } catch (notifError) {
+        console.error("Error creating asset notification:", notifError);
+      }
     }
 
     res.status(200).json({
@@ -568,6 +583,7 @@ export const getEmployeeAssets = async (req, res) => {
         assignedDate: assignment.assignedDate,
         assignedBy: assignment.assignedBy?.name,
         conditionAtAssignment: assignment.conditionAtAssignment,
+        room: assignment.room,
         notes: assignment.notes,
       }));
 

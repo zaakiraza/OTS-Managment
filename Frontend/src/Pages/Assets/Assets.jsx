@@ -42,6 +42,7 @@ function Assets() {
     employeeId: "",
     quantityToAssign: 1,
     conditionAtAssignment: "Good",
+    room: "",
     notes: "",
   });
   const [stats, setStats] = useState(null);
@@ -254,6 +255,12 @@ function Assets() {
   const handleAssign = async (e) => {
     e.preventDefault();
     try {
+      const hasRoom = !!assignData.room?.trim();
+      if (!assignData.employeeId && !hasRoom) {
+        toast.error("Select an employee or enter a room.");
+        return;
+      }
+
       setLoading(true);
       await assetAPI.assign({
         assetId: selectedAsset._id,
@@ -267,6 +274,7 @@ function Assets() {
         employeeId: "",
         quantityToAssign: 1,
         conditionAtAssignment: "Good",
+        room: "",
         notes: "",
       });
       fetchAssets();
@@ -1255,7 +1263,7 @@ function Assets() {
                               employeeId: e.target.value,
                             })
                           }
-                          required
+                          required={!assignData.room?.trim()}
                         >
                           <option value="">Select Employee</option>
                           {getAssignFilteredEmployees().map((emp) => (
@@ -1303,6 +1311,20 @@ function Assets() {
                             </option>
                           ))}
                         </select>
+                      </div>
+                      <div className="form-group">
+                        <label>Room</label>
+                        <input
+                          type="text"
+                          value={assignData.room}
+                          onChange={(e) =>
+                            setAssignData({
+                              ...assignData,
+                              room: e.target.value,
+                            })
+                          }
+                          placeholder="e.g., Room 201 / Lab A"
+                        />
                       </div>
                     </div>
                     <div className="form-group" style={{ marginTop: '14px' }}>
@@ -1593,6 +1615,7 @@ function Assets() {
                             <th style={{ padding: "10px", textAlign: "left", borderBottom: "2px solid #ddd" }}>Quantity</th>
                             <th style={{ padding: "10px", textAlign: "left", borderBottom: "2px solid #ddd" }}>Assigned Date</th>
                             <th style={{ padding: "10px", textAlign: "left", borderBottom: "2px solid #ddd" }}>Condition at Assignment</th>
+                            <th style={{ padding: "10px", textAlign: "left", borderBottom: "2px solid #ddd" }}>Room</th>
                             <th style={{ padding: "10px", textAlign: "left", borderBottom: "2px solid #ddd" }}>Status</th>
                             <th style={{ padding: "10px", textAlign: "left", borderBottom: "2px solid #ddd" }}>Return Date</th>
                             <th style={{ padding: "10px", textAlign: "left", borderBottom: "2px solid #ddd" }}>Notes</th>
@@ -1630,6 +1653,9 @@ function Assets() {
                                 }}>
                                   {assignment.conditionAtAssignment}
                                 </span>
+                              </td>
+                              <td style={{ padding: "10px" }}>
+                                {assignment.room || "-"}
                               </td>
                               <td style={{ padding: "10px" }}>
                                 <span style={{

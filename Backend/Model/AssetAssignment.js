@@ -10,7 +10,9 @@ const assetAssignmentSchema = new mongoose.Schema(
     employee: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Employee",
-      required: true,
+      required: function () {
+        return !this.room;
+      },
     },
     quantity: {
       type: Number,
@@ -46,6 +48,10 @@ const assetAssignmentSchema = new mongoose.Schema(
       type: String,
       enum: ["Excellent", "Good", "Fair", "Poor"],
       default: null,
+    },
+    room: {
+      type: String,
+      trim: true,
     },
     notes: {
       type: String,

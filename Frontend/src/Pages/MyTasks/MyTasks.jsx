@@ -12,6 +12,7 @@ function MyTasks() {
   const [newComment, setNewComment] = useState("");
   const [loading, setLoading] = useState(false);
   const [departmentFilter, setDepartmentFilter] = useState("");
+  const [myTasksOnly, setMyTasksOnly] = useState(false);
 
   // Get user shifts for department filter
   const user = (() => {
@@ -27,7 +28,7 @@ function MyTasks() {
 
   useEffect(() => {
     fetchMyTasks();
-  }, [departmentFilter]);
+  }, [departmentFilter, myTasksOnly]);
 
   const fetchMyTasks = async () => {
     try {
@@ -38,7 +39,20 @@ function MyTasks() {
       }
       const response = await taskAPI.getMyTasks(params);
       if (response.data.success) {
-        setTasks(response.data.data);
+        let tasksData = response.data.data;
+        
+        // Filter to show only tasks assigned to logged-in user
+        if (myTasksOnly) {
+          tasksData = tasksData.filter((task) => {
+            if (!task?.assignedTo) return false;
+            const assignees = Array.isArray(task.assignedTo) ? task.assignedTo : [task.assignedTo];
+            return assignees.some(
+              (emp) => emp?._id === user?._id || emp?._id?.toString() === user?._id?.toString()
+            );
+          });
+        }
+        
+        setTasks(tasksData);
       }
     } catch (error) {
       console.error("Error fetching my tasks:", error);
@@ -210,9 +224,9 @@ function MyTasks() {
             </div>
           </div>
 
-          {/* Department Filter for Multi-Shift Employees */}
-          {hasMultipleShifts && (
-            <div className="filters-section" style={{ marginBottom: '20px' }}>
+          {/* Filters Section */}
+          <div className="filters-section" style={{ marginBottom: '20px' }}>
+            {hasMultipleShifts && (
               <div className="filter-group">
                 <label>Filter by Department:</label>
                 <select
@@ -228,8 +242,20 @@ function MyTasks() {
                   ))}
                 </select>
               </div>
+            )}
+            
+            <div className="filter-group">
+              <label>Assigned To:</label>
+              <select
+                value={myTasksOnly ? "me" : "all"}
+                onChange={(e) => setMyTasksOnly(e.target.value === "me")}
+                className="filter-select"
+              >
+                <option value="all">All Tasks</option>
+                <option value="me">My Tasks Only</option>
+              </select>
             </div>
-          )}
+          </div>
 
           {/* Kanban Board */}
           {loading ? (
@@ -274,6 +300,11 @@ function MyTasks() {
                           <i className="fas fa-user"></i> {renderAssignees(task.assignedTo)}
                           {isAssignedToMe(task) && <span style={{ marginLeft: '5px', color: '#10b981' }}>(You)</span>}
                         </div>
+                        {task.assignedBy && (
+                          <div className="task-assignee" style={{ fontSize: '0.85em', color: '#64748b' }}>
+                            <i className="fas fa-user-check"></i> Assigned by: {task.assignedBy.name}
+                          </div>
+                        )}
                         <div
                           className={`task-due-date ${
                             new Date(task.dueDate) < new Date() ? "overdue" : ""
@@ -327,6 +358,11 @@ function MyTasks() {
                           <i className="fas fa-user"></i> {renderAssignees(task.assignedTo)}
                           {isAssignedToMe(task) && <span style={{ marginLeft: '5px', color: '#10b981' }}>(You)</span>}
                         </div>
+                        {task.assignedBy && (
+                          <div className="task-assignee" style={{ fontSize: '0.85em', color: '#64748b' }}>
+                            <i className="fas fa-user-check"></i> Assigned by: {task.assignedBy.name}
+                          </div>
+                        )}
                         <div
                           className={`task-due-date ${
                             new Date(task.dueDate) < new Date() ? "overdue" : ""
@@ -380,6 +416,11 @@ function MyTasks() {
                           <i className="fas fa-user"></i> {renderAssignees(task.assignedTo)}
                           {isAssignedToMe(task) && <span style={{ marginLeft: '5px', color: '#10b981' }}>(You)</span>}
                         </div>
+                        {task.assignedBy && (
+                          <div className="task-assignee" style={{ fontSize: '0.85em', color: '#64748b' }}>
+                            <i className="fas fa-user-check"></i> Assigned by: {task.assignedBy.name}
+                          </div>
+                        )}
                         <div className="task-due-date">
                           <i className="fas fa-check"></i> {new Date(task.completedAt).toLocaleDateString()}
                         </div>

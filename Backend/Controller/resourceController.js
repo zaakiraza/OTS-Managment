@@ -1,15 +1,66 @@
 import Resource from "../Model/Resource.js";
-import Employee from "../Model/Employee.js";
+import Department from "../Model/Department.js";
+
+const getAttendanceDeptDepartmentIds = async (user) => {
+  const allDepts = await Department.find({ isActive: true }).select("_id createdBy path");
+  const ownedDeptIds = allDepts
+    .filter((dept) => String(dept.createdBy) === String(user._id))
+    .map((dept) => String(dept._id));
+
+  const assignedDeptIds = (user.departments || []).map((deptId) => String(deptId));
+  const baseIds = new Set([...ownedDeptIds, ...assignedDeptIds]);
+
+  if (baseIds.size === 0) {
+    return [];
+  }
+
+  const allowedIds = new Set();
+  allDepts.forEach((dept) => {
+    const deptId = String(dept._id);
+    const path = dept.path || "";
+
+    if (baseIds.has(deptId)) {
+      allowedIds.add(deptId);
+      return;
+    }
+
+    for (const baseId of baseIds) {
+      if (path.includes(baseId)) {
+        allowedIds.add(deptId);
+        break;
+      }
+    }
+  });
+
+  return Array.from(allowedIds);
+};
 
 // Get all resources with filtering
 export const getAllResources = async (req, res) => {
   try {
-    const userType = req.user.userType;
+    const roleName = req.user?.role?.name || req.user?.role;
     let query = { isActive: true };
 
-    // If user is employee (team lead), filter by department
-    if (userType === "employee") {
-      query.department = req.user.department;
+    if (roleName === "teamLead") {
+      query.assignedTo = req.user._id;
+    } else if (roleName === "attendanceDepartment") {
+      const allowedDeptIds = await getAttendanceDeptDepartmentIds(req.user);
+      if (allowedDeptIds.length === 0) {
+        return res.status(200).json({
+          success: true,
+          count: 0,
+          data: [],
+        });
+      }
+
+      if (req.query.department && !allowedDeptIds.includes(String(req.query.department))) {
+        return res.status(403).json({
+          success: false,
+          message: "Access denied. Department is outside your scope.",
+        });
+      }
+
+      query.department = req.query.department || { $in: allowedDeptIds };
     } else if (req.query.department) {
       query.department = req.query.department;
     }
@@ -57,6 +108,27 @@ export const getResourceById = async (req, res) => {
       });
     }
 
+    const roleName = req.user?.role?.name || req.user?.role;
+    if (roleName === "teamLead") {
+      const assignedId = resource.assignedTo?._id || resource.assignedTo;
+      if (String(assignedId || "") !== String(req.user._id)) {
+        return res.status(403).json({
+          success: false,
+          message: "Access denied. Resource is not assigned to you.",
+        });
+      }
+    }
+
+    if (roleName === "attendanceDepartment") {
+      const allowedDeptIds = await getAttendanceDeptDepartmentIds(req.user);
+      if (!allowedDeptIds.includes(String(resource.department?._id || resource.department))) {
+        return res.status(403).json({
+          success: false,
+          message: "Access denied. Department is outside your scope.",
+        });
+      }
+    }
+
     res.status(200).json({
       success: true,
       data: resource,
@@ -72,6 +144,17 @@ export const getResourceById = async (req, res) => {
 // Create new resource
 export const createResource = async (req, res) => {
   try {
+    const roleName = req.user?.role?.name || req.user?.role;
+    if (roleName === "attendanceDepartment") {
+      const allowedDeptIds = await getAttendanceDeptDepartmentIds(req.user);
+      if (!allowedDeptIds.includes(String(req.body.department))) {
+        return res.status(403).json({
+          success: false,
+          message: "Access denied. Department is outside your scope.",
+        });
+      }
+    }
+
     const resourceData = {
       ...req.body,
       createdBy: req.user._id,
@@ -107,6 +190,18 @@ export const updateResource = async (req, res) => {
         success: false,
         message: "Resource not found",
       });
+    }
+
+    const roleName = req.user?.role?.name || req.user?.role;
+    if (roleName === "attendanceDepartment") {
+      const allowedDeptIds = await getAttendanceDeptDepartmentIds(req.user);
+      const targetDeptId = String(req.body.department || resource.department);
+      if (!allowedDeptIds.includes(targetDeptId)) {
+        return res.status(403).json({
+          success: false,
+          message: "Access denied. Department is outside your scope.",
+        });
+      }
     }
 
     const updateData = {
@@ -149,6 +244,17 @@ export const deleteResource = async (req, res) => {
       });
     }
 
+    const roleName = req.user?.role?.name || req.user?.role;
+    if (roleName === "attendanceDepartment") {
+      const allowedDeptIds = await getAttendanceDeptDepartmentIds(req.user);
+      if (!allowedDeptIds.includes(String(resource.department))) {
+        return res.status(403).json({
+          success: false,
+          message: "Access denied. Department is outside your scope.",
+        });
+      }
+    }
+
     resource.isActive = false;
     await resource.save();
 
@@ -169,9 +275,26 @@ export const getResourceStats = async (req, res) => {
   try {
     let query = { isActive: true };
 
-    // Filter by department for team leads
-    if (req.user.userType === "employee") {
-      query.department = req.user.department;
+    const roleName = req.user?.role?.name || req.user?.role;
+    if (roleName === "teamLead") {
+      query.assignedTo = req.user._id;
+    } else if (roleName === "attendanceDepartment") {
+      const allowedDeptIds = await getAttendanceDeptDepartmentIds(req.user);
+      if (allowedDeptIds.length === 0) {
+        return res.status(200).json({
+          success: true,
+          data: {
+            total: 0,
+            active: 0,
+            expired: 0,
+            pending: 0,
+            totalCost: 0,
+            byType: {},
+            expiringThisMonth: 0,
+          },
+        });
+      }
+      query.department = { $in: allowedDeptIds };
     }
 
     const resources = await Resource.find(query);

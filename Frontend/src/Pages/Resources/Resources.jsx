@@ -44,6 +44,9 @@ function Resources() {
     } catch { return {}; }
   })();
 
+  const roleName = user?.role?.name || user?.role;
+  const isTeamLead = roleName === "teamLead";
+
   const resourceTypes = [
     "Software Subscription",
     "API Key",
@@ -92,9 +95,9 @@ function Resources() {
 
   const fetchDepartments = async () => {
     try {
-      const response = await departmentAPI.getAll();
+      const response = await departmentAPI.getAll({ flat: true });
       if (response.data.success) {
-        setDepartments(response.data.data);
+        setDepartments(response.data.flatData || response.data.data || []);
       }
     } catch (error) {
       console.error("Error fetching departments:", error);
@@ -216,12 +219,14 @@ function Resources() {
                 <p>Track external resources, subscriptions, and tools</p>
               </div>
             </div>
-            <button className="btn btn-primary" onClick={() => {
-              resetForm();
-              setShowModal(true);
-            }}>
-              + Add Resource
-            </button>
+            {!isTeamLead && (
+              <button className="btn btn-primary" onClick={() => {
+                resetForm();
+                setShowModal(true);
+              }}>
+                + Add Resource
+              </button>
+            )}
           </div>
 
           {/* Stats */}
@@ -318,20 +323,24 @@ function Resources() {
                         >
                           <i className="fas fa-eye"></i>
                         </button>
-                        <button
-                          className="btn btn-icon"
-                          onClick={() => handleEdit(resource)}
-                          title="Edit"
-                        >
-                          <i className="fas fa-edit"></i>
-                        </button>
-                        <button
-                          className="btn btn-icon btn-danger"
-                          onClick={() => handleDelete(resource._id)}
-                          title="Delete"
-                        >
-                          <i className="fas fa-trash"></i>
-                        </button>
+                        {!isTeamLead && (
+                          <button
+                            className="btn btn-icon"
+                            onClick={() => handleEdit(resource)}
+                            title="Edit"
+                          >
+                            <i className="fas fa-edit"></i>
+                          </button>
+                        )}
+                        {!isTeamLead && (
+                          <button
+                            className="btn btn-icon btn-danger"
+                            onClick={() => handleDelete(resource._id)}
+                            title="Delete"
+                          >
+                            <i className="fas fa-trash"></i>
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ))

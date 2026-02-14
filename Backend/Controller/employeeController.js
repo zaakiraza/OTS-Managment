@@ -36,10 +36,13 @@ export const createEmployee = async (req, res) => {
       role,
     } = req.body;
 
+    const normalizedEmail = email?.trim().toLowerCase();
+    let existingEmployee = null;
+
     // Check if employee with email exists (only if email is provided)
-    if (email) {
-      const existingEmployee = await Employee.findOne({ email });
-      if (existingEmployee) {
+    if (normalizedEmail) {
+      existingEmployee = await Employee.findOne({ email: normalizedEmail });
+      if (existingEmployee && existingEmployee.isActive) {
         return res.status(400).json({
           success: false,
           message: "Employee with this email already exists",
@@ -202,6 +205,7 @@ export const createEmployee = async (req, res) => {
     const employeeData = {
       employeeId: newEmployeeId,
       name,
+      email: normalizedEmail || undefined,
       department,
       role,
       createdBy: req.user._id,
@@ -242,7 +246,7 @@ export const createEmployee = async (req, res) => {
     }
 
     // Only add optional fields if they have values
-    if (email && email.trim()) employeeData.email = email;
+    if (normalizedEmail) employeeData.email = normalizedEmail;
     if (phone && phone.trim()) employeeData.phone = phone;
     if (cnic && cnic.trim()) employeeData.cnic = cnic;
     if (biometricId && biometricId.trim()) employeeData.biometricId = biometricId;
@@ -268,6 +272,51 @@ export const createEmployee = async (req, res) => {
       plainPassword = `Emp@${last4}`;
       // Don't set password - pre-save hook will generate it for new documents
       // The hook checks this.isNew, so it will run for new employees
+    }
+
+    if (existingEmployee && !existingEmployee.isActive) {
+      const updateData = { ...employeeData };
+      delete updateData.employeeId;
+      delete updateData.createdBy;
+      updateData.isActive = true;
+      updateData.modifiedBy = req.user._id;
+
+      if (updateData.password) {
+        updateData.password = await bcrypt.hash(updateData.password, 10);
+      }
+
+      const reactivatedEmployee = await Employee.findByIdAndUpdate(
+        existingEmployee._id,
+        updateData,
+        { new: true, runValidators: true }
+      )
+        .select("-salary -shifts.monthlySalary")
+        .populate("department", "name code")
+        .populate("shifts.department", "name code")
+        .populate("leadingDepartments", "name code")
+        .populate("role", "name description");
+
+      if (reactivatedEmployee?.email) {
+        notifyEmployeeCreated(reactivatedEmployee.email, {
+          name: reactivatedEmployee.name,
+          email: reactivatedEmployee.email,
+          employeeId: reactivatedEmployee.employeeId,
+          department: reactivatedEmployee.department?.name || "N/A",
+          tempPassword: plainPassword,
+        }).catch((err) => {
+          console.error(`[Employee Reactivated] Error sending email to ${reactivatedEmployee.email}:`, err);
+        });
+      }
+
+      await logEmployeeAction(req, "UPDATE", reactivatedEmployee, {
+        after: { name: reactivatedEmployee.name, employeeId: reactivatedEmployee.employeeId, department: reactivatedEmployee.department?.name }
+      });
+
+      return res.status(200).json({
+        success: true,
+        message: "Employee reactivated successfully",
+        data: reactivatedEmployee,
+      });
     }
 
     const employee = await Employee.create(employeeData);
@@ -943,8 +992,12 @@ export const updateEmployee = async (req, res) => {
     const updateData = { ...req.body, modifiedBy: req.user._id };
     delete updateData.employeeId; // Don't allow changing employee ID
 
+    if (updateData.email !== undefined && updateData.email !== null) {
+      const normalizedEmail = String(updateData.email).trim().toLowerCase();
+      updateData.email = normalizedEmail === "" ? undefined : normalizedEmail;
+    }
+
     // Convert empty strings to undefined for unique sparse fields to avoid duplicate key errors
-    if (updateData.email === '') updateData.email = undefined;
     if (updateData.phone === '') updateData.phone = undefined;
     if (updateData.cnic === '') updateData.cnic = undefined;
     if (updateData.biometricId === '') updateData.biometricId = undefined;

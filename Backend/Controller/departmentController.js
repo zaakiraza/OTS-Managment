@@ -32,7 +32,7 @@ export const createDepartment = async (req, res) => {
     // Auto-generate code if not provided
     const deptCode = code ? code.toUpperCase() : name.substring(0, 3).toUpperCase() + Math.floor(Math.random() * 1000);
 
-    // For attendanceDepartment role, validate they can create under departments they have access to
+    // For attendanceDepartment role, validate they can create under departments they created OR under root departments
     const requestingUserRole = req.user?.role?.name || req.user?.role;
     if (requestingUserRole === "attendanceDepartment" && parentDepartment) {
       const parent = await Department.findById(parentDepartment);
@@ -43,18 +43,16 @@ export const createDepartment = async (req, res) => {
         });
       }
       
-      // Check if user created the parent department OR has created any sibling departments under this parent
+      // Allow if: parent is root-level (level 0) OR user created the parent department
+      const parentIsRoot = (parent.level === 0 || !parent.level);
       const userCreatedParent = String(parent.createdBy) === String(req.user._id);
-      const hasCreatedSiblings = await Department.countDocuments({
-        parentDepartment: parentDepartment,
-        createdBy: req.user._id,
-        isActive: true
-      });
       
-      if (!userCreatedParent && hasCreatedSiblings === 0) {
+      console.log(`[Create Department] User: ${req.user.name}, Parent: ${parent.name}, ParentIsRoot: ${parentIsRoot}, UserCreatedParent: ${userCreatedParent}`);
+      
+      if (!parentIsRoot && !userCreatedParent) {
         return res.status(403).json({
           success: false,
-          message: "Access denied. You can only create departments under parents you created or where you have existing departments.",
+          message: "Access denied. You can only create departments under OTS (root) or under departments you created.",
         });
       }
     }
@@ -158,7 +156,8 @@ export const getAllDepartments = async (req, res) => {
         // 1. Created by the user, OR
         // 2. Parent departments of departments they created (so they can create siblings), OR
         // 3. It's the user's assigned department, OR
-        // 4. It's a sub-department of the user's assigned department
+        // 4. It's a sub-department of the user's assigned department, OR
+        // 5. It's a root department (level 0) - so attendance dept can create their first dept
         const allDepts = await Department.find({ isActive: true })
           .populate("parentDepartment", "_id");
         
@@ -178,54 +177,69 @@ export const getAllDepartments = async (req, res) => {
           }
         });
         
-        // Second pass: include parent departments and check against assigned department
+        // Second pass: include parent departments, assigned department, and root departments
         allDepts.forEach(dept => {
           const deptId = String(dept._id);
           const parentId = dept.parentDepartment 
             ? String(dept.parentDepartment._id || dept.parentDepartment) 
             : null;
           const deptPath = dept.path || "";
+          const deptLevel = dept.level || 0;
           
           // Include if:
           // - Already added (created by user)
           // - It's a parent of a department they created
           // - It's the assigned department
           // - It's a sub-department of assigned department
+          // - It's a root-level department (level 0) so they can create under it
           if (allowedDeptIds.has(deptId) ||
               parentIdsOfCreatedDepts.has(deptId) ||
               deptId === String(userDeptId) ||
               parentId === String(userDeptId) ||
-              deptPath.includes(String(userDeptId))) {
+              deptPath.includes(String(userDeptId)) ||
+              deptLevel === 0) {
             allowedDeptIds.add(deptId);
           }
         });
         
         query._id = { $in: Array.from(allowedDeptIds).map(id => new mongoose.Types.ObjectId(id)) };
       } else {
-        // If no assigned department, show departments created by user AND their parent departments
-        const userCreatedDepts = await Department.find({ 
-          createdBy: req.user._id, 
-          isActive: true 
-        }).populate("parentDepartment", "_id");
-        
+        // If no assigned department, show departments created by user, their parents, AND root departments
+        const allDepts = await Department.find({ isActive: true }).populate("parentDepartment", "_id");
         const allowedDeptIds = new Set();
         
-        // Add all user-created departments
-        userCreatedDepts.forEach(dept => {
-          allowedDeptIds.add(String(dept._id));
-          // Add parent department so user can create siblings
-          if (dept.parentDepartment) {
-            const parentId = String(dept.parentDepartment._id || dept.parentDepartment);
-            allowedDeptIds.add(parentId);
+        // Add all user-created departments and their parents
+        allDepts.forEach(dept => {
+          const createdBy = String(dept.createdBy);
+          if (createdBy === String(req.user._id)) {
+            allowedDeptIds.add(String(dept._id));
+            // Add parent department so user can create siblings
+            if (dept.parentDepartment) {
+              const parentId = String(dept.parentDepartment._id || dept.parentDepartment);
+              allowedDeptIds.add(parentId);
+            }
+          }
+        });
+        
+        // Also add root-level departments (level 0) so they can create their first department
+        allDepts.forEach(dept => {
+          if (dept.level === 0) {
+            allowedDeptIds.add(String(dept._id));
           }
         });
         
         if (allowedDeptIds.size > 0) {
           query._id = { $in: Array.from(allowedDeptIds).map(id => new mongoose.Types.ObjectId(id)) };
         } else {
-          query.createdBy = req.user._id;
+          // If still no departments, allow seeing root departments
+          query.$or = [
+            { createdBy: req.user._id },
+            { level: 0 }
+          ];
         }
       }
+      
+      console.log(`[getAllDepartments] User: ${req.user.name} (${userRole}), Allowed departments: ${query._id ? query._id.$in?.length || 'all' : 'filtered by other criteria'}`);
     }
     
     const departments = await Department.find(query)
@@ -339,6 +353,14 @@ export const updateDepartment = async (req, res) => {
   try {
     const { name, code, description, head, isActive, leverageTime, teamLead, parentDepartment } = req.body;
 
+    console.log("[Department Update] Received data:", { 
+      name, 
+      code, 
+      leverageTime, 
+      teamLead, 
+      head 
+    });
+
     const currentDept = await Department.findById(req.params.id);
     if (!currentDept) {
       return res.status(404).json({
@@ -346,6 +368,8 @@ export const updateDepartment = async (req, res) => {
         message: "Department not found",
       });
     }
+
+    console.log("[Department Update] Current department leverageTime:", currentDept.leverageTime);
 
     // For attendanceDepartment role, only allow editing departments they created
     const requestingUserRole = req.user?.role?.name || req.user?.role;
@@ -360,6 +384,8 @@ export const updateDepartment = async (req, res) => {
 
     const updateData = { name, description, head, isActive, leverageTime, teamLead };
     if (code) updateData.code = code.toUpperCase();
+
+    console.log("[Department Update] Update data prepared:", updateData);
 
     // Get current parent ID as string for comparison
     const currentParentId = currentDept.parentDepartment 
@@ -396,6 +422,18 @@ export const updateDepartment = async (req, res) => {
           });
         }
         
+        // For attendanceDepartment role, validate they can only move under root departments or departments they created
+        if (requestingUserRole === "attendanceDepartment") {
+          const parentIsRoot = (parent.level === 0 || !parent.level);
+          const userCreatedParent = String(parent.createdBy) === String(req.user._id);
+          if (!parentIsRoot && !userCreatedParent) {
+            return res.status(403).json({
+              success: false,
+              message: "Access denied. You can only move departments under OTS (root) or under departments you created.",
+            });
+          }
+        }
+        
         updateData.parentDepartment = newParentId;
         updateData.level = parent.level + 1;
         updateData.path = parent.path ? `${parent.path}/${parent._id}` : `${parent._id}`;
@@ -417,6 +455,12 @@ export const updateDepartment = async (req, res) => {
       .populate("head", "name email")
       .populate("teamLead", "name employeeId email position")
       .populate("parentDepartment", "name code");
+
+    console.log("[Department Update] Updated department:", {
+      name: department.name,
+      leverageTime: department.leverageTime,
+      teamLead: department.teamLead
+    });
 
     // Audit log
     await logDepartmentAction(req, "UPDATE", department, {

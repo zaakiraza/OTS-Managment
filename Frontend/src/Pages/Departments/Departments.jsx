@@ -144,8 +144,8 @@ const Departments = () => {
       teamLead: dept.teamLead?._id || "",
       parentDepartment: dept.parentDepartment?._id || "",
       leverageTime: {
-        checkInMinutes: dept.leverageTime?.checkInMinutes || 15,
-        checkOutMinutes: dept.leverageTime?.checkOutMinutes || 10,
+        checkInMinutes: dept.leverageTime?.checkInMinutes ?? 15,
+        checkOutMinutes: dept.leverageTime?.checkOutMinutes ?? 10,
       },
     });
     setShowModal(true);
@@ -198,7 +198,7 @@ const Departments = () => {
         <p className="dept-description">{dept.description || "No description"}</p>
         <div className="dept-info">
           <span className="leverage-info">
-            <i className="fas fa-clock"></i> Grace: Check-in {dept.leverageTime?.checkInMinutes || 15}min | Check-out {dept.leverageTime?.checkOutMinutes || 10}min
+            <i className="fas fa-clock"></i> Grace: Check-in {dept.leverageTime?.checkInMinutes ?? 15}min | Check-out {dept.leverageTime?.checkOutMinutes ?? 10}min
           </span>
         </div>
         <div className="dept-team-info">
@@ -508,7 +508,12 @@ const Departments = () => {
                       </option>
                     ))}
                 </select>
-                <small className="helper-text info"><i className="fas fa-lightbulb"></i> Leave empty for a top-level department</small>
+                <small className="helper-text info">
+                  <i className="fas fa-lightbulb"></i> 
+                  {flatDepartments.length === 0 
+                    ? " No departments available. Create your first root department."
+                    : " Select 'None' to create a root department, or select OTS Studio to create under it."}
+                </small>
               </div>
               
               <div className="form-section-title">
