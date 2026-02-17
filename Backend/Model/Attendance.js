@@ -182,9 +182,11 @@ attendanceSchema.pre("save", async function () {
         String(s.department) === String(this.department)
       ) || employee.shifts?.[0];
       
-      const ws = shift?.workSchedule;
+      // Get workSchedule from shift, or fall back to legacy employee.workSchedule
+      let ws = shift?.workSchedule || employee.workSchedule;
+      
       if (!ws) {
-        // Fallback if no shift/workSchedule found
+        // Final fallback if no workSchedule at all
         const standardDailyHours = 8;
         this.extraWorkingHours = Math.max(0, this.workingHours - standardDailyHours);
         if (this.workingHours >= 8) this.status = "present";

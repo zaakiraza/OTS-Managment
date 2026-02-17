@@ -91,14 +91,16 @@ export const deviceCheckIn = async (req, res) => {
       });
       punchType = 'CHECK-IN';
     } else if (!attendance.checkIn) {
-      // Has record but no check-in (edge case)
+      // Has record but no check-in (could be auto-marked absent)
       attendance.checkIn = punchTime;
+      attendance.status = 'pending'; // Reset status so pre-save hook will recalculate
       if (deviceId) attendance.deviceId = deviceId;
       await attendance.save();
       punchType = 'CHECK-IN';
     } else if (!attendance.checkOut) {
       // Already has check-in, this is check-out
       attendance.checkOut = punchTime;
+      attendance.status = 'pending'; // Reset status so pre-save hook will recalculate
       await attendance.save();
       punchType = 'CHECK-OUT';
     } else {
