@@ -231,8 +231,10 @@ export const createTask = async (req, res) => {
       });
     }
 
-    // Verify all assignees exist
-    const employees = await Employee.find({ _id: { $in: assignees } });
+    // Verify all assignees exist and populate shifts
+    const employees = await Employee.find({ _id: { $in: assignees } })
+      .populate("shifts.department");
+    
     if (employees.length !== assignees.length) {
       return res.status(404).json({
         success: false,
@@ -240,10 +242,38 @@ export const createTask = async (req, res) => {
       });
     }
 
+    // Determine task department
+    const taskDept = department || employees[0].department;
+
+    // Validate that assignees are valid for this department (considering shifts)
+    const roleName = req.user.role?.name || req.user.role;
+    if (roleName !== "superAdmin" && taskDept) {
+      const taskDeptStr = String(taskDept);
+      const invalidAssignees = [];
+
+      for (const emp of employees) {
+        const hasPrimaryDept = emp.department && String(emp.department) === taskDeptStr;
+        const hasShiftInDept = emp.shifts && emp.shifts.some(shift => 
+          shift.department && String(shift.department._id) === taskDeptStr
+        );
+
+        if (!hasPrimaryDept && !hasShiftInDept) {
+          invalidAssignees.push(emp.employeeId || emp.name);
+        }
+      }
+
+      if (invalidAssignees.length > 0) {
+        return res.status(400).json({
+          success: false,
+          message: `Employee(s) ${invalidAssignees.join(", ")} are not assigned to department ${taskDept.name || taskDept}. They must have either primary department or a shift in this department.`,
+        });
+      }
+    }
+
     const taskData = {
       ...otherData,
       assignedTo: assignees,
-      department: department || employees[0].department,
+      department: taskDept,
       assignedBy: req.user._id,
     };
 
@@ -699,3 +729,105 @@ export const getTaskReport = async (req, res) => {
     });
   }
 };
+
+// Get employees available for task assignment in a department
+// Considers both primary department and shifts (multi-shift support)
+export const getEmployeesForTaskAssignment = async (req, res) => {
+  try {
+    const { department } = req.query;
+    const roleName = req.user.role?.name || req.user.role;
+
+    if (!department) {
+      return res.status(400).json({
+        success: false,
+        message: "Department is required",
+      });
+    }
+
+    const deptStr = String(department);
+
+    // Build the query to find employees in this department (by primary OR shifts)
+    const employees = await Employee.find({
+      isActive: true,
+      $or: [
+        { department: department }, // Primary department
+        { "shifts.department": department } // Has a shift in this department
+      ]
+    })
+      .select("_id employeeId name email position department")
+      .populate("department", "name code")
+      .populate("shifts.department", "name code")
+      .sort({ employeeId: 1 });
+
+    // For teamLead, validate they have access to this department
+    if (roleName === "teamLead") {
+      const currentEmployee = await Employee.findById(req.user._id)
+        .populate("leadingDepartments", "_id");
+
+      const isAllowed = currentEmployee?.leadingDepartments?.some(
+        d => String(d._id) === deptStr
+      );
+
+      if (!isAllowed) {
+        return res.status(403).json({
+          success: false,
+          message: "You don't have permission to assign tasks in this department",
+        });
+      }
+    }
+
+    // For attendanceDepartment, validate they can manage this department
+    if (roleName === "attendanceDepartment") {
+      const createdEmployees = await Employee.find({
+        createdBy: req.user._id,
+        isActive: true,
+      }).select("department");
+
+      const managedDepts = new Set();
+      createdEmployees.forEach(emp => {
+        if (emp.department) {
+          managedDepts.add(String(emp.department));
+        }
+      });
+
+      if (!managedDepts.has(deptStr)) {
+        return res.status(403).json({
+          success: false,
+          message: "You don't have permission to assign tasks in this department",
+        });
+      }
+    }
+
+    // Enrich response with department info for each employee
+    const enrichedEmployees = employees.map(emp => {
+      const empObj = emp.toObject();
+      
+      // Add where they work in this department (primary or shift)
+      const workLocations = [];
+      if (emp.department && String(emp.department._id) === deptStr) {
+        workLocations.push({ type: "primary", department: emp.department });
+      }
+      const shiftsInDept = emp.shifts?.filter(s => String(s.department._id) === deptStr);
+      if (shiftsInDept?.length > 0) {
+        shiftsInDept.forEach(shift => {
+          workLocations.push({ type: "shift", department: shift.department });
+        });
+      }
+      
+      empObj.workLocations = workLocations;
+      return empObj;
+    });
+
+    res.status(200).json({
+      success: true,
+      count: enrichedEmployees.length,
+      data: enrichedEmployees,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+

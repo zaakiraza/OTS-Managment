@@ -77,19 +77,39 @@ function Tasks() {
   }, [filter.department, employees]);
 
   // Update filtered employees when department changes or employees are loaded
+  // Fetches from backend endpoint that considers both primary department AND shifts
   useEffect(() => {
-    if (formData.department && employees.length > 0) {
-      // Convert both to strings for comparison
-      const deptIdStr = String(formData.department);
-      const filtered = employees.filter(emp => {
-        const empDeptId = emp.department?._id || emp.department;
-        return String(empDeptId) === deptIdStr;
-      });
-      setFilteredEmployees(filtered);
-    } else if (!formData.department) {
+    if (formData.department) {
+      fetchEmployeesForDepartment(formData.department);
+    } else {
       setFilteredEmployees([]);
     }
-  }, [formData.department, employees]);
+  }, [formData.department]);
+
+  const fetchEmployeesForDepartment = async (departmentId) => {
+    try {
+      const token = localStorage.getItem("token");
+      const response = await fetch(
+        `${import.meta.env.VITE_API_URL}/tasks/employees/for-assignment?department=${departmentId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+      if (response.ok) {
+        const result = await response.json();
+        setFilteredEmployees(result.data || []);
+      } else {
+        console.error("Failed to fetch employees for department");
+        setFilteredEmployees([]);
+      }
+    } catch (error) {
+      console.error("Error fetching employees:", error);
+      setFilteredEmployees([]);
+    }
+  };
 
   const fetchTasks = async () => {
     try {

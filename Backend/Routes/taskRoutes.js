@@ -10,6 +10,7 @@ import {
   addComment,
   getTaskStats,
   getTaskReport,
+  getEmployeesForTaskAssignment,
 } from "../Controller/taskController.js";
 import { verifyToken, hasRole } from "../Middleware/auth.js";
 import { taskAttachmentUpload, handleUploadError } from "../Middleware/fileUpload.js";
@@ -22,6 +23,9 @@ router.use(verifyToken);
 // Employee routes - can view their own tasks and update status
 router.get("/my-tasks", getMyTasks);
 router.patch("/:id/status", updateTaskStatus);
+
+// Get employees available for task assignment in a department (consider shifts)
+router.get("/employees/for-assignment", hasRole("superAdmin", "teamLead", "attendanceDepartment"), getEmployeesForTaskAssignment);
 
 // Team leads, attendance department, and above can create and manage tasks
 router.post("/", hasRole("superAdmin", "teamLead", "attendanceDepartment"), taskAttachmentUpload, handleUploadError, createTask);

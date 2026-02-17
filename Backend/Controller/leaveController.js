@@ -2,6 +2,7 @@ import Leave from "../Model/Leave.js";
 import Employee from "../Model/Employee.js";
 import Attendance from "../Model/Attendance.js";
 import Role from "../Model/Role.js";
+import Department from "../Model/Department.js";
 import { logAttendanceAction } from "../Utils/auditLogger.js";
 import { getFileInfo } from "../Middleware/fileUpload.js";
 import { uploadBase64ToS3 } from "../Config/s3.js";
@@ -161,6 +162,20 @@ export const applyLeave = async (req, res) => {
       }).select("_id");
       
       teamLeads.forEach((tl) => recipientsSet.add(tl._id.toString()));
+    }
+
+    // If the employee is a team lead of a sub-department, also notify the parent department team lead
+    if (leaveDepartment) {
+      const deptDoc = await Department.findById(leaveDepartment)
+        .select("parentDepartment teamLead")
+        .populate("parentDepartment", "teamLead");
+
+      const isDeptTeamLead = deptDoc?.teamLead && String(deptDoc.teamLead) === String(employeeId);
+      const parentTeamLead = deptDoc?.parentDepartment?.teamLead;
+
+      if (isDeptTeamLead && parentTeamLead) {
+        recipientsSet.add(parentTeamLead.toString());
+      }
     }
 
     if (recipientsSet.size > 0) {
