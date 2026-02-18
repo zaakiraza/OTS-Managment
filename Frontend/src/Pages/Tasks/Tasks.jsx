@@ -88,22 +88,9 @@ function Tasks() {
 
   const fetchEmployeesForDepartment = async (departmentId) => {
     try {
-      const token = localStorage.getItem("token");
-      const response = await fetch(
-        `${import.meta.env.VITE_API_URL}/tasks/employees/for-assignment?department=${departmentId}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-        }
-      );
-      if (response.ok) {
-        const result = await response.json();
-        setFilteredEmployees(result.data || []);
-      } else {
-        console.error("Failed to fetch employees for department");
-        setFilteredEmployees([]);
+      const response = await taskAPI.getEmployeesForAssignment(departmentId);
+      if (response.data.success) {
+        setFilteredEmployees(response.data.data || []);
       }
     } catch (error) {
       console.error("Error fetching employees:", error);

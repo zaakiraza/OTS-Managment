@@ -179,7 +179,7 @@ function Tickets() {
           const formDataWithFiles = new FormData();
           Object.keys(dataToSend).forEach((key) => {
             if (dataToSend[key] !== null && dataToSend[key] !== undefined) {
-              if (key === "compressedImages" || key === "existingAttachments") {
+              if (key === "compressedImages" || key === "existingAttachments" || key === "visibleToDepartments") {
                 formDataWithFiles.append(key, JSON.stringify(dataToSend[key]));
               } else {
                 formDataWithFiles.append(key, dataToSend[key]);
@@ -200,7 +200,7 @@ function Tickets() {
           const formDataWithFiles = new FormData();
           Object.keys(dataToSend).forEach((key) => {
             if (dataToSend[key] !== null && dataToSend[key] !== undefined) {
-              if (key === "compressedImages") {
+              if (key === "compressedImages" || key === "visibleToDepartments") {
                 formDataWithFiles.append(key, JSON.stringify(dataToSend[key]));
               } else {
                 formDataWithFiles.append(key, dataToSend[key]);
@@ -723,11 +723,6 @@ function Tickets() {
                               onChange={(e) => {
                                 if (e.target.checked) {
                                   setFormData({ ...formData, visibleToDepartments: [] });
-                                } else {
-                                  // When unchecking "All Departments", select the first department
-                                  if (departments.length > 0) {
-                                    setFormData({ ...formData, visibleToDepartments: [departments[0]._id] });
-                                  }
                                 }
                               }}
                             />
@@ -746,15 +741,12 @@ function Tickets() {
                                       visibleToDepartments: [...formData.visibleToDepartments, dept._id]
                                     });
                                   } else {
-                                    const newDepts = formData.visibleToDepartments.filter(id => id !== dept._id);
-                                    // If unchecking the last department, make it public (all departments)
                                     setFormData({
                                       ...formData,
-                                      visibleToDepartments: newDepts.length === 0 ? [] : newDepts
+                                      visibleToDepartments: formData.visibleToDepartments.filter(id => id !== dept._id)
                                     });
                                   }
                                 }}
-                                disabled={formData.visibleToDepartments.length === 0}
                               />
                               <label htmlFor={`dept-${dept._id}`}>
                                 {"—".repeat(dept.level || 0)} {dept.name}
@@ -764,7 +756,7 @@ function Tickets() {
                         </div>
                         <small className="form-help">
                           <i className="fas fa-info-circle"></i> 
-                          Check "All Departments" for public visibility, or select specific departments to restrict access.
+                          Select specific departments manually, or keep none selected to submit as All Departments.
                         </small>
                       </div>
                     </div>

@@ -3,6 +3,7 @@ import api from "./Api";
 const taskAPI = {
   getAll: (params) => api.get("/tasks", { params }),
   getMyTasks: (params) => api.get("/tasks/my-tasks", { params }),
+  getEmployeesForAssignment: (department) => api.get("/tasks/employees/for-assignment", { params: { department } }),
   getById: (id) => api.get(`/tasks/${id}`),
   create: (data) => api.post("/tasks", data),
   update: (id, data) => api.put(`/tasks/${id}`, data),

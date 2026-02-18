@@ -120,19 +120,19 @@ app.listen(process.env.PORT, async () => {
 
   // Connect to ZKTeco biometric device and start polling
   logger.info("Initializing ZKTeco biometric integration...");
-  // const connected = await connectToDevice();
-  // if (connected) {
-  //   startPolling();
-  // } else {
-  //   logger.warn("ZKTeco device not connected. Will retry...");
-  // }
+  const connected = await connectToDevice();
+  if (connected) {
+    startPolling();
+  } else {
+    logger.warn("ZKTeco device not connected. Will retry...");
+  }
 
   // Schedule daily absentee check at 11:59 PM
-  // scheduleAbsenteeCheck("23:59");
-  // logger.info("Daily absentee check scheduled");
+  scheduleAbsenteeCheck("23:59");
+  logger.info("Daily absentee check sche/my-tasksduled");
 
   // Schedule marking old pending attendance as missing (runs daily at midnight UTC)
-  // scheduleMarkMissingAttendance();
+  scheduleMarkMissingAttendance();
 });
 
 export default app;

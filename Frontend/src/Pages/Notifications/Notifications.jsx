@@ -19,7 +19,7 @@ const Notifications = () => {
     deleteAllRead,
   } = useNotifications();
 
-  const [filter, setFilter] = useState("all"); // all, unread, read
+  const [filter, setFilter] = useState("unread"); // all, unread, read
 
   useEffect(() => {
     fetchNotifications();
@@ -105,6 +105,13 @@ const Notifications = () => {
 
     // Navigate based on notification type (more specific than referenceType)
     const type = notification.type;
+    const referenceId = notification?.data?.referenceId;
+
+    // Deep-link task comments to open specific task with comments focused
+    if (type === "task_comment" && referenceId) {
+      navigate(`/my-tasks?taskId=${referenceId}&focus=comments`);
+      return;
+    }
     
     // Route map based on notification type
     const routeMap = {
@@ -235,7 +242,7 @@ const Notifications = () => {
               <span className="filter-count">{notifications.length}</span>
             </button>
             <button
-              className={`filter-tab ${filter === "unread" ? "active" : ""}`}
+              className={`filter-tab unread-tab ${filter === "unread" ? "active" : ""}`}
               onClick={() => setFilter("unread")}
             >
               <i className="fas fa-envelope"></i>

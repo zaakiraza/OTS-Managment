@@ -102,7 +102,7 @@
   position: absolute;
   top: -8px;
   right: -8px;
-  background: linear-gradient(135deg, #FF6B6B 0%, #EE5A5A 100%);
+  background: #1f6a75;
   color: white;
   font-size: 12px;
   font-weight: 700;
@@ -113,7 +113,7 @@
   align-items: center;
   justify-content: center;
   padding: 0 6px;
-  box-shadow: 0 4px 12px rgba(255, 107, 107, 0.5);
+  box-shadow: 0 4px 12px rgba(31, 106, 117, 0.4);
   animation: pulse-badge 2s infinite;
 }
 
@@ -228,9 +228,14 @@
 }
 
 .filter-tab.active {
+  background: #1f6a75;
   color: white;
   font-weight: 600;
   box-shadow: 0 4px 20px rgba(31, 106, 117, 0.15);
+}
+
+.filter-tab.unread-tab.active {
+  background: #1f6a75;
 }
 
 .filter-tab.active::before {
@@ -260,7 +265,7 @@
 }
 
 .filter-count.unread {
-  background: linear-gradient(135deg, #FF6B6B 0%, #EE5A5A 100%);
+  background: #1f6a75;
   color: white;
 }
 
@@ -299,7 +304,42 @@
 }
 
 .notification-card.unread {
-  background: linear-gradient(135deg, rgba(31, 106, 117, 0.03) 0%, rgba(42, 141, 156, 0.06) 100%);
+  background: #1f6a75;
+}
+
+.notification-card.unread .card-accent {
+  background: #1f6a75 !important;
+}
+
+.notification-card.unread .notification-icon {
+  background: rgba(255, 255, 255, 0.16) !important;
+  color: #ffffff !important;
+}
+
+.notification-card.unread .notification-icon i {
+  color: #ffffff;
+}
+
+.notification-card.unread .notification-header h4 {
+  color: #ffffff;
+}
+
+.notification-card.unread .notification-message {
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.notification-card.unread .notification-time {
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.notification-card.unread .notification-type {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.notification-card.unread .new-badge {
+  background: #ffffff;
+  color: #1f6a75;
 }
 
 .card-accent {

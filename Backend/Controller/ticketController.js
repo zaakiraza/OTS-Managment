@@ -18,6 +18,30 @@ const getRoleIdsByName = async (names) => {
   return roles.map((r) => r._id);
 };
 
+const normalizeVisibleDepartments = (value) => {
+  if (value === undefined || value === null || value === "") return [];
+
+  if (Array.isArray(value)) {
+    return value.filter(Boolean);
+  }
+
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      if (Array.isArray(parsed)) {
+        return parsed.filter(Boolean);
+      }
+    } catch {
+      if (value.includes(",")) {
+        return value.split(",").map((id) => id.trim()).filter(Boolean);
+      }
+      return [value];
+    }
+  }
+
+  return [];
+};
+
 // Get all tickets
 export const getAllTickets = async (req, res) => {
   try {
@@ -45,7 +69,11 @@ export const getAllTickets = async (req, res) => {
 
     // Filter tickets based on visibility rules
     const currentUser = req.user;
-    const currentUserDeptIds = req.user.departments || [];
+    const currentUserPrimaryDeptId = req.user.department?._id
+      ? req.user.department._id.toString()
+      : req.user.department
+      ? req.user.department.toString()
+      : null;
     const currentUserId = currentUser._id.toString();
     const isSuperAdmin = currentUser.role?.name === "superAdmin";
     
@@ -70,12 +98,11 @@ export const getAllTickets = async (req, res) => {
         return true;
       }
       
-      // For restricted tickets, check if any of user's departments is in the visible departments list
-      if (currentUserDeptIds.length > 0) {
-        const isVisible = ticket.visibleToDepartments.some(
-          dept => currentUserDeptIds.includes(dept._id.toString())
+      // For restricted tickets, only exact selected departments can view (no inherited child-department visibility)
+      if (currentUserPrimaryDeptId) {
+        return ticket.visibleToDepartments.some(
+          (dept) => dept._id.toString() === currentUserPrimaryDeptId
         );
-        return isVisible;
       }
       
       // If user has no department and ticket is restricted, they can't see it
@@ -132,6 +159,8 @@ export const createTicket = async (req, res) => {
       ...req.body,
       reportedBy: req.user._id,
     };
+
+    ticketData.visibleToDepartments = normalizeVisibleDepartments(ticketData.visibleToDepartments);
 
     // Handle attachments array
     ticketData.attachments = [];
@@ -309,6 +338,9 @@ export const updateTicket = async (req, res) => {
     if (req.body.assignedTo === "") req.body.assignedTo = null;
     if (req.body.reportedAgainst === "") req.body.reportedAgainst = null;
     if (req.body.resolvedBy === "") req.body.resolvedBy = null;
+    if (req.body.visibleToDepartments !== undefined) {
+      req.body.visibleToDepartments = normalizeVisibleDepartments(req.body.visibleToDepartments);
+    }
 
     // Handle attachments
     let updatedAttachments = [];
@@ -411,6 +443,44 @@ export const updateTicket = async (req, res) => {
         updatedTicket,
         req.user
       ).catch((err) => console.error("Email notification failed:", err));
+    }
+
+    // Send in-app notification when ticket status changes
+    if (previousStatus !== updatedTicket.status) {
+      try {
+        const notifyIds = new Set();
+
+        if (updatedTicket.reportedBy?._id) {
+          notifyIds.add(updatedTicket.reportedBy._id.toString());
+        }
+        if (updatedTicket.reportedAgainst?._id) {
+          notifyIds.add(updatedTicket.reportedAgainst._id.toString());
+        }
+        if (updatedTicket.assignedTo?._id) {
+          notifyIds.add(updatedTicket.assignedTo._id.toString());
+        }
+
+        // Do not notify the user who made the status change
+        notifyIds.delete(req.user._id.toString());
+
+        if (notifyIds.size > 0) {
+          await createBulkNotifications({
+            recipients: Array.from(notifyIds),
+            type: "ticket_status_changed",
+            title: "Ticket Status Updated",
+            message: `${req.user.name} changed ticket ${updatedTicket.ticketId} status from ${previousStatus} to ${updatedTicket.status}`,
+            data: {
+              referenceId: updatedTicket._id,
+              referenceType: "Ticket",
+              previousStatus,
+              newStatus: updatedTicket.status,
+            },
+            sender: req.user._id,
+          });
+        }
+      } catch (notifError) {
+        console.error("Error creating status change notification:", notifError);
+      }
     }
 
     // Log the action

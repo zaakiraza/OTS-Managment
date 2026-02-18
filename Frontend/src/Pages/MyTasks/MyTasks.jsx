@@ -1,11 +1,14 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import SideBar from "../../Components/SideBar/SideBar";
 import taskAPI from "../../Config/taskApi";
 import { useToast } from "../../Components/Common/Toast/Toast";
+import { useLocation, useNavigate } from "react-router-dom";
 import "../Tasks/Tasks.css";
 
 function MyTasks() {
   const toast = useToast();
+  const location = useLocation();
+  const navigate = useNavigate();
   const [tasks, setTasks] = useState([]);
   const [selectedTask, setSelectedTask] = useState(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
@@ -13,6 +16,13 @@ function MyTasks() {
   const [loading, setLoading] = useState(false);
   const [departmentFilter, setDepartmentFilter] = useState("");
   const [myTasksOnly, setMyTasksOnly] = useState(false);
+  const [priorityFilter, setPriorityFilter] = useState("");
+  const [dateRangeFilter, setDateRangeFilter] = useState("week");
+  const [customStart, setCustomStart] = useState("");
+  const [customEnd, setCustomEnd] = useState("");
+  const commentsSectionRef = useRef(null);
+  const commentInputRef = useRef(null);
+  const handledDeepLinkRef = useRef(false);
 
   // Get user shifts for department filter
   const user = (() => {
@@ -25,6 +35,7 @@ function MyTasks() {
   
   const userShifts = user?.shifts || [];
   const hasMultipleShifts = userShifts.length > 1;
+  const priorities = ["Low", "Medium", "High", "Critical"];
 
   useEffect(() => {
     fetchMyTasks();
@@ -61,18 +72,51 @@ function MyTasks() {
     }
   };
 
-  const handleViewTask = async (task) => {
+  const openTaskById = async (taskId, focusComments = false) => {
     try {
-      const response = await taskAPI.getById(task._id);
+      const response = await taskAPI.getById(taskId);
       if (response.data.success) {
         setSelectedTask(response.data.data);
         setShowDetailModal(true);
+
+        if (focusComments) {
+          setTimeout(() => {
+            commentsSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+            commentInputRef.current?.focus();
+          }, 200);
+        }
       }
     } catch (error) {
       console.error("Error fetching task details:", error);
       toast.error("Failed to load task details");
     }
   };
+
+  const handleViewTask = async (task) => {
+    await openTaskById(task._id, false);
+  };
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const taskId = params.get("taskId");
+    const focus = params.get("focus");
+
+    if (!taskId || handledDeepLinkRef.current) return;
+
+    handledDeepLinkRef.current = true;
+    openTaskById(taskId, focus === "comments");
+
+    params.delete("taskId");
+    params.delete("focus");
+    const newSearch = params.toString();
+    navigate(
+      {
+        pathname: location.pathname,
+        search: newSearch ? `?${newSearch}` : "",
+      },
+      { replace: true }
+    );
+  }, [location.pathname, location.search, navigate]);
 
   const handleStatusChange = async (status) => {
     try {
@@ -158,18 +202,66 @@ function MyTasks() {
     return new Date(task.dueDate) < new Date() && task.status !== "completed";
   };
 
+  const filterTasksByDateRange = (tasksToFilter) => {
+    if (dateRangeFilter === "all") return tasksToFilter;
+
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+    return tasksToFilter.filter((task) => {
+      if (!task?.dueDate) return false;
+      const dueDate = new Date(task.dueDate);
+
+      switch (dateRangeFilter) {
+        case "week": {
+          const oneWeekLater = new Date(startOfToday);
+          oneWeekLater.setDate(oneWeekLater.getDate() + 7);
+          return dueDate >= startOfToday && dueDate <= oneWeekLater;
+        }
+        case "month": {
+          const oneMonthLater = new Date(startOfToday);
+          oneMonthLater.setMonth(oneMonthLater.getMonth() + 1);
+          return dueDate >= startOfToday && dueDate <= oneMonthLater;
+        }
+        case "range": {
+          const start = customStart ? new Date(customStart) : null;
+          const end = customEnd ? new Date(customEnd) : null;
+
+          if (start && end) {
+            const endOfDay = new Date(end);
+            endOfDay.setHours(23, 59, 59, 999);
+            return dueDate >= start && dueDate <= endOfDay;
+          }
+          if (start) return dueDate >= start;
+          if (end) {
+            const endOfDay = new Date(end);
+            endOfDay.setHours(23, 59, 59, 999);
+            return dueDate <= endOfDay;
+          }
+          return true;
+        }
+        default:
+          return true;
+      }
+    });
+  };
+
+  const filteredTasks = filterTasksByDateRange(
+    tasks.filter((task) => !priorityFilter || task.priority === priorityFilter)
+  );
+
   const groupedTasks = {
-    todo: tasks.filter((t) => t.status === "todo"),
-    "in-progress": tasks.filter((t) => t.status === "in-progress"),
-    completed: tasks.filter((t) => t.status === "completed"),
+    todo: filteredTasks.filter((t) => t.status === "todo"),
+    "in-progress": filteredTasks.filter((t) => t.status === "in-progress"),
+    completed: filteredTasks.filter((t) => t.status === "completed"),
   };
 
   const stats = {
-    total: tasks.length,
+    total: filteredTasks.length,
     todo: groupedTasks.todo.length,
     inProgress: groupedTasks["in-progress"].length,
     completed: groupedTasks.completed.length,
-    overdue: tasks.filter(
+    overdue: filteredTasks.filter(
       (t) => t.status !== "completed" && new Date(t.dueDate) < new Date()
     ).length,
   };
@@ -253,6 +345,59 @@ function MyTasks() {
               >
                 <option value="all">All Tasks</option>
                 <option value="me">My Tasks Only</option>
+              </select>
+            </div>
+
+            <div className="filter-group">
+              <label>Time Range</label>
+              <select
+                value={dateRangeFilter}
+                onChange={(e) => setDateRangeFilter(e.target.value)}
+                className="filter-select"
+              >
+                <option value="week">This Week</option>
+                <option value="month">This Month</option>
+                <option value="range">Custom Range</option>
+                <option value="all">All Tasks</option>
+              </select>
+            </div>
+
+            {dateRangeFilter === "range" && (
+              <>
+                <div className="filter-group">
+                  <label>Start Date</label>
+                  <input
+                    type="date"
+                    value={customStart}
+                    onChange={(e) => setCustomStart(e.target.value)}
+                    className="filter-select"
+                  />
+                </div>
+                <div className="filter-group">
+                  <label>End Date</label>
+                  <input
+                    type="date"
+                    value={customEnd}
+                    onChange={(e) => setCustomEnd(e.target.value)}
+                    className="filter-select"
+                  />
+                </div>
+              </>
+            )}
+
+            <div className="filter-group">
+              <label>Priority</label>
+              <select
+                value={priorityFilter}
+                onChange={(e) => setPriorityFilter(e.target.value)}
+                className="filter-select"
+              >
+                <option value="">All Priorities</option>
+                {priorities.map((priority) => (
+                  <option key={priority} value={priority}>
+                    {priority}
+                  </option>
+                ))}
               </select>
             </div>
           </div>
@@ -572,7 +717,7 @@ function MyTasks() {
                   </div>
 
                   {/* Comments Section */}
-                  <div className="comments-section">
+                  <div className="comments-section" ref={commentsSectionRef}>
                     <h4><i className="fas fa-comments"></i> Comments</h4>
                     <div className="comments-list">
                       {selectedTask.comments && selectedTask.comments.length > 0 ? (
@@ -602,6 +747,7 @@ function MyTasks() {
 
                     <div className="add-comment">
                       <input
+                        ref={commentInputRef}
                         type="text"
                         placeholder="Write a comment..."
                         value={newComment}
