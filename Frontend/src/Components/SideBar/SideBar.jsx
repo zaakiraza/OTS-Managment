@@ -346,9 +346,8 @@ function SideBar() {
           <span className="nav-icon"><i className="fas fa-list-check"></i></span>
           {!isCollapsed && <span className="nav-text">Personal Notes</span>}
         </NavLink>
-      </nav>
 
-      <div className="sidebar-footer">
+        {/* Profile & Settings Section */}
         <NavLink to="/profile" className="nav-item profile-btn">
           <span className="nav-icon"><i className="fas fa-user-circle"></i></span>
           {!isCollapsed && <span className="nav-text">My Profile</span>}
@@ -364,7 +363,7 @@ function SideBar() {
           <span className="nav-icon"><i className="fas fa-sign-out-alt"></i></span>
           {!isCollapsed && <span className="nav-text">Logout</span>}
         </button>
-      </div>
+      </nav>
 
       <ChangePassword 
         show={showChangePassword} 

@@ -8,8 +8,19 @@ import { uploadBase64ToS3 } from "../Config/s3.js";
 // Get all assets
 export const getAllAssets = async (req, res) => {
   try {
-    const { status, category, assignedTo, search } = req.query;
+    const { status, category, assignedTo, search, createdBy, assignedBy } = req.query;
     const filter = { isActive: true };
+
+    // Role-based filtering: ITAssetManager can only see their own assets
+    const userRole = req.user.role?.name;
+    const isSuperAdmin = userRole === "superAdmin";
+    
+    if (userRole === "ITAssetManager" && !isSuperAdmin) {
+      filter.createdBy = req.user._id;
+    } else if (createdBy) {
+      // Super Admin can filter by specific creator
+      filter.createdBy = createdBy;
+    }
 
     if (status) filter.status = status;
     if (category) filter.category = category;
@@ -22,7 +33,7 @@ export const getAllAssets = async (req, res) => {
       ];
     }
 
-    const assets = await Asset.find(filter)
+    let assets = await Asset.find(filter)
       .populate({
         path: "assignedTo",
         select: "employeeId name email department",
@@ -31,8 +42,19 @@ export const getAllAssets = async (req, res) => {
           select: "name"
         }
       })
-      .populate("createdBy", "name")
+      .populate("createdBy", "name employeeId")
       .sort({ createdAt: -1 });
+
+    // Filter by assignedBy if provided (requires checking AssetAssignment records)
+    if (assignedBy) {
+      const assetAssignments = await AssetAssignment.find({
+        assignedBy: assignedBy,
+        status: "Active"
+      }).select("asset");
+      
+      const assignedAssetIds = assetAssignments.map(a => String(a.asset));
+      assets = assets.filter(asset => assignedAssetIds.includes(String(asset._id)));
+    }
 
     res.status(200).json({
       success: true,
@@ -59,6 +81,18 @@ export const getAssetById = async (req, res) => {
       return res.status(404).json({
         success: false,
         message: "Asset not found",
+      });
+    }
+
+    // Authorization check: ITAssetManager can only view their own assets
+    const userRole = req.user.role?.name;
+    const isSuperAdmin = userRole === "superAdmin";
+    const isCreator = String(asset.createdBy._id || asset.createdBy) === String(req.user._id);
+
+    if (userRole === "ITAssetManager" && !isSuperAdmin && !isCreator) {
+      return res.status(403).json({
+        success: false,
+        message: "You don't have permission to view this asset.",
       });
     }
 
@@ -219,6 +253,17 @@ export const updateAsset = async (req, res) => {
       });
     }
 
+    // Authorization: Only creator or superAdmin can edit
+    const isSuperAdmin = req.user.role?.name === "superAdmin";
+    const isCreator = String(asset.createdBy) === String(req.user._id);
+    
+    if (!isSuperAdmin && !isCreator) {
+      return res.status(403).json({
+        success: false,
+        message: "You don't have permission to edit this asset. Only the creator or Super Admin can modify it.",
+      });
+    }
+
     // Handle image upload to S3
     let imageUrls = [];
     if (req.body.images && req.body.images.length > 0) {
@@ -280,6 +325,17 @@ export const deleteAsset = async (req, res) => {
       return res.status(404).json({
         success: false,
         message: "Asset not found",
+      });
+    }
+
+    // Authorization: Only creator or superAdmin can delete
+    const isSuperAdmin = req.user.role?.name === "superAdmin";
+    const isCreator = String(asset.createdBy) === String(req.user._id);
+    
+    if (!isSuperAdmin && !isCreator) {
+      return res.status(403).json({
+        success: false,
+        message: "You don't have permission to delete this asset. Only the creator or Super Admin can delete it.",
       });
     }
 
@@ -532,6 +588,26 @@ export const getAssetHistory = async (req, res) => {
   try {
     const { assetId } = req.params;
 
+    // Authorization check: ITAssetManager can only view history of their own assets
+    const asset = await Asset.findById(assetId);
+    if (!asset) {
+      return res.status(404).json({
+        success: false,
+        message: "Asset not found",
+      });
+    }
+
+    const userRole = req.user.role?.name;
+    const isSuperAdmin = userRole === "superAdmin";
+    const isCreator = String(asset.createdBy) === String(req.user._id);
+
+    if (userRole === "ITAssetManager" && !isSuperAdmin && !isCreator) {
+      return res.status(403).json({
+        success: false,
+        message: "You don't have permission to view this asset's history.",
+      });
+    }
+
     const history = await AssetAssignment.find({ asset: assetId })
       .populate("employee", "employeeId name email")
       .populate("assignedBy", "name")
@@ -603,20 +679,29 @@ export const getEmployeeAssets = async (req, res) => {
 // Get asset statistics
 export const getAssetStats = async (req, res) => {
   try {
-    const totalAssets = await Asset.countDocuments({ isActive: true });
-    const available = await Asset.countDocuments({ status: "Available", isActive: true });
-    const assigned = await Asset.countDocuments({ status: "Assigned", isActive: true });
-    const underRepair = await Asset.countDocuments({ status: "Under Repair", isActive: true });
-    const damaged = await Asset.countDocuments({ status: "Damaged", isActive: true });
+    // Role-based filtering: ITAssetManager can only see their own assets stats
+    const userRole = req.user.role?.name;
+    const isSuperAdmin = userRole === "superAdmin";
+    
+    const baseFilter = { isActive: true };
+    if (userRole === "ITAssetManager" && !isSuperAdmin) {
+      baseFilter.createdBy = req.user._id;
+    }
+
+    const totalAssets = await Asset.countDocuments(baseFilter);
+    const available = await Asset.countDocuments({ ...baseFilter, status: "Available" });
+    const assigned = await Asset.countDocuments({ ...baseFilter, status: "Assigned" });
+    const underRepair = await Asset.countDocuments({ ...baseFilter, status: "Under Repair" });
+    const damaged = await Asset.countDocuments({ ...baseFilter, status: "Damaged" });
 
     const categoryBreakdown = await Asset.aggregate([
-      { $match: { isActive: true } },
+      { $match: baseFilter },
       { $group: { _id: "$category", count: { $sum: 1 } } },
       { $sort: { count: -1 } },
     ]);
 
     const statusBreakdown = await Asset.aggregate([
-      { $match: { isActive: true } },
+      { $match: baseFilter },
       { $group: { _id: "$status", count: { $sum: 1 } } },
     ]);
 
@@ -643,15 +728,24 @@ export const getAssetStats = async (req, res) => {
 // Get detailed asset analytics with employee distribution
 export const getAssetAnalytics = async (req, res) => {
   try {
+    // Role-based filtering: ITAssetManager can only see their own assets analytics
+    const userRole = req.user.role?.name;
+    const isSuperAdmin = userRole === "superAdmin";
+    
+    const baseFilter = { isActive: true };
+    if (userRole === "ITAssetManager" && !isSuperAdmin) {
+      baseFilter.createdBy = req.user._id;
+    }
+
     // Count total assets by quantity
     const totalAssets = await Asset.aggregate([
-      { $match: { isActive: true } },
+      { $match: baseFilter },
       { $group: { _id: null, total: { $sum: "$quantity" } } },
     ]);
 
     // Count total assigned quantity
     const totalAssignedByQuantity = await Asset.aggregate([
-      { $match: { isActive: true } },
+      { $match: baseFilter },
       { $group: { _id: null, assigned: { $sum: "$quantityAssigned" } } },
     ]);
 
@@ -661,19 +755,31 @@ export const getAssetAnalytics = async (req, res) => {
 
     // Asset count breakdown
     const assetCountByStatus = await Asset.aggregate([
-      { $match: { isActive: true } },
+      { $match: baseFilter },
       { $group: { _id: "$status", count: { $sum: 1 }, quantity: { $sum: "$quantity" } } },
     ]);
 
     // Asset count by category
     const assetsByCategory = await Asset.aggregate([
-      { $match: { isActive: true } },
+      { $match: baseFilter },
       { $group: { _id: "$category", count: { $sum: 1 }, quantity: { $sum: "$quantity" } } },
     ]);
 
+    // Get user's asset IDs for filtering assignments
+    let userAssetIds = [];
+    if (userRole === "ITAssetManager" && !isSuperAdmin) {
+      const userAssets = await Asset.find(baseFilter).select("_id");
+      userAssetIds = userAssets.map(asset => asset._id);
+    }
+
     // Employee-wise asset distribution
+    const assignmentMatch = { status: "Active" };
+    if (userAssetIds.length > 0) {
+      assignmentMatch.asset = { $in: userAssetIds };
+    }
+
     const employeeAssignments = await AssetAssignment.aggregate([
-      { $match: { status: "Active" } },
+      { $match: assignmentMatch },
       { $group: { 
           _id: "$employee", 
           totalAssigned: { $sum: "$quantity" },
@@ -698,7 +804,7 @@ export const getAssetAnalytics = async (req, res) => {
 
     // Top assets being assigned
     const topAssignedAssets = await Asset.aggregate([
-      { $match: { isActive: true, quantityAssigned: { $gt: 0 } } },
+      { $match: { ...baseFilter, quantityAssigned: { $gt: 0 } } },
       { $sort: { quantityAssigned: -1 } },
       { $project: {
           assetId: 1,
@@ -717,7 +823,7 @@ export const getAssetAnalytics = async (req, res) => {
           totalQuantity,
           totalAssignedQty,
           availableQty,
-          assetCount: await Asset.countDocuments({ isActive: true })
+          assetCount: await Asset.countDocuments(baseFilter)
         },
         assetsByStatus: assetCountByStatus,
         assetsByCategory: assetsByCategory,

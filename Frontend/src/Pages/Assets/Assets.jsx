@@ -836,6 +836,7 @@ function Assets() {
                   assets.map((asset) => {
                     const available = (asset.quantity || 1) - (asset.quantityAssigned || 0);
                     const total = asset.quantity || 1;
+                    
                     return (
                     <tr key={asset._id}>
                       <td className="asset-id">{asset.assetId}</td>
