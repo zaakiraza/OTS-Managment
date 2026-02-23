@@ -75,9 +75,16 @@ function Attendance() {
   const [stats, setStats] = useState(null);
   const [exporting, setExporting] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [showHolidayModal, setShowHolidayModal] = useState(false);
   const [settings, setSettings] = useState({
     manualAttendanceEnabled: true,
     importAttendanceEnabled: true,
+  });
+  const [holidayFormData, setHolidayFormData] = useState({
+    date: new Date().toISOString().split("T")[0],
+    scope: "all",
+    departmentId: "",
+    remarks: "Holiday - manually marked present",
   });
   const [savingSettings, setSavingSettings] = useState(false);
 
@@ -92,6 +99,7 @@ function Attendance() {
   const canManualEntry =
     (isSuperAdmin || user?.role?.name === "attendanceDepartment") &&
     (isSuperAdmin || settings.manualAttendanceEnabled);
+  const canHolidayMark = isSuperAdmin || user?.role?.name === "attendanceDepartment";
 
   useEffect(() => {
     fetchTodayAttendance();
@@ -477,6 +485,34 @@ function Attendance() {
     fetchEmployeesByDepartment(deptId);
   };
 
+  const handleHolidaySubmit = async (e) => {
+    e.preventDefault();
+    try {
+      setLoading(true);
+      const payload = {
+        date: holidayFormData.date,
+        scope: holidayFormData.scope,
+        remarks: holidayFormData.remarks,
+      };
+
+      if (holidayFormData.scope === "department") {
+        payload.departmentId = holidayFormData.departmentId;
+      }
+
+      const response = await attendanceAPI.markHolidayPresent(payload);
+      toast.success(response.data?.message || "Holiday present marked successfully");
+      setShowHolidayModal(false);
+      fetchAttendance();
+      fetchTodayAttendance();
+      fetchAttendanceStats();
+    } catch (error) {
+      console.error("Error marking holiday present:", error);
+      toast.error(error.response?.data?.message || "Failed to mark holiday present");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleExport = async (format) => {
     try {
       setExporting(true);
@@ -542,6 +578,15 @@ function Attendance() {
                   onClick={() => setShowManualModal(true)}
                 >
                   + Manual Entry
+                </button>
+              )}
+              {canHolidayMark && (
+                <button
+                  className="btn-primary"
+                  onClick={() => setShowHolidayModal(true)}
+                  style={{ background: "#0ea5a3" }}
+                >
+                  + Holiday Present
                 </button>
               )}
             </div>
@@ -1181,6 +1226,101 @@ function Attendance() {
                     >
                       <i className={loading ? "fas fa-spinner fa-spin" : "fas fa-save"}></i>
                       {loading ? " Updating..." : " Update Attendance"}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* Holiday Present Modal */}
+          {showHolidayModal && (
+            <div className="modal-overlay" onClick={() => setShowHolidayModal(false)}>
+              <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+                <div className="modal-header">
+                  <h2>
+                    <i className="fas fa-calendar-check"></i> Mark Holiday Present
+                  </h2>
+                  <button className="close-btn" onClick={() => setShowHolidayModal(false)}>
+                    <i className="fas fa-times"></i>
+                  </button>
+                </div>
+
+                <form onSubmit={handleHolidaySubmit} className="modal-body">
+                  <div className="form-group">
+                    <label><i className="fas fa-calendar-day"></i> Date <span className="required">*</span></label>
+                    <input
+                      type="date"
+                      value={holidayFormData.date}
+                      max={new Date().toISOString().split("T")[0]}
+                      onChange={(e) =>
+                        setHolidayFormData({ ...holidayFormData, date: e.target.value })
+                      }
+                      required
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label><i className="fas fa-layer-group"></i> Scope <span className="required">*</span></label>
+                    <select
+                      value={holidayFormData.scope}
+                      onChange={(e) =>
+                        setHolidayFormData({
+                          ...holidayFormData,
+                          scope: e.target.value,
+                          departmentId: e.target.value === "department" ? holidayFormData.departmentId : "",
+                        })
+                      }
+                      required
+                    >
+                      <option value="all">All Employees</option>
+                      <option value="department">Specific Department</option>
+                    </select>
+                  </div>
+
+                  {holidayFormData.scope === "department" && (
+                    <div className="form-group">
+                      <label><i className="fas fa-building"></i> Department <span className="required">*</span></label>
+                      <select
+                        value={holidayFormData.departmentId}
+                        onChange={(e) =>
+                          setHolidayFormData({ ...holidayFormData, departmentId: e.target.value })
+                        }
+                        required
+                      >
+                        <option value="">-- Select Department --</option>
+                        {departments.map((dept) => (
+                          <option key={dept._id} value={dept._id}>
+                            {dept.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  <div className="form-group">
+                    <label><i className="fas fa-comment"></i> Remarks</label>
+                    <textarea
+                      rows={3}
+                      value={holidayFormData.remarks}
+                      onChange={(e) =>
+                        setHolidayFormData({ ...holidayFormData, remarks: e.target.value })
+                      }
+                      placeholder="Holiday reason"
+                    />
+                  </div>
+
+                  <div className="modal-actions">
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      onClick={() => setShowHolidayModal(false)}
+                    >
+                      <i className="fas fa-times"></i> Cancel
+                    </button>
+                    <button type="submit" className="btn-primary" disabled={loading}>
+                      <i className={loading ? "fas fa-spinner fa-spin" : "fas fa-check"}></i>
+                      {loading ? " Applying..." : " Apply Present"}
                     </button>
                   </div>
                 </form>

@@ -77,6 +77,7 @@ export const attendanceAPI = {
   getAttendanceById: (id) => api.get(`/attendance/${id}`),
   getAttendanceStats: (params) => api.get("/attendance/stats", { params }),
   createManualAttendance: (data) => api.post("/attendance/manual", data),
+  markHolidayPresent: (data) => api.post("/attendance/holiday-present", data),
   updateAttendance: (id, data) => api.put(`/attendance/${id}`, data),
   deleteAttendance: (id) => api.delete(`/attendance/${id}`),
     submitJustification: (data) => api.post("/attendance/justification", data),

@@ -10,6 +10,7 @@ import {
   getAttendanceStats,
   deviceCheckIn,
   markAbsent,
+  markHolidayPresent,
   submitJustification,
   reviewJustification,
   getPendingJustifications,
@@ -37,6 +38,13 @@ router.post(
   verifyToken,
   hasRole("superAdmin", "attendanceDepartment"),
   createManualAttendance
+);
+
+router.post(
+  "/holiday-present",
+  verifyToken,
+  hasRole("superAdmin", "attendanceDepartment"),
+  markHolidayPresent
 );
 
 // Only attendance department and superAdmin can update/delete

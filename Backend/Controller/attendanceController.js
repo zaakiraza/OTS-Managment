@@ -952,6 +952,136 @@ export const markAbsent = async (req, res) => {
   }
 };
 
+// Mark holiday present for all employees or a specific department
+export const markHolidayPresent = async (req, res) => {
+  try {
+    const { date, departmentId, scope = "all", remarks } = req.body;
+
+    if (!date) {
+      return res.status(400).json({
+        success: false,
+        message: "Date is required",
+      });
+    }
+
+    if (scope === "department" && !departmentId) {
+      return res.status(400).json({
+        success: false,
+        message: "Department is required when scope is department",
+      });
+    }
+
+    const targetDate = getDateAtMidnightUTC(new Date(date));
+    const nextDate = new Date(targetDate.getTime() + TIME.ONE_DAY);
+
+    const employeeFilter = { isActive: true };
+    if (scope === "department") {
+      employeeFilter.$or = [
+        { department: departmentId },
+        { "shifts.department": departmentId },
+      ];
+    }
+
+    const employees = await Employee.find(employeeFilter)
+      .populate("role", "name")
+      .select("_id employeeId name department shifts role");
+
+    const eligibleEmployees = employees.filter(
+      (emp) => emp.role?.name !== "superAdmin"
+    );
+
+    if (eligibleEmployees.length === 0) {
+      return res.status(200).json({
+        success: true,
+        message: "No eligible employees found for selected criteria",
+        data: {
+          processed: 0,
+          created: 0,
+          updated: 0,
+          skipped: 0,
+          date: targetDate,
+          scope,
+          departmentId: departmentId || null,
+        },
+      });
+    }
+
+    let created = 0;
+    let updated = 0;
+    let skipped = 0;
+
+    for (const employee of eligibleEmployees) {
+      const selectedDept =
+        scope === "department"
+          ? departmentId
+          : employee.department || employee.shifts?.[0]?.department;
+
+      if (!selectedDept) {
+        skipped += 1;
+        continue;
+      }
+
+      const existing = await Attendance.findOne({
+        employee: employee._id,
+        date: {
+          $gte: targetDate,
+          $lt: nextDate,
+        },
+        department: selectedDept,
+      });
+
+      const remarkText = remarks?.trim() || "Holiday - manually marked present";
+
+      if (existing) {
+        existing.status = "present";
+        existing.isManualEntry = true;
+        existing.modifiedBy = req.user._id;
+        existing.remarks = existing.remarks
+          ? `${existing.remarks} | ${remarkText}`
+          : remarkText;
+        await existing.save();
+        updated += 1;
+      } else {
+        await Attendance.create({
+          employee: employee._id,
+          userId: employee.employeeId,
+          department: selectedDept,
+          date: targetDate,
+          status: "present",
+          isManualEntry: true,
+          modifiedBy: req.user._id,
+          remarks: remarkText,
+          checkIn: null,
+          checkOut: null,
+        });
+        created += 1;
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      message: `Holiday present marked. Created: ${created}, Updated: ${updated}, Skipped: ${skipped}`,
+      data: {
+        processed: eligibleEmployees.length,
+        created,
+        updated,
+        skipped,
+        date: targetDate,
+        scope,
+        departmentId: departmentId || null,
+      },
+    });
+  } catch (error) {
+    logger.error(`Error in markHolidayPresent: ${error.message}`, {
+      stack: error.stack,
+    });
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
 // Submit justification for attendance issue
 export const submitJustification = async (req, res) => {
   try {

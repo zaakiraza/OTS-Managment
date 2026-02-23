@@ -321,9 +321,23 @@ function Tasks() {
       department: "",
       assignedTo: [],
     });
-    setFilteredEmployees(employees);
+    setFilteredEmployees([]);
     setSelectedTask(null);
     setShowModal(false);
+  };
+
+  const openCreateTaskModal = () => {
+    setSelectedTask(null);
+    setFormData({
+      title: "",
+      description: "",
+      priority: "Medium",
+      dueDate: "",
+      department: "",
+      assignedTo: [],
+    });
+    setFilteredEmployees([]);
+    setShowModal(true);
   };
 
   const getPriorityColor = (priority) => {
@@ -526,7 +540,7 @@ function Tasks() {
             </div>
             <div style={{ display: "flex", gap: "10px" }}>
               {canCreateTasks && (
-                <button className="btn-primary" onClick={() => setShowModal(true)}>
+                <button className="btn-primary" onClick={openCreateTaskModal}>
                   + Create Task
                 </button>
               )}
@@ -772,11 +786,11 @@ function Tasks() {
 
           {/* Create/Edit Modal */}
           {showModal && (
-            <div className="modal-overlay" onClick={() => setShowModal(false)}>
+            <div className="modal-overlay" onClick={resetForm}>
               <div className="modal-content" onClick={(e) => e.stopPropagation()}>
                 <div className="modal-header">
                   <h2>{selectedTask ? "Edit Task" : "Create New Task"}</h2>
-                  <button className="close-btn" onClick={() => setShowModal(false)}>
+                  <button className="close-btn" onClick={resetForm}>
                     ×
                   </button>
                 </div>
@@ -900,7 +914,7 @@ function Tasks() {
                     <button
                       type="button"
                       className="btn-secondary"
-                      onClick={() => setShowModal(false)}
+                      onClick={resetForm}
                     >
                       Cancel
                     </button>

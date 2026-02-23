@@ -127,7 +127,7 @@ const AssetAnalytics = () => {
       <div className="dashboard-layout">
         <SideBar />
         <div className="main-content">
-          <div className="analytics-container">
+          <div className="page-container analytics-container">
             <div className="analytics-loading">Loading analytics...</div>
           </div>
         </div>
@@ -140,7 +140,7 @@ const AssetAnalytics = () => {
       <div className="dashboard-layout">
         <SideBar />
         <div className="main-content">
-          <div className="analytics-container">
+          <div className="page-container analytics-container">
             <div className="analytics-error">Failed to load analytics data</div>
           </div>
         </div>
@@ -150,12 +150,48 @@ const AssetAnalytics = () => {
 
   const { summary, assetsByStatus, assetsByCategory, employeeAssignments, topAssignedAssets } = analytics;
 
+  const statusMap = (assetsByStatus || []).reduce((acc, item) => {
+    const key = String(item?._id || "").toLowerCase().trim();
+    if (!key) return acc;
+    acc[key] = {
+      count: item?.count || 0,
+      quantity: item?.quantity || 0,
+    };
+    return acc;
+  }, {});
+
+  const completeStatusRows = [
+    { key: "available", label: "Available" },
+    { key: "assigned", label: "Assigned" },
+    { key: "under repair", label: "Under Repair" },
+    { key: "damaged", label: "Damaged" },
+    { key: "refurb", label: "Refurb" },
+    { key: "retired", label: "Retired" },
+  ].map((row) => ({
+    ...row,
+    count: statusMap[row.key]?.count || 0,
+    quantity: statusMap[row.key]?.quantity || 0,
+  }));
+
   return (
     <div className="dashboard-layout">
       <SideBar />
       <div className="main-content">
-        <div className="analytics-container">
-          <h1>Asset Analytics Dashboard</h1>
+        <div className="page-container analytics-container">
+          <div className="page-header">
+            <div>
+              <h1><i className="fas fa-chart-line"></i> Asset Analytics</h1>
+              <p>Insights for status, category, assignment, and utilization</p>
+            </div>
+            <div className="header-actions">
+              <button className="btn-export" onClick={exportAnalyticsToExcel}>
+                <i className="fas fa-file-excel"></i> Export Excel
+              </button>
+              <button className="btn-primary" onClick={fetchAnalytics}>
+                <i className="fas fa-sync-alt"></i> Refresh Analytics
+              </button>
+            </div>
+          </div>
 
       {/* Summary Cards */}
       <div className="summary-cards">
@@ -176,6 +212,33 @@ const AssetAnalytics = () => {
           <div className="card-value">{summary.totalAssignedQty}</div>
           <div className="card-subtext">{((summary.totalAssignedQty / summary.totalQuantity) * 100 || 0).toFixed(1)}%</div>
         </div>
+      </div>
+
+      {/* Complete Status Summary */}
+      <div className="analytics-card full-width">
+        <h2>Complete Status Summary</h2>
+        <table className="analytics-table complete-status-table">
+          <thead>
+            <tr>
+              <th>Status</th>
+              <th>Assets</th>
+              <th>Quantity</th>
+            </tr>
+          </thead>
+          <tbody>
+            {completeStatusRows.map((row) => (
+              <tr key={row.key}>
+                <td className="status-cell">
+                  <span className={`status-badge status-${row.key.replace(/\s+/g, "-")}`}>
+                    {row.label}
+                  </span>
+                </td>
+                <td>{row.count}</td>
+                <td>{row.quantity}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
 
       {/* Status Breakdown */}
@@ -253,7 +316,7 @@ const AssetAnalytics = () => {
 
       {/* Employee Distribution */}
       <div className="analytics-card full-width">
-        <h2>Employee Asset Distribution (Top 10)</h2>
+        <h2>Employee Asset Distribution</h2>
         <div className="employee-distribution">
           {employeeAssignments && employeeAssignments.length > 0 ? (
             <table className="analytics-table">
@@ -267,7 +330,7 @@ const AssetAnalytics = () => {
                 </tr>
               </thead>
               <tbody>
-                {employeeAssignments.slice(0, 10).map((emp, index) => (
+                {employeeAssignments.map((emp, index) => (
                   <tr key={emp.employeeId || index} className="employee-row">
                     <td>{emp.employeeId}</td>
                     <td className="employee-name">{emp.employeeName}</td>
@@ -286,7 +349,7 @@ const AssetAnalytics = () => {
 
       {/* Top Assigned Assets */}
       <div className="analytics-card full-width">
-        <h2>Most Assigned Assets (Top 10)</h2>
+        <h2>Most Assigned Assets</h2>
         <div className="top-assets">
           {topAssignedAssets && topAssignedAssets.length > 0 ? (
             <table className="analytics-table">
@@ -302,7 +365,7 @@ const AssetAnalytics = () => {
                 </tr>
               </thead>
               <tbody>
-                {topAssignedAssets.slice(0, 10).map((asset) => (
+                {topAssignedAssets.map((asset) => (
                   <tr key={asset._id} className="asset-row">
                     <td>{asset.assetId}</td>
                     <td className="asset-name">{asset.name}</td>
@@ -332,15 +395,6 @@ const AssetAnalytics = () => {
           )}
         </div>
       </div>
-
-          <div className="analytics-actions">
-            <button className="export-btn" onClick={exportAnalyticsToExcel}>
-              Export Excel
-            </button>
-            <button className="refresh-btn" onClick={fetchAnalytics}>
-              Refresh Analytics
-            </button>
-          </div>
         </div>
       </div>
     </div>
