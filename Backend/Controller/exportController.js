@@ -12,6 +12,7 @@ import Ticket from "../Model/Ticket.js";
 import AuditLog from "../Model/AuditLog.js";
 import Salary from "../Model/Salary.js";
 import { logExportAction } from "../Utils/auditLogger.js";
+import { formatLocalTime } from "../Utils/timezone.js";
 
 /**
  * Helper to set Excel headers for download
@@ -250,19 +251,19 @@ export const exportAttendance = async (req, res) => {
       );
     }
 
-    // Helper function to format time - ensures proper time extraction
+    // Use centralized timezone utility for correct local time formatting
     const formatTime = (dateTime) => {
-      if (!dateTime) return "N/A";
+      if (!dateTime) return "-";
       try {
-        const date = new Date(dateTime);
-        if (isNaN(date.getTime())) return "N/A";
-        const hours24 = date.getHours();
-        const minutes = String(date.getMinutes()).padStart(2, '0');
-        const ampm = hours24 >= 12 ? "PM" : "AM";
-        let hours12 = hours24 % 12;
-        if (hours12 === 0) hours12 = 12;
-        // Return as text to prevent Excel auto-formatting
-        return `${hours12}:${minutes} ${ampm}`;
+        const timeStr = formatLocalTime(dateTime);
+        if (!timeStr || timeStr === "-") return "N/A";
+        // Optionally, convert to 12-hour format for Excel if needed
+        const [hours, minutes] = timeStr.split(":");
+        let hour = parseInt(hours);
+        const ampm = hour >= 12 ? "PM" : "AM";
+        if (hour > 12) hour -= 12;
+        else if (hour === 0) hour = 12;
+        return `${hour}:${minutes} ${ampm}`;
       } catch (e) {
         return "N/A";
       }
@@ -283,17 +284,19 @@ export const exportAttendance = async (req, res) => {
       }
     };
 
-    // Prepare data rows
-    const dataRows = filteredRecords.map((record) => ({
-      date: formatDate(record.date),
-      employeeId: record.employee?.employeeId || "N/A",
-      biometricId: record.employee?.biometricId || "N/A",
-      name: record.employee?.name || "N/A",
-      checkIn: formatTime(record.checkIn),
-      checkOut: formatTime(record.checkOut),
-      workingHours: record.workingHours?.toFixed(2) || "0.00",
-      status: record.status || "N/A",
-    }));
+    // Only include employees who have marked attendance (i.e., have checkIn or checkOut)
+    const dataRows = filteredRecords
+      .filter((record) => record.checkIn || record.checkOut)
+      .map((record) => ({
+        date: formatDate(record.date),
+        employeeId: record.employee?.employeeId || "N/A",
+        biometricId: record.employee?.biometricId || "N/A",
+        name: record.employee?.name || "N/A",
+        checkIn: formatTime(record.checkIn),
+        checkOut: formatTime(record.checkOut),
+        workingHours: record.workingHours?.toFixed(2) || "0.00",
+        status: record.status || "N/A",
+      }));
 
     await logExportAction(req, "Attendance", `Exported ${filteredRecords.length} attendance records to ${format.toUpperCase()}`);
 

@@ -519,11 +519,23 @@ function MyAttendance() {
 
   const formatTime = (dateTime) => {
     if (!dateTime) return "N/A";
-    return new Date(dateTime).toLocaleTimeString([], {
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: true,
-    });
+    try {
+      let date;
+      if (typeof dateTime === "string" && dateTime.indexOf("T") !== -1 && !dateTime.endsWith("Z") && !dateTime.endsWith("z"))
+        date = new Date(dateTime + "Z");
+      else
+        date = new Date(dateTime);
+      if (isNaN(date.getTime())) return "N/A";
+      let pktHours = date.getUTCHours() + 5;
+      const pktMinutes = date.getUTCMinutes();
+      if (pktHours >= 24) pktHours -= 24;
+      if (pktHours < 0) pktHours += 24;
+      const ampm = pktHours >= 12 ? "PM" : "AM";
+      const hours12 = pktHours % 12 || 12;
+      return `${hours12}:${String(pktMinutes).padStart(2, "0")} ${ampm}`;
+    } catch (error) {
+      return "N/A";
+    }
   };
 
   const calculateWorkHours = (checkIn, checkOut) => {

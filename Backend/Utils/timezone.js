@@ -100,39 +100,50 @@ export const parseLocalTimeToUTC = (date, timeStr) => {
 };
 
 /**
- * Format a UTC date to local time string (HH:MM)
- * 
+ * Format a UTC date to local time string (HH:MM) in PKT (UTC+5).
+ * Uses UTC methods so the result is the same regardless of server timezone.
+ *
  * @param {Date|string} utcTime - UTC time
- * @returns {string} - Formatted time string (HH:MM)
+ * @returns {string} - Formatted time string (HH:MM) in PKT
  */
 export const formatLocalTime = (utcTime) => {
   if (!utcTime) return "-";
-  
-  const localTime = utcToLocal(utcTime);
-  if (!localTime) return "-";
-  
-  const hours = String(localTime.getHours()).padStart(2, "0");
-  const minutes = String(localTime.getMinutes()).padStart(2, "0");
-  
+
+  const date = utcTime instanceof Date ? utcTime : new Date(utcTime);
+  if (isNaN(date.getTime())) return "-";
+
+  let pktHours = date.getUTCHours() + TIMEZONE.PKT_OFFSET_HOURS;
+  const pktMinutes = date.getUTCMinutes();
+  if (pktHours >= 24) pktHours -= 24;
+  if (pktHours < 0) pktHours += 24;
+
+  const hours = String(pktHours).padStart(2, "0");
+  const minutes = String(pktMinutes).padStart(2, "0");
   return `${hours}:${minutes}`;
 };
 
 /**
- * Format a UTC date to local time string with seconds (HH:MM:SS)
- * 
+ * Format a UTC date to local time string with seconds (HH:MM:SS) in PKT (UTC+5).
+ * Uses UTC methods so the result is the same regardless of server timezone.
+ *
  * @param {Date|string} utcTime - UTC time
- * @returns {string} - Formatted time string (HH:MM:SS)
+ * @returns {string} - Formatted time string (HH:MM:SS) in PKT
  */
 export const formatLocalTimeWithSeconds = (utcTime) => {
   if (!utcTime) return "-";
-  
-  const localTime = utcToLocal(utcTime);
-  if (!localTime) return "-";
-  
-  const hours = String(localTime.getHours()).padStart(2, "0");
-  const minutes = String(localTime.getMinutes()).padStart(2, "0");
-  const seconds = String(localTime.getSeconds()).padStart(2, "0");
-  
+
+  const date = utcTime instanceof Date ? utcTime : new Date(utcTime);
+  if (isNaN(date.getTime())) return "-";
+
+  let pktHours = date.getUTCHours() + TIMEZONE.PKT_OFFSET_HOURS;
+  const pktMinutes = date.getUTCMinutes();
+  const pktSeconds = date.getUTCSeconds();
+  if (pktHours >= 24) pktHours -= 24;
+  if (pktHours < 0) pktHours += 24;
+
+  const hours = String(pktHours).padStart(2, "0");
+  const minutes = String(pktMinutes).padStart(2, "0");
+  const seconds = String(pktSeconds).padStart(2, "0");
   return `${hours}:${minutes}:${seconds}`;
 };
 

@@ -259,7 +259,21 @@ const Employees = () => {
       return false;
     });
 
-    return availableDepts;
+    const selectedAdditionalIds = new Set(
+      (formData.additionalDepartments || []).map((id) => String(id))
+    );
+
+    const selectedAdditionalDepts = getFilteredDepartments().filter((dept) => {
+      const deptId = String(dept._id);
+      return deptId !== primaryDeptId && selectedAdditionalIds.has(deptId);
+    });
+
+    const mergedDepts = new Map();
+    [...availableDepts, ...selectedAdditionalDepts].forEach((dept) => {
+      mergedDepts.set(String(dept._id), dept);
+    });
+
+    return Array.from(mergedDepts.values());
   };
 
   // Get filtered departments for Team Lead Of dropdown
@@ -364,7 +378,38 @@ const Employees = () => {
 
   // Get employees for a department
   const getEmployeesForDept = (deptId) => {
-    return employees.filter(emp => emp.department?._id === deptId);
+    const targetDeptId = String(deptId);
+
+    const getDeptId = (value) => {
+      if (!value) return null;
+      return String(value?._id || value);
+    };
+
+    return employees.flatMap((emp) => {
+      const primaryDeptId = getDeptId(emp.department);
+
+      // Additional departments from shifts
+      const shiftDeptIds = (emp.shifts || [])
+        .map((shift) => getDeptId(shift?.department))
+        .filter(Boolean);
+
+      // Legacy/additional departments field support
+      const additionalDeptIds = (emp.additionalDepartments || [])
+        .map((department) => getDeptId(department))
+        .filter(Boolean);
+
+      const additionalSet = new Set([...shiftDeptIds, ...additionalDeptIds]);
+
+      if (primaryDeptId === targetDeptId) {
+        return [{ ...emp, __deptContext: "primary" }];
+      }
+
+      if (additionalSet.has(targetDeptId)) {
+        return [{ ...emp, __deptContext: "additional" }];
+      }
+
+      return [];
+    });
   };
 
   // Render department tree with employees
@@ -414,6 +459,9 @@ const Employees = () => {
                         <div className="tree-emp-position">{emp.position}</div>
                         <div className="tree-emp-details">
                           <span className="tree-emp-id">{emp.employeeId}</span>
+                          <span className={`tree-dept-context context-${emp.__deptContext || 'additional'}`}>
+                            {emp.__deptContext === "primary" ? "Primary" : "Additional"}
+                          </span>
                           {emp.isTeamLead && <span className="tree-emp-lead"><i className="fas fa-star"></i> Team Lead</span>}
                           <span className={`tree-emp-role role-${emp.role?.name || 'employee'}`}>
                             {emp.role?.name || 'Employee'}
@@ -673,10 +721,15 @@ const Employees = () => {
         })
       ];
 
+      const additionalDepartmentIds = [
+        ...new Set((formData.additionalDepartments || []).map((id) => String(id))),
+      ].filter((id) => id && id !== String(formData.department));
+
       // Ensure department is a valid string (not empty)
       const submitData = {
         ...formData,
         department: formData.department || null,
+        additionalDepartments: additionalDepartmentIds,
         shifts: allShifts,
       };
 
@@ -684,7 +737,6 @@ const Employees = () => {
       delete submitData.salary;
       delete submitData.workSchedule;
       delete submitData.joiningDate;
-      delete submitData.additionalDepartments;
       
       if (!submitData.leadingDepartments || submitData.leadingDepartments.length === 0) {
         submitData.leadingDepartments = [];
@@ -755,6 +807,21 @@ const Employees = () => {
     // Extract primary and non-primary shifts
     const primaryShift = emp.shifts?.find(s => s.isPrimary) || emp.shifts?.[0] || {};
     const nonPrimaryShifts = (emp.shifts || []).filter(s => !s.isPrimary);
+    const primaryDeptId = String(emp.department?._id || emp.department || "");
+
+    const additionalFromShifts = nonPrimaryShifts
+      .map((s) => s.department?._id || s.department)
+      .filter(Boolean)
+      .map((id) => String(id));
+
+    const additionalFromLegacy = (emp.additionalDepartments || [])
+      .map((d) => d?._id || d)
+      .filter(Boolean)
+      .map((id) => String(id));
+
+    const mergedAdditionalDepartments = [
+      ...new Set([...additionalFromLegacy, ...additionalFromShifts]),
+    ].filter((id) => id && id !== primaryDeptId);
     
     setFormData({
       name: emp.name,
@@ -763,7 +830,7 @@ const Employees = () => {
       cnic: emp.cnic || "",
       biometricId: emp.biometricId || "",
       department: emp.department?._id || "",
-      additionalDepartments: nonPrimaryShifts.map(s => s.department?._id || s.department).filter(Boolean),
+      additionalDepartments: mergedAdditionalDepartments,
       shifts: nonPrimaryShifts.map(shift => ({
         department: shift.department?._id || shift.department || "",
         startTime: shift.workSchedule?.checkInTime || shift.startTime || "08:00",
@@ -844,10 +911,11 @@ const Employees = () => {
   };
 
   const handleMultiDeptToggle = (deptId, field) => {
-    const currentDepts = formData[field];
-    const newDepts = currentDepts.includes(deptId)
-      ? currentDepts.filter(d => d !== deptId)
-      : [...currentDepts, deptId];
+    const normalizedDeptId = String(deptId);
+    const currentDepts = (formData[field] || []).map((id) => String(id));
+    const newDepts = currentDepts.includes(normalizedDeptId)
+      ? currentDepts.filter((id) => id !== normalizedDeptId)
+      : [...currentDepts, normalizedDeptId];
     
     // Auto-set isTeamLead if leading any department
     const updates = { [field]: newDepts };
@@ -1585,8 +1653,8 @@ const Employees = () => {
                         <label key={dept._id} className="checkbox-label dept-checkbox">
                           <input
                             type="checkbox"
-                            checked={formData.additionalDepartments.includes(dept._id)}
-                            onChange={() => handleMultiDeptToggle(dept._id, 'additionalDepartments')}
+                            checked={formData.additionalDepartments.map(id => String(id)).includes(String(dept._id))}
+                            onChange={() => handleMultiDeptToggle(String(dept._id), 'additionalDepartments')}
                           />
                           <span className="dept-name">
                             {"—".repeat(dept.level || 0)} {dept.name}

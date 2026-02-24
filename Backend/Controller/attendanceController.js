@@ -325,54 +325,11 @@ export const getAllAttendance = async (req, res) => {
         filter.department = req.query.department;
     }
 
-    // For attendanceDepartment role, only show attendance of employees they created + their own attendance
-    // BUT: if a department filter is explicitly provided, skip this restriction (admin-level query)
+    // For superAdmin and attendanceDepartment: show all attendance (same as Excel export), including all employees with shifts.
+    // For regular users (not superAdmin or attendanceDepartment): only show their own attendance.
     const requestingUserRole = req.user?.role?.name || req.user?.role;
-    if (requestingUserRole === "attendanceDepartment" && !hasDepartmentFilter) {
-      // Get all employees created by this user
-      const employeesCreatedByUser = await Employee.find({
-        createdBy: req.user._id,
-        isActive: true
-      }).select('_id');
-      
-      const employeeIds = employeesCreatedByUser.map(emp => emp._id);
-      
-      // Also add the logged-in user's own ID to see their own attendance
-      employeeIds.push(req.user._id);
-
-      // Get departments created by the user + their assigned department
-      const userCreatedDepts = await Department.find({
-        createdBy: req.user._id,
-        isActive: true
-      }).select('_id');
-
-      const deptIdSet = new Set(userCreatedDepts.map(d => d._id.toString()));
-      const currentEmployee = await Employee.findById(req.user._id).select('department');
-      if (currentEmployee?.department) {
-        deptIdSet.add(currentEmployee.department.toString());
-      }
-
-      const deptIds = Array.from(deptIdSet).map(id => new mongoose.Types.ObjectId(id));
-
-      const roleFilter = deptIds.length > 0 ? {
-        $or: [
-          { employee: { $in: employeeIds } },
-          { department: { $in: deptIds } }
-        ]
-      } : {
-        employee: { $in: employeeIds }
-      };
-
-      if (filter.$or || filter.$and) {
-        const existingFilter = { ...filter };
-        filter = { $and: [existingFilter, roleFilter] };
-      } else {
-        Object.assign(filter, roleFilter);
-      }
-    }
-    // For regular users (not superAdmin or attendanceDepartment), only show their own attendance
-    else if (requestingUserRole !== "superAdmin" && !hasDepartmentFilter) {
-      // Override any employee filter to ensure users can only see their own data
+    if (requestingUserRole !== "superAdmin" && requestingUserRole !== "attendanceDepartment") {
+      // Regular users see only their own attendance
       filter.employee = req.user._id;
     }
 

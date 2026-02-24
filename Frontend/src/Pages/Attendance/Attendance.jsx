@@ -255,23 +255,30 @@ function Attendance() {
 
   const formatTime = (time) => {
     if (!time) return "-";
-    
+
     try {
-      const date = new Date(time);
-      // Get UTC hours and minutes, then add 5 hours for PKT
+      // Parse as UTC so website matches Excel export (both use PKT = UTC+5).
+      // ISO strings without "Z" are parsed as local time by the browser, which causes mismatch.
+      let date;
+      if (typeof time === "string" && time.indexOf("T") !== -1 && !time.endsWith("Z") && !time.endsWith("z")) {
+        date = new Date(time + "Z");
+      } else {
+        date = new Date(time);
+      }
+      if (isNaN(date.getTime())) return "-";
+
+      // PKT = UTC+5 (same as backend formatLocalTime in export)
       let pktHours = date.getUTCHours() + 5;
       const pktMinutes = date.getUTCMinutes();
-      
-      // Handle day overflow (if hours >= 24)
-      if (pktHours >= 24) {
-        pktHours = pktHours - 24;
-      }
-      
+
+      if (pktHours >= 24) pktHours -= 24;
+      if (pktHours < 0) pktHours += 24;
+
       const ampm = pktHours >= 12 ? "PM" : "AM";
       let hours12 = pktHours % 12;
       if (hours12 === 0) hours12 = 12;
-      
-      const minutes = String(pktMinutes).padStart(2, '0');
+
+      const minutes = String(pktMinutes).padStart(2, "0");
       return `${hours12}:${minutes} ${ampm}`;
     } catch (error) {
       return "-";
@@ -317,42 +324,38 @@ function Attendance() {
 
   const handleEdit = (record) => {
     setSelectedRecord(record);
-    
-    // Extract time in HH:MM format from UTC Date objects
-    // Convert UTC to PKT (UTC+5) for display
+
+    // Extract time in HH:MM format (PKT = UTC+5), same logic as formatTime
     let checkInTime = "";
     let checkOutTime = "";
-    
+
+    const parseAsUTC = (t) => {
+      if (!t) return null;
+      if (typeof t === "string" && t.indexOf("T") !== -1 && !t.endsWith("Z") && !t.endsWith("z"))
+        return new Date(t + "Z");
+      return new Date(t);
+    };
+
     if (record.checkIn) {
-      const date = new Date(record.checkIn);
-      // Get UTC hours and minutes, then add 5 hours for PKT
-      let pktHours = date.getUTCHours() + 5;
-      const pktMinutes = date.getUTCMinutes();
-      
-      // Handle day overflow (if hours >= 24)
-      if (pktHours >= 24) {
-        pktHours = pktHours - 24;
+      const date = parseAsUTC(record.checkIn);
+      if (!isNaN(date.getTime())) {
+        let pktHours = date.getUTCHours() + 5;
+        const pktMinutes = date.getUTCMinutes();
+        if (pktHours >= 24) pktHours -= 24;
+        if (pktHours < 0) pktHours += 24;
+        checkInTime = `${String(pktHours).padStart(2, "0")}:${String(pktMinutes).padStart(2, "0")}`;
       }
-      
-      const hours = String(pktHours).padStart(2, '0');
-      const minutes = String(pktMinutes).padStart(2, '0');
-      checkInTime = `${hours}:${minutes}`;
     }
-    
+
     if (record.checkOut) {
-      const date = new Date(record.checkOut);
-      // Get UTC hours and minutes, then add 5 hours for PKT
-      let pktHours = date.getUTCHours() + 5;
-      const pktMinutes = date.getUTCMinutes();
-      
-      // Handle day overflow (if hours >= 24)
-      if (pktHours >= 24) {
-        pktHours = pktHours - 24;
+      const date = parseAsUTC(record.checkOut);
+      if (!isNaN(date.getTime())) {
+        let pktHours = date.getUTCHours() + 5;
+        const pktMinutes = date.getUTCMinutes();
+        if (pktHours >= 24) pktHours -= 24;
+        if (pktHours < 0) pktHours += 24;
+        checkOutTime = `${String(pktHours).padStart(2, "0")}:${String(pktMinutes).padStart(2, "0")}`;
       }
-      
-      const hours = String(pktHours).padStart(2, '0');
-      const minutes = String(pktMinutes).padStart(2, '0');
-      checkOutTime = `${hours}:${minutes}`;
     }
     
     const workingHours = record.workingHours || "";

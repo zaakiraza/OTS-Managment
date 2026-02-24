@@ -55,13 +55,22 @@ function Reports() {
     return weeks;
   };
 
-  // Format time to show local PKT time
+  // Format time in PKT (UTC+5) so it matches Excel export
   const formatTime = (time) => {
     if (!time) return "-";
     try {
-      const date = new Date(time);
-      const hours = String(date.getHours()).padStart(2, "0");
-      const minutes = String(date.getMinutes()).padStart(2, "0");
+      let date;
+      if (typeof time === "string" && time.indexOf("T") !== -1 && !time.endsWith("Z") && !time.endsWith("z"))
+        date = new Date(time + "Z");
+      else
+        date = new Date(time);
+      if (isNaN(date.getTime())) return "-";
+      let pktHours = date.getUTCHours() + 5;
+      const pktMinutes = date.getUTCMinutes();
+      if (pktHours >= 24) pktHours -= 24;
+      if (pktHours < 0) pktHours += 24;
+      const hours = String(pktHours).padStart(2, "0");
+      const minutes = String(pktMinutes).padStart(2, "0");
       return `${hours}:${minutes}`;
     } catch (error) {
       return "-";

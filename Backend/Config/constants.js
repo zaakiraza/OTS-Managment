@@ -76,8 +76,12 @@ export const DEVICE = {
   // ZKTeco defaults
   DEFAULT_IP: '192.168.30.201',
   DEFAULT_PORT: 4370,
-  DEFAULT_TIMEOUT: 5000,
+  DEFAULT_TIMEOUT: 15000,
   DEFAULT_INPORT: 5200,
+  
+  // Connection retry settings
+  MAX_RETRY_ATTEMPTS: 3,
+  RETRY_DELAY: 2000,
   
   // Polling interval (30 seconds)
   DEFAULT_POLL_INTERVAL: 30000,
