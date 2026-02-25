@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
+import * as XLSX from "xlsx";
 import SideBar from "../../Components/SideBar/SideBar";
-import { attendanceAPI, employeeAPI, departmentAPI, exportAPI } from "../../Config/Api";
+import { attendanceAPI, employeeAPI, departmentAPI } from "../../Config/Api";
 import settingsAPI from "../../Config/settingsApi";
 import { useToast } from "../../Components/Common/Toast/Toast";
 import "./Attendance.css";
@@ -147,7 +148,7 @@ function Attendance() {
   }, [showManualModal]);
 
   useEffect(() => {
-    if (filter.date) {
+    if (filter.date || filter.status === "not-marked") {
       fetchAttendance();
     }
   }, [filter]);
@@ -296,6 +297,7 @@ function Attendance() {
 
   const getStatusBadge = (status) => {
     const statusColors = {
+      "not-marked": "status-missing",
       present: "status-present",
       absent: "status-absent",
       "half-day": "status-half-day",
@@ -310,6 +312,7 @@ function Attendance() {
 
   const getStatusLabel = (status) => {
     const statusLabels = {
+      "not-marked": "Not Marked",
       present: "Present",
       absent: "Absent",
       "half-day": "Half Day",
@@ -321,6 +324,8 @@ function Attendance() {
     };
     return statusLabels[status] || status;
   };
+
+  const isNotMarkedRow = (record) => record.status === "not-marked" || (record._id && String(record._id).startsWith("not-marked-"));
 
   const handleEdit = (record) => {
     setSelectedRecord(record);
@@ -472,7 +477,7 @@ function Attendance() {
         workingHours: "",
       });
       fetchTodayAttendance();
-      // fetchAttendance will be called automatically by useEffect when filter.date changes
+      // fetchAttendance will be called automatically by useEffect when filter changes
     } catch (error) {
       console.error("Error creating manual attendance:", error);
       toast.error(
@@ -516,37 +521,41 @@ function Attendance() {
     }
   };
 
-  const handleExport = async (format) => {
+  const handleExport = (format) => {
     try {
       setExporting(true);
-      
-      // Build params from current filter
-      const params = {};
-      if (filter.date) {
-        // For single date export, set both startDate and endDate to the same value
-        params.startDate = filter.date;
-        params.endDate = filter.date;
-      }
-      if (filter.userId) params.employeeId = filter.userId;
-      if (filter.status) params.status = filter.status;
-      
-      const response = await exportAPI.exportAttendance(format, params);
-      
-      const blob = new Blob([response.data], {
-        type: format === 'xlsx' 
-          ? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-          : "text/csv"
+
+      // Build file from current table data (same as what's on screen) – no backend call
+      const headers = ["User ID", "Name", "Department", "Date", "Check In", "Check Out", "Working Hours", "Extra Hours", "Status", "Device"];
+      const rows = displayRecords.map((record) => {
+        const notMarked = isNotMarkedRow(record);
+        return [
+          record?.employee?.employeeId ?? "-",
+          record?.employee?.name ?? "-",
+          record?.department?.name || record?.employee?.department?.name || "-",
+          formatDate(record.date),
+          notMarked ? "-" : formatTime(record.checkIn),
+          notMarked ? "-" : formatTime(record.checkOut),
+          notMarked ? "-" : (record.workingHours > 0 ? formatWorkingHours(record.workingHours) : "-"),
+          notMarked ? "-" : (record.extraWorkingHours > 0 ? `+${record.extraWorkingHours.toFixed(2)}h` : "-"),
+          getStatusLabel(record.status),
+          notMarked ? "-" : (record.isManualEntry ? "Manual" : (record.deviceId || "Biometric")),
+        ];
       });
-      
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `attendance_${filter.date || 'report'}.${format === 'xlsx' ? 'xlsx' : 'csv'}`;
-      link.click();
-      window.URL.revokeObjectURL(url);
+
+      const aoa = [headers, ...rows];
+      const worksheet = XLSX.utils.aoa_to_sheet(aoa);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Attendance");
+
+      const ext = format === "xlsx" ? "xlsx" : "csv";
+      const filename = `attendance_${filter.date || "report"}.${ext}`;
+      XLSX.writeFile(workbook, filename, { bookType: ext });
+
+      toast.success("Export downloaded");
     } catch (error) {
       console.error("Export error:", error);
-      toast.error(error.response?.data?.message || "Failed to export attendance");
+      toast.error("Failed to export attendance");
     } finally {
       setExporting(false);
     }
@@ -678,6 +687,7 @@ function Attendance() {
                 onChange={handleFilterChange}
               >
                 <option value="">All Status</option>
+                <option value="not-marked">Not Marked</option>
                 <option value="present">Present</option>
                 <option value="absent">Absent</option>
                 <option value="half-day">Half Day</option>
@@ -692,7 +702,8 @@ function Attendance() {
                   type="button"
                   className="btn-export excel"
                   onClick={() => handleExport('xlsx')}
-                  disabled={exporting || displayRecords.length === 0}
+                  disabled={exporting || displayRecords.length === 0 || filter.status === "not-marked"}
+                  title={filter.status === "not-marked" ? "Export not available for Not Marked view" : ""}
                 >
                   {exporting ? <><i className="fas fa-spinner fa-spin"></i></> : <><i className="fas fa-file-excel"></i> Excel</>}
                 </button>
@@ -700,7 +711,8 @@ function Attendance() {
                   type="button"
                   className="btn-export csv"
                   onClick={() => handleExport('csv')}
-                  disabled={exporting || displayRecords.length === 0}
+                  disabled={exporting || displayRecords.length === 0 || filter.status === "not-marked"}
+                  title={filter.status === "not-marked" ? "Export not available for Not Marked view" : ""}
                 >
                   {exporting ? <><i className="fas fa-spinner fa-spin"></i></> : <><i className="fas fa-file-csv"></i> CSV</>}
                 </button>
@@ -747,24 +759,24 @@ function Attendance() {
                       <td>{record?.department?.name || record?.employee?.department?.name || "-"}</td>
                       <td>{formatDate(record.date)}</td>
                       <td className="time-cell">
-                        {formatTime(record.checkIn)}
+                        {isNotMarkedRow(record) ? "-" : formatTime(record.checkIn)}
                       </td>
                       <td className="time-cell">
-                        {formatTime(record.checkOut)}
+                        {isNotMarkedRow(record) ? "-" : formatTime(record.checkOut)}
                       </td>
                       <td>
-                        {record.workingHours > 0
+                        {isNotMarkedRow(record) ? "-" : (record.workingHours > 0
                           ? formatWorkingHours(record.workingHours)
-                          : "-"}
+                          : "-")}
                       </td>
                       <td>
-                        {record.extraWorkingHours && record.extraWorkingHours > 0 ? (
+                        {isNotMarkedRow(record) ? "-" : (record.extraWorkingHours && record.extraWorkingHours > 0 ? (
                           <span style={{ color: "#10b981", fontWeight: "bold" }}>
                             +{record.extraWorkingHours.toFixed(2)}h
                           </span>
                         ) : (
                           "-"
-                        )}
+                        ))}
                       </td>
                       <td>
                         <span
@@ -774,19 +786,21 @@ function Attendance() {
                         </span>
                       </td>
                       <td>
-                        {record.isManualEntry ? (
+                        {isNotMarkedRow(record) ? "-" : (record.isManualEntry ? (
                           <span className="manual-badge">Manual</span>
                         ) : (
                           record.deviceId || "Biometric"
-                        )}
+                        ))}
                       </td>
                       <td>
-                        <button
-                          className="btn-edit"
-                          onClick={() => handleEdit(record)}
-                        >
-                          <i className="fas fa-edit"></i>
-                        </button>
+                        {!isNotMarkedRow(record) && (
+                          <button
+                            className="btn-edit"
+                            onClick={() => handleEdit(record)}
+                          >
+                            <i className="fas fa-edit"></i>
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ))

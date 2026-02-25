@@ -4,6 +4,7 @@ import {
   getAllAttendance,
   getAttendanceById,
   getTodayAttendance,
+  getNotMarkedAttendance,
   createManualAttendance,
   updateAttendance,
   deleteAttendance,
@@ -29,6 +30,7 @@ router.post("/mark", markAttendance);
 // All authenticated users can view attendance (with filtering applied in controller)
 router.get("/", verifyToken, getAllAttendance);
 router.get("/today", verifyToken, hasRole("superAdmin", "attendanceDepartment"), getTodayAttendance);
+router.get("/not-marked", verifyToken, hasRole("superAdmin", "attendanceDepartment"), getNotMarkedAttendance);
 router.get("/stats", verifyToken, hasRole("superAdmin", "attendanceDepartment"), getAttendanceStats);
 router.get("/:id", verifyToken, hasRole("superAdmin", "attendanceDepartment"), getAttendanceById);
 

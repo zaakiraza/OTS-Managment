@@ -267,12 +267,82 @@ export const markAttendance = async (req, res) => {
 // Get all attendance records with filters
 export const getAllAttendance = async (req, res) => {
   try {
+    const { date, userId, employee, status, startDate, endDate, month, year } = req.query;
+    const requestingUserRole = req.user?.role?.name || req.user?.role;
+
+    // When status is "not-marked", return employees who have no attendance for the date (table-shaped rows)
+    if (status === "not-marked") {
+      const targetDate = date ? getDateAtMidnightUTC(new Date(date)) : getTodayUTC();
+      const nextDay = new Date(targetDate.getTime() + TIME.ONE_DAY);
+
+      let deptIds = null;
+      if (requestingUserRole === "attendanceDepartment") {
+        const departmentsCreatedByUser = await Department.find({
+          createdBy: req.user._id,
+          isActive: true
+        }).select("_id");
+        deptIds = departmentsCreatedByUser.map((d) => d._id);
+        if (deptIds.length === 0) {
+          return res.status(200).json({ success: true, count: 0, data: [] });
+        }
+      }
+
+      const superAdminRole = await Role.findOne({ name: "superAdmin" });
+      const superAdminId = superAdminRole?._id;
+      let employeeFilter = { isActive: true };
+      if (superAdminId) employeeFilter.role = { $ne: superAdminId };
+      if (requestingUserRole === "attendanceDepartment" && deptIds?.length) {
+        employeeFilter.$or = [
+          { department: { $in: deptIds } },
+          { "shifts.department": { $in: deptIds } },
+        ];
+      }
+      if (userId) {
+        employeeFilter.employeeId = new RegExp(userId, "i");
+      }
+
+      const employeesInScope = await Employee.find(employeeFilter)
+        .select("_id name employeeId email department shifts")
+        .populate("department", "name code")
+        .lean();
+
+      const markedEmployeeIds = await Attendance.distinct("employee", {
+        date: { $gte: targetDate, $lt: nextDay },
+        ...(deptIds?.length ? { department: { $in: deptIds } } : {}),
+      });
+      const markedSet = new Set(markedEmployeeIds.map((id) => String(id)));
+      let notMarked = employeesInScope.filter((emp) => !markedSet.has(String(emp._id)));
+
+      if (req.query.department) {
+        const deptId = String(req.query.department);
+        notMarked = notMarked.filter(
+          (emp) =>
+            String(emp.department?._id) === deptId ||
+            (emp.shifts && emp.shifts.some((s) => String(s.department) === deptId))
+        );
+      }
+
+      const tableRows = notMarked.map((emp) => ({
+        _id: `not-marked-${emp._id}`,
+        employee: { _id: emp._id, name: emp.name, employeeId: emp.employeeId, email: emp.email, department: emp.department },
+        department: emp.department || { name: "-", code: "-" },
+        date: targetDate,
+        checkIn: null,
+        checkOut: null,
+        status: "not-marked",
+        workingHours: null,
+      }));
+
+      return res.status(200).json({
+        success: true,
+        count: tableRows.length,
+        data: tableRows,
+      });
+    }
+
     // Mark any pending attendance from before today as missing
     await markOldPendingAsMissing();
 
-    const { date, userId, employee, status, startDate, endDate, month, year } = req.query;
-    
-    
     let filter = {};
 
     // Filter by employee ObjectId
@@ -325,12 +395,10 @@ export const getAllAttendance = async (req, res) => {
         filter.department = req.query.department;
     }
 
-    const requestingUserRole = req.user?.role?.name || req.user?.role;
     if (requestingUserRole === "superAdmin") {
       // SuperAdmin sees all attendance
     } else if (requestingUserRole === "attendanceDepartment") {
       // Admin (attendanceDepartment) only sees attendance of employees in departments they created.
-      // If employee has 2 shifts, only show the attendance row for the department created by this admin.
       if (!hasDepartmentFilter) {
         const departmentsCreatedByUser = await Department.find({
           createdBy: req.user._id,
@@ -340,16 +408,15 @@ export const getAllAttendance = async (req, res) => {
         if (deptIds.length > 0) {
           filter.department = { $in: deptIds };
         } else {
-          filter.department = { $in: [] }; // no departments created -> no attendance
+          filter.department = { $in: [] };
         }
       }
     } else {
-      // Regular users see only their own attendance
       filter.employee = req.user._id;
     }
 
     const attendanceRecords = await Attendance.find(filter)
-      .select('+checkIn +checkOut') // Explicitly include these fields
+      .select('+checkIn +checkOut')
       .populate("employee", "name employeeId email phone department")
       .populate("department", "name code")
       .populate("modifiedBy", "name")
@@ -453,6 +520,72 @@ export const getTodayAttendance = async (req, res) => {
       success: true,
       count: attendanceRecords.length,
       data: attendanceRecords,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+/**
+ * Get employees who have not marked attendance for a given date.
+ * superAdmin: all active (non-superAdmin) employees with no attendance for the date.
+ * attendanceDepartment: only employees in departments they created, with no attendance for the date in those departments.
+ */
+export const getNotMarkedAttendance = async (req, res) => {
+  try {
+    const dateStr = req.query.date; // YYYY-MM-DD optional
+    const targetDate = dateStr ? getDateAtMidnightUTC(new Date(dateStr)) : getTodayUTC();
+    const nextDay = new Date(targetDate.getTime() + TIME.ONE_DAY);
+
+    const role = req.user?.role?.name || req.user?.role;
+
+    let deptIds = null;
+    if (role === "attendanceDepartment") {
+      const departmentsCreatedByUser = await Department.find({
+        createdBy: req.user._id,
+        isActive: true
+      }).select("_id");
+      deptIds = departmentsCreatedByUser.map((d) => d._id);
+      if (deptIds.length === 0) {
+        return res.status(200).json({ success: true, data: [], count: 0 });
+      }
+    }
+
+    const superAdminRole = await Role.findOne({ name: "superAdmin" });
+    const superAdminId = superAdminRole?._id;
+
+    let employeeFilter = { isActive: true };
+    if (superAdminId) {
+      employeeFilter.role = { $ne: superAdminId };
+    }
+    if (role === "attendanceDepartment" && deptIds?.length) {
+      employeeFilter.$or = [
+        { department: { $in: deptIds } },
+        { "shifts.department": { $in: deptIds } },
+      ];
+    }
+
+    const employeesInScope = await Employee.find(employeeFilter)
+      .select("_id name employeeId email department shifts")
+      .populate("department", "name code")
+      .lean();
+
+    const markedEmployeeIds = await Attendance.distinct("employee", {
+      date: { $gte: targetDate, $lt: nextDay },
+      ...(deptIds?.length ? { department: { $in: deptIds } } : {}),
+    });
+
+    const markedSet = new Set(markedEmployeeIds.map((id) => String(id)));
+    const notMarked = employeesInScope.filter((emp) => !markedSet.has(String(emp._id)));
+
+    res.status(200).json({
+      success: true,
+      count: notMarked.length,
+      data: notMarked,
+      date: targetDate.toISOString().split("T")[0],
     });
   } catch (error) {
     res.status(500).json({

@@ -198,139 +198,170 @@ export const exportEmployees = async (req, res) => {
 /**
  * Export Attendance to Excel or CSV
  */
+// Status labels to match frontend table
+const STATUS_LABELS = {
+  present: "Present",
+  absent: "Absent",
+  "half-day": "Half Day",
+  late: "Late",
+  "early-departure": "Early Departure",
+  "late-early-departure": "Late + Early Departure",
+  pending: "Pending",
+  missing: "Missing",
+  leave: "Leave",
+  "not-marked": "Not Marked",
+};
+
 export const exportAttendance = async (req, res) => {
   try {
     const { startDate, endDate, departmentId, employeeId, status, month, format = 'xlsx' } = req.query;
+    const requestingUserRole = req.user?.role?.name || req.user?.role;
     const filter = {};
 
-    // Handle date range
+    // Date range: same as getAllAttendance (single day = start to start of next day)
     if (startDate && endDate) {
-      filter.date = { $gte: new Date(startDate), $lte: new Date(endDate) };
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      end.setDate(end.getDate() + 1);
+      filter.date = { $gte: start, $lt: end };
     } else if (month) {
-      // Parse month in format "YYYY-MM"
       const [year, monthNum] = month.split('-');
       const startOfMonth = new Date(year, parseInt(monthNum) - 1, 1);
-      const endOfMonth = new Date(year, parseInt(monthNum), 0, 23, 59, 59);
+      const endOfMonth = new Date(year, parseInt(monthNum), 0, 23, 59, 59, 999);
       filter.date = { $gte: startOfMonth, $lte: endOfMonth };
     }
 
-    // Handle status filter
-    if (status) {
-      filter.status = status;
-    }
+    if (status) filter.status = status;
 
-    // Handle employeeId - need to find by string employeeId, not MongoDB _id
-    let employeeObjectId = null;
-    if (employeeId) {
-      // Check if it's a MongoDB ObjectId or a string employeeId
-      if (employeeId.match(/^[0-9a-fA-F]{24}$/)) {
-        employeeObjectId = employeeId;
+    const hasDepartmentFilter = !!departmentId;
+    if (hasDepartmentFilter) filter.department = departmentId;
+
+    // Same role-based scope as getAllAttendance
+    if (requestingUserRole === "attendanceDepartment") {
+      const departmentsCreatedByUser = await Department.find({
+        createdBy: req.user._id,
+        isActive: true
+      }).select('_id');
+      const deptIds = departmentsCreatedByUser.map(d => d._id);
+      if (deptIds.length > 0) {
+        filter.department = hasDepartmentFilter ? departmentId : { $in: deptIds };
       } else {
-        // Find employee by their string employeeId
-        const employee = await Employee.findOne({ employeeId: employeeId });
-        if (employee) {
-          employeeObjectId = employee._id;
-        }
-      }
-      if (employeeObjectId) {
-        filter.employee = employeeObjectId;
+        filter.department = { $in: [] };
       }
     }
 
-    let query = Attendance.find(filter)
-      .populate("employee", "name employeeId biometricId department")
-      .sort({ date: -1 });
-
-    const attendanceRecords = await query;
-
-    // Filter by department if specified
-    let filteredRecords = attendanceRecords;
-    if (departmentId) {
-      filteredRecords = attendanceRecords.filter(
-        (a) => a.employee?.department?.toString() === departmentId
-      );
+    if (employeeId) {
+      if (employeeId.match(/^[0-9a-fA-F]{24}$/)) {
+        filter.employee = employeeId;
+      } else {
+        const emp = await Employee.findOne({ employeeId: employeeId }).select('_id');
+        if (emp) filter.employee = emp._id;
+      }
     }
 
-    // Use centralized timezone utility for correct local time formatting
+    const attendanceRecords = await Attendance.find(filter)
+      .select('+checkIn +checkOut')
+      .populate("employee", "name employeeId department")
+      .populate("department", "name code")
+      .sort({ date: -1, createdAt: -1 });
+
+    const filteredRecords = attendanceRecords;
+
+    // Time in PKT, 12-hour format (match frontend formatTime)
     const formatTime = (dateTime) => {
       if (!dateTime) return "-";
       try {
         const timeStr = formatLocalTime(dateTime);
-        if (!timeStr || timeStr === "-") return "N/A";
-        // Optionally, convert to 12-hour format for Excel if needed
-        const [hours, minutes] = timeStr.split(":");
-        let hour = parseInt(hours);
+        if (!timeStr || timeStr === "-") return "-";
+        const [h, m] = timeStr.split(":");
+        let hour = parseInt(h, 10);
         const ampm = hour >= 12 ? "PM" : "AM";
         if (hour > 12) hour -= 12;
         else if (hour === 0) hour = 12;
-        return `${hour}:${minutes} ${ampm}`;
+        return `${hour}:${m} ${ampm}`;
       } catch (e) {
-        return "N/A";
+        return "-";
       }
     };
 
-    // Helper function to format date
+    // Date: "Feb 25, 2026" (match frontend formatDate)
     const formatDate = (dateValue) => {
-      if (!dateValue) return "N/A";
+      if (!dateValue) return "-";
       try {
         const date = new Date(dateValue);
-        if (isNaN(date.getTime())) return "N/A";
-        const day = String(date.getDate()).padStart(2, '0');
-        const month = String(date.getMonth() + 1).padStart(2, '0');
-        const year = date.getFullYear();
-        return `${day}/${month}/${year}`;
+        if (isNaN(date.getTime())) return "-";
+        return date.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
       } catch (e) {
-        return "N/A";
+        return "-";
       }
     };
 
-    // Only include employees who have marked attendance (i.e., have checkIn or checkOut)
-    const dataRows = filteredRecords
-      .filter((record) => record.checkIn || record.checkOut)
-      .map((record) => ({
-        date: formatDate(record.date),
-        employeeId: record.employee?.employeeId || "N/A",
-        biometricId: record.employee?.biometricId || "N/A",
-        name: record.employee?.name || "N/A",
-        checkIn: formatTime(record.checkIn),
-        checkOut: formatTime(record.checkOut),
-        workingHours: record.workingHours?.toFixed(2) || "0.00",
-        status: record.status || "N/A",
-      }));
+    // Working hours: "H.MM" (match frontend formatWorkingHours)
+    const formatWorkingHours = (decimalHours) => {
+      if (decimalHours == null || decimalHours === 0) return "-";
+      const hours = Math.floor(decimalHours);
+      const minutes = Math.round((decimalHours - hours) * 60);
+      return `${hours}.${String(minutes).padStart(2, "0")}`;
+    };
+
+    const formatExtraHours = (val) => {
+      if (val == null || val <= 0) return "-";
+      return `+${Number(val).toFixed(2)}h`;
+    };
+
+    const formatDevice = (record) => {
+      if (record.isManualEntry) return "Manual";
+      return record.deviceId || "Biometric";
+    };
+
+    const dataRows = filteredRecords.map((record) => ({
+      userId: record.employee?.employeeId ?? "-",
+      name: record.employee?.name ?? "-",
+      department: record.department?.name ?? record.employee?.department?.name ?? "-",
+      date: formatDate(record.date),
+      checkIn: formatTime(record.checkIn),
+      checkOut: formatTime(record.checkOut),
+      workingHours: formatWorkingHours(record.workingHours),
+      extraHours: formatExtraHours(record.extraWorkingHours),
+      status: STATUS_LABELS[record.status] ?? record.status ?? "-",
+      device: formatDevice(record),
+    }));
 
     await logExportAction(req, "Attendance", `Exported ${filteredRecords.length} attendance records to ${format.toUpperCase()}`);
 
+    const headers = ["User ID", "Name", "Department", "Date", "Check In", "Check Out", "Working Hours", "Extra Hours", "Status", "Device"];
+
     if (format === 'csv') {
-      // Export as CSV
-      const headers = ["Date", "Employee ID", "Biometric ID", "Employee Name", "Check In", "Check Out", "Working Hours", "Status"];
       const rows = dataRows.map((row) => [
-        row.date,
-        row.employeeId,
-        row.biometricId,
+        row.userId,
         row.name,
+        row.department,
+        row.date,
         row.checkIn,
         row.checkOut,
         row.workingHours,
+        row.extraHours,
         row.status,
+        row.device,
       ]);
-      const csvContent = [headers.join(","), ...rows.map((row) => row.map((cell) => `"${cell}"`).join(","))].join("\n");
-      
-      setCsvHeaders(res, `attendance_${new Date().toISOString().split("T")[0]}.csv`);
+      const csvContent = [headers.map((h) => `"${h}"`).join(","), ...rows.map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","))].join("\n");
+      setCsvHeaders(res, `attendance_${startDate || new Date().toISOString().split("T")[0]}.csv`);
       res.send(csvContent);
     } else {
-      // Export as Excel
       const workbook = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet("Attendance");
 
       worksheet.columns = [
-        { header: "Date", key: "date", width: 15 },
-        { header: "Employee ID", key: "employeeId", width: 15 },
-        { header: "Biometric ID", key: "biometricId", width: 15 },
-        { header: "Employee Name", key: "name", width: 25 },
-        { header: "Check In", key: "checkIn", width: 14 },
-        { header: "Check Out", key: "checkOut", width: 14 },
-        { header: "Working Hours", key: "workingHours", width: 15 },
-        { header: "Status", key: "status", width: 12 },
+        { header: "User ID", key: "userId", width: 14 },
+        { header: "Name", key: "name", width: 24 },
+        { header: "Department", key: "department", width: 20 },
+        { header: "Date", key: "date", width: 14 },
+        { header: "Check In", key: "checkIn", width: 12 },
+        { header: "Check Out", key: "checkOut", width: 12 },
+        { header: "Working Hours", key: "workingHours", width: 14 },
+        { header: "Extra Hours", key: "extraHours", width: 12 },
+        { header: "Status", key: "status", width: 18 },
+        { header: "Device", key: "device", width: 12 },
       ];
 
       worksheet.getRow(1).eachCell((cell) => {
@@ -339,15 +370,14 @@ export const exportAttendance = async (req, res) => {
         cell.alignment = headerStyle.alignment;
       });
 
-      // Add data rows with explicit text formatting for time columns
       dataRows.forEach((row) => {
         const newRow = worksheet.addRow(row);
-        // Set Check In and Check Out cells as text to prevent auto-formatting
-        newRow.getCell('checkIn').numFmt = '@'; // Text format
-        newRow.getCell('checkOut').numFmt = '@'; // Text format
+        newRow.getCell("checkIn").numFmt = "@";
+        newRow.getCell("checkOut").numFmt = "@";
       });
 
-      setExcelHeaders(res, `attendance_${new Date().toISOString().split("T")[0]}.xlsx`);
+      const filename = `attendance_${startDate || new Date().toISOString().split("T")[0]}.xlsx`;
+      setExcelHeaders(res, filename);
       await workbook.xlsx.write(res);
       res.end();
     }

@@ -74,6 +74,7 @@ export const attendanceAPI = {
   markAttendance: (data) => api.post("/attendance/mark", data),
   getAllAttendance: (params) => api.get("/attendance", { params }),
   getTodayAttendance: () => api.get("/attendance/today"),
+  getNotMarkedAttendance: (params) => api.get("/attendance/not-marked", { params }),
   getAttendanceById: (id) => api.get(`/attendance/${id}`),
   getAttendanceStats: (params) => api.get("/attendance/stats", { params }),
   createManualAttendance: (data) => api.post("/attendance/manual", data),

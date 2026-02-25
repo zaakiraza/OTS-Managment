@@ -264,30 +264,6 @@ async function pollDeviceOnce() {
 
     logger.debug(`Total logs on device: ${logs.length}`);
 
-    // Date range: N months ago until end of tomorrow (include tomorrow logs - device clock may be ahead or different TZ)
-    const fetchMonths = Number(process.env.LOG_FETCH_MONTHS || DEVICE.LOG_FETCH_MONTHS || 6);
-    const now = new Date();
-    const rangeStart = new Date(now);
-    rangeStart.setMonth(now.getMonth() - fetchMonths);
-    rangeStart.setHours(0, 0, 0, 0);
-    const rangeEnd = new Date(now);
-    rangeEnd.setDate(rangeEnd.getDate() + 1);
-    rangeEnd.setHours(23, 59, 59, 999);
-    logger.debug(`Date filter (last ${fetchMonths} months, up to end of tomorrow): ${rangeStart.toISOString()} to ${rangeEnd.toISOString()}`);
-
-    const logsInRange = logs.filter(log => {
-      let logDate;
-      if (log.record_time) {
-        logDate = new Date(log.record_time);
-      } else if (log.timestamp) {
-        logDate = new Date(log.timestamp);
-      } else {
-        return false; // No valid timestamp
-      }
-      return logDate >= rangeStart && logDate <= rangeEnd;
-    });
-    logger.debug(`Logs in date range (last ${fetchMonths} months): ${logsInRange.length} of ${logs.length}`);
-
     // On first poll after server restart, initialize from DB
     try {
       // Reuse device info from above (avoid second getInfo() which can throw ERR_OUT_OF_RANGE)
@@ -497,51 +473,21 @@ async function pollDeviceOnce() {
           if (!isInitialized) {
             await loadLastProcessedSN();
             isInitialized = true;
-            if (lastProcessedSN > 0) {
-              logger.info(`Resuming from last processed SN: ${lastProcessedSN}`);
-            } else {
-              logger.info(`No saved SN found. Processing logs from device (current month when SN=0)...`);
-            }
+            logger.info(lastProcessedSN > 0 ? `Resuming from last processed SN: ${lastProcessedSN}` : 'No saved SN. Will process from first log (sn>0) in chunks.');
           }
-          const nowInner = new Date();
-          const rangeEndInner = new Date(nowInner);
-          rangeEndInner.setDate(rangeEndInner.getDate() + 1);
-          rangeEndInner.setHours(23, 59, 59, 999);
-          const rangeStartInner = new Date(nowInner);
-          if (lastProcessedSN === 0) {
-            rangeStartInner.setDate(1);
-            rangeStartInner.setHours(0, 0, 0, 0);
-            logger.debug(`Date filter (current month, SN=0): ${rangeStartInner.toISOString()} to ${rangeEndInner.toISOString()}`);
-          } else {
-            const fetchMonthsInner = Number(process.env.LOG_FETCH_MONTHS || DEVICE.LOG_FETCH_MONTHS || 6);
-            rangeStartInner.setMonth(nowInner.getMonth() - fetchMonthsInner);
-            rangeStartInner.setHours(0, 0, 0, 0);
-            logger.debug(`Date filter (last ${fetchMonthsInner} months, up to end of tomorrow): ${rangeStartInner.toISOString()} to ${rangeEndInner.toISOString()}`);
-          }
-          const logsInRange = logs.filter(log => {
-            let logDate;
-            if (log.record_time) {
-              logDate = new Date(log.record_time);
-            } else if (log.timestamp) {
-              logDate = new Date(log.timestamp);
-            } else {
-              return false;
-            }
-            return logDate >= rangeStartInner && logDate <= rangeEndInner;
-          });
-          logger.debug(`Logs in date range: ${logsInRange.length} of ${logs.length}`);
-          // Sort by time (then by sn) so we process oldest-first — correct check-in/check-out order
-          const allLogsToProcess = [...logsInRange].sort((a, b) => {
+          // Process only logs with sn > lastProcessedAttendanceSN (no date filter)
+          const pending = logs.filter(log => (Number(log.sn ?? log.SN ?? 0) > lastProcessedSN));
+          const sortedPending = [...pending].sort((a, b) => {
             const tA = new Date(a.record_time || a.timestamp || 0).getTime();
             const tB = new Date(b.record_time || b.timestamp || 0).getTime();
             if (tA !== tB) return tA - tB;
             return (Number(a.sn ?? a.SN ?? 0) - Number(b.sn ?? b.SN ?? 0));
           });
-          // Process ALL logs in range so we backfill any missing (e.g. 6020 on device vs 5975 in DB).
-          const newLogs = allLogsToProcess.filter(log => log.sn > lastProcessedSN);
-          logger.debug(`Logs in range: ${allLogsToProcess.length}, new since last SN: ${newLogs.length} (last SN was ${lastProcessedSN})`);
+          const logsPerPoll = Number(process.env.LOGS_PER_POLL || DEVICE.LOGS_PER_POLL || 2000);
+          const allLogsToProcess = sortedPending.slice(0, logsPerPoll);
+          logger.debug(`Logs on device: ${logs.length}, pending (sn>${lastProcessedSN}): ${pending.length}, processing this poll: ${allLogsToProcess.length} (max ${logsPerPoll})`);
           if (allLogsToProcess.length > 0 && !firstLogShapePrinted) {
-            logger.debug(`Example log object: ${JSON.stringify(allLogsToProcess[allLogsToProcess.length - 1], null, 2)}`);
+            logger.debug(`Example log object: ${JSON.stringify(allLogsToProcess[0], null, 2)}`);
             firstLogShapePrinted = true;
           }
           let inserted = 0;

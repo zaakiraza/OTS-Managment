@@ -89,6 +89,9 @@ export const DEVICE = {
   // How many months back to fetch logs from device (old logs)
   LOG_FETCH_MONTHS: 2,
 
+  // Max logs to process per poll (avoids 2–3 hr runs; rest processed in next polls)
+  LOGS_PER_POLL: 2000,
+
   // Rapid punch threshold (3 hours)
   RAPID_PUNCH_THRESHOLD: 3 * 60 * 60 * 1000,
 

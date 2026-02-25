@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { employeeAPI, departmentAPI, roleAPI, exportAPI, authAPI } from "../../Config/Api";
+import * as XLSX from "xlsx";
+import { employeeAPI, departmentAPI, roleAPI, authAPI } from "../../Config/Api";
 import SideBar from "../../Components/SideBar/SideBar";
 import { getStoredUser } from "../../Utils/storage";
 import { useToast } from "../../Components/Common/Toast/Toast";
@@ -590,39 +591,90 @@ const Employees = () => {
     setShowExportFieldsModal(true);
   };
 
-  // Perform the actual export
+  // Build one cell value for export by field key
+  const getExportCellValue = (emp, fieldKey) => {
+    switch (fieldKey) {
+      case "employeeId":
+        return emp.employeeId ?? "-";
+      case "name":
+        return emp.name ?? "-";
+      case "email":
+        return emp.email ?? "-";
+      case "phone":
+        return emp.phone ?? "-";
+      case "cnic":
+        return emp.cnic ?? "-";
+      case "department":
+        return emp.department?.name ?? "-";
+      case "additionalDepts": {
+        const primaryId = emp.department?._id;
+        const shiftDepts = (emp.shifts || [])
+          .filter((s) => !s.isPrimary && s.department)
+          .map((s) => s.department?.name)
+          .filter(Boolean);
+        return shiftDepts.join(", ") || "-";
+      }
+      case "leadingDepts":
+        return (emp.leadingDepartments || []).map((d) => d.name).join(", ") || "-";
+      case "role":
+        return emp.role?.name ?? "Employee";
+      case "position":
+        return emp.position ?? "-";
+      case "workSchedule":
+        return emp.workSchedule
+          ? `${emp.workSchedule.checkInTime || ""} - ${emp.workSchedule.checkOutTime || ""}`
+          : "-";
+      case "joinDate":
+        return emp.joiningDate ? new Date(emp.joiningDate).toLocaleDateString() : "-";
+      case "status":
+        return emp.isActive ? "Active" : "Inactive";
+      default:
+        return "-";
+    }
+  };
+
+  // Perform the actual export – build file on frontend from fetched data
   const handleConfirmExport = async () => {
     try {
       setExporting(true);
-      const selectedFields = Object.keys(selectedExportFields).filter(key => selectedExportFields[key]);
-      
+      const selectedFields = exportFields.filter((f) => selectedExportFields[f.key]);
       if (selectedFields.length === 0) {
         toast.error("Please select at least one field to export");
         setExporting(false);
         return;
       }
 
-      const params = {
-        fields: selectedFields.join(','),
-      };
-      if (selectedDept) params.department = selectedDept;
-      
-      const response = exportFormat === 'xlsx' 
-        ? await exportAPI.employees(params)
-        : await exportAPI.employeesCsv(params);
-      
-      const blob = new Blob([response.data], { 
-        type: exportFormat === 'xlsx' 
-          ? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-          : "text/csv"
-      });
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `employees_${new Date().toISOString().split("T")[0]}.${exportFormat === 'xlsx' ? 'xlsx' : 'csv'}`;
-      link.click();
-      window.URL.revokeObjectURL(url);
-      toast.success(`Employees exported to ${exportFormat === 'xlsx' ? 'Excel' : 'CSV'} successfully!`);
+      // Fetch all employees in chunks (backend max limit is 100 per request)
+      const limit = 100;
+      let list = [];
+      let page = 1;
+      let total = 0;
+      do {
+        const params = { page, limit };
+        if (selectedDept) params.department = selectedDept;
+        if (searchTerm) params.search = searchTerm;
+        const response = await employeeAPI.getAll(params);
+        const data = response.data?.data ?? [];
+        const pagination = response.data?.pagination ?? {};
+        list = list.concat(data);
+        total = pagination.total ?? list.length;
+        if (data.length < limit || list.length >= total) break;
+        page += 1;
+      } while (true);
+
+      const headers = selectedFields.map((f) => f.label);
+      const rows = list.map((emp) => selectedFields.map((f) => getExportCellValue(emp, f.key)));
+
+      const aoa = [headers, ...rows];
+      const worksheet = XLSX.utils.aoa_to_sheet(aoa);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Employees");
+
+      const ext = exportFormat === "xlsx" ? "xlsx" : "csv";
+      const filename = `employees_${new Date().toISOString().split("T")[0]}.${ext}`;
+      XLSX.writeFile(workbook, filename, { bookType: ext });
+
+      toast.success(`Exported ${list.length} of ${total} employees to ${exportFormat === "xlsx" ? "Excel" : "CSV"}`);
       setShowExportFieldsModal(false);
     } catch (error) {
       console.error("Export failed:", error);
