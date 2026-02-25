@@ -96,9 +96,9 @@ function mapZkLogToDoc(log) {
 async function processAttendanceLog(doc) {
   try {
     // Find employee by biometric ID (userId from device) with role populated
-    const employee = await Employee.findOne({ 
+    const employee = await Employee.findOne({
       biometricId: doc.userId.toString().trim(),
-      isActive: true 
+      isActive: true
     }).populate('department', 'name leverageTime')
       .populate('role', 'name');
 
@@ -128,13 +128,13 @@ async function processAttendanceLog(doc) {
 
     let punchType = '';
     const RAPID_PUNCH_THRESHOLD_MS = DEVICE.RAPID_PUNCH_THRESHOLD || (3 * TIME.ONE_HOUR);
-    
+
     if (!attendance) {
       // First punch of the day - create new record with check-in
       // Get department from primary shift or default
       const primaryShift = employee.shifts?.find(s => s.isPrimary) || employee.shifts?.[0];
       const deptId = primaryShift?.department || employee.department;
-      
+
       attendance = await Attendance.create({
         employee: employee._id,
         userId: employee.employeeId,
@@ -158,24 +158,24 @@ async function processAttendanceLog(doc) {
       // Already has check-in, this might be check-out
       // But first check if it's a rapid punch (within 30 minutes of check-in)
       const timeSinceCheckIn = punchTime.getTime() - attendance.checkIn.getTime();
-      
+
       if (timeSinceCheckIn < RAPID_PUNCH_THRESHOLD_MS) {
         // Rapid punch detected - ignore it
         logger.debug(`${employee.name} (${employee.employeeId}) - IGNORED (rapid punch: ${Math.round(timeSinceCheckIn / 60000)} min after check-in)`);
         return; // Skip this punch
       }
-      
+
       // Valid checkout - sufficient time has passed
       attendance.checkOut = punchTime;
       await attendance.save();
       punchType = 'CHECK-OUT';
       logger.debug(`${employee.name} (${employee.employeeId}) - ${punchType}`);
-      
+
       // Check if employee has multiple shifts and split attendance if needed
       const hasShifts = await hasMultipleShifts(employee._id);
       if (hasShifts) {
         logger.info(`Multi-shift employee detected: ${employee.employeeId}, splitting attendance`);
-        
+
         // Prepare attendance data for splitting
         const attendanceData = {
           employee: employee._id,
@@ -186,10 +186,10 @@ async function processAttendanceLog(doc) {
           deviceId: doc.deviceIp,
           isManualEntry: false,
         };
-        
+
         // Delete the single attendance record
         await Attendance.deleteOne({ _id: attendance._id });
-        
+
         // Create split records across departments
         const splitRecords = await splitAttendanceByDepartments(attendanceData);
         logger.info(`Attendance split into ${splitRecords.length} department records for ${employee.employeeId}`);
@@ -212,7 +212,7 @@ async function pollDeviceOnce() {
     return;
   }
   isPolling = true;
-  
+
   const device = createDeviceInstance();
   let retryCount = 0;
   const maxRetries = DEVICE.MAX_RETRY_ATTEMPTS || 3;
@@ -237,14 +237,19 @@ async function pollDeviceOnce() {
 
   try {
 
-    // Get device info first
-    const info = await device.getInfo();
-    logger.debug(`Device info: ${JSON.stringify(info)}`);
+    // Get device info first (non-fatal: zkteco-js getInfo can throw ERR_OUT_OF_RANGE on some devices)
+    let info = null;
+    try {
+      info = await device.getInfo();
+      logger.debug(`Device info: ${JSON.stringify(info)}`);
+    } catch (infoErr) {
+      logger.debug(`Device info skipped (non-fatal): ${infoErr.message || infoErr}`);
+    }
 
     // Try different methods to get attendance
     logger.debug('Getting attendance logs from device...');
     let response = await device.getAttendances();
-    
+
     // Extract the actual logs array
     let logs = [];
     if (Array.isArray(response)) {
@@ -256,18 +261,20 @@ async function pollDeviceOnce() {
     } else if (response) {
       logger.warn(`Unexpected response format: ${JSON.stringify(response).substring(0, 200)}`);
     }
-    
+
     logger.debug(`Total logs on device: ${logs.length}`);
 
-    // Calculate date range: 1 month ago from today until now
+    // Date range: N months ago until end of tomorrow (include tomorrow logs - device clock may be ahead or different TZ)
+    const fetchMonths = Number(process.env.LOG_FETCH_MONTHS || DEVICE.LOG_FETCH_MONTHS || 6);
     const now = new Date();
-    const oneMonthAgo = new Date(now);
-    oneMonthAgo.setMonth(now.getMonth() - 1);
-    oneMonthAgo.setHours(0, 0, 0, 0); // Start of day 1 month ago
-    
-    logger.debug(`Date filter: ${oneMonthAgo.toISOString()} to ${now.toISOString()}`);
+    const rangeStart = new Date(now);
+    rangeStart.setMonth(now.getMonth() - fetchMonths);
+    rangeStart.setHours(0, 0, 0, 0);
+    const rangeEnd = new Date(now);
+    rangeEnd.setDate(rangeEnd.getDate() + 1);
+    rangeEnd.setHours(23, 59, 59, 999);
+    logger.debug(`Date filter (last ${fetchMonths} months, up to end of tomorrow): ${rangeStart.toISOString()} to ${rangeEnd.toISOString()}`);
 
-    // Filter logs by date range first (1 month ago to now)
     const logsInRange = logs.filter(log => {
       let logDate;
       if (log.record_time) {
@@ -277,17 +284,14 @@ async function pollDeviceOnce() {
       } else {
         return false; // No valid timestamp
       }
-      
-      return logDate >= oneMonthAgo && logDate <= now;
+      return logDate >= rangeStart && logDate <= rangeEnd;
     });
-    
-    logger.debug(`Logs in date range (last month to now): ${logsInRange.length} of ${logs.length}`);
+    logger.debug(`Logs in date range (last ${fetchMonths} months): ${logsInRange.length} of ${logs.length}`);
 
     // On first poll after server restart, initialize from DB
     try {
-      // Get device info first
-      const info = await device.getInfo();
-      logger.debug(`Device info: ${JSON.stringify(info)}`);
+      // Reuse device info from above (avoid second getInfo() which can throw ERR_OUT_OF_RANGE)
+      if (info) logger.debug(`Device info: ${JSON.stringify(info)}`);
 
       // Try different methods to get attendance
       logger.debug('Getting attendance logs from device...');
@@ -297,7 +301,7 @@ async function pollDeviceOnce() {
       } catch (streamErr) {
         logger.error(`Device stream error: ${streamErr.message}`);
         // If stream is closed, disconnect and abort polling
-        try { await device.disconnect(); } catch (_) {}
+        try { await device.disconnect(); } catch (_) { }
         isPolling = false;
         return;
       }
@@ -358,9 +362,9 @@ async function pollDeviceOnce() {
 
       async function processAttendanceLog(doc) {
         try {
-          const employee = await Employee.findOne({ 
+          const employee = await Employee.findOne({
             biometricId: doc.userId.toString().trim(),
-            isActive: true 
+            isActive: true
           }).populate('department', 'name leverageTime')
             .populate('role', 'name');
           if (!employee) {
@@ -464,15 +468,19 @@ async function pollDeviceOnce() {
           }
         }
         try {
-          const info = await device.getInfo();
-          logger.debug(`Device info: ${JSON.stringify(info)}`);
+          try {
+            const info = await device.getInfo();
+            logger.debug(`Device info: ${JSON.stringify(info)}`);
+          } catch (infoErr) {
+            logger.debug(`Device info skipped (non-fatal): ${infoErr.message || infoErr}`);
+          }
           logger.debug('Getting attendance logs from device...');
           let response;
           try {
             response = await device.getAttendances();
           } catch (streamErr) {
             logger.error(`Device stream error: ${streamErr.message}`);
-            try { await device.disconnect(); } catch (_) {}
+            try { await device.disconnect(); } catch (_) { }
             isPolling = false;
             return;
           }
@@ -486,11 +494,30 @@ async function pollDeviceOnce() {
             logger.warn(`Unexpected response format: ${JSON.stringify(response).substring(0, 200)}`);
           }
           logger.debug(`Total logs on device: ${logs.length}`);
-          const now = new Date();
-          const oneMonthAgo = new Date(now);
-          oneMonthAgo.setMonth(now.getMonth() - 1);
-          oneMonthAgo.setHours(0, 0, 0, 0);
-          logger.debug(`Date filter: ${oneMonthAgo.toISOString()} to ${now.toISOString()}`);
+          if (!isInitialized) {
+            await loadLastProcessedSN();
+            isInitialized = true;
+            if (lastProcessedSN > 0) {
+              logger.info(`Resuming from last processed SN: ${lastProcessedSN}`);
+            } else {
+              logger.info(`No saved SN found. Processing logs from device (current month when SN=0)...`);
+            }
+          }
+          const nowInner = new Date();
+          const rangeEndInner = new Date(nowInner);
+          rangeEndInner.setDate(rangeEndInner.getDate() + 1);
+          rangeEndInner.setHours(23, 59, 59, 999);
+          const rangeStartInner = new Date(nowInner);
+          if (lastProcessedSN === 0) {
+            rangeStartInner.setDate(1);
+            rangeStartInner.setHours(0, 0, 0, 0);
+            logger.debug(`Date filter (current month, SN=0): ${rangeStartInner.toISOString()} to ${rangeEndInner.toISOString()}`);
+          } else {
+            const fetchMonthsInner = Number(process.env.LOG_FETCH_MONTHS || DEVICE.LOG_FETCH_MONTHS || 6);
+            rangeStartInner.setMonth(nowInner.getMonth() - fetchMonthsInner);
+            rangeStartInner.setHours(0, 0, 0, 0);
+            logger.debug(`Date filter (last ${fetchMonthsInner} months, up to end of tomorrow): ${rangeStartInner.toISOString()} to ${rangeEndInner.toISOString()}`);
+          }
           const logsInRange = logs.filter(log => {
             let logDate;
             if (log.record_time) {
@@ -500,27 +527,29 @@ async function pollDeviceOnce() {
             } else {
               return false;
             }
-            return logDate >= oneMonthAgo && logDate <= now;
+            return logDate >= rangeStartInner && logDate <= rangeEndInner;
           });
-          logger.debug(`Logs in date range (last month to now): ${logsInRange.length} of ${logs.length}`);
-          if (!isInitialized) {
-            await loadLastProcessedSN();
-            isInitialized = true;
-            if (lastProcessedSN > 0) {
-              logger.info(`Resuming from last processed SN: ${lastProcessedSN}`);
-            } else {
-              logger.info(`No saved SN found. Processing ${logsInRange.length} existing logs from device (one-time fetch)...`);
-            }
-          }
-          const newLogs = logsInRange.filter(log => log.sn > lastProcessedSN);
-          logger.debug(`New logs since last poll: ${newLogs.length} (last SN was ${lastProcessedSN})`);
-          if (newLogs.length > 0 && !firstLogShapePrinted) {
-            logger.debug(`Example log object: ${JSON.stringify(newLogs[newLogs.length - 1], null, 2)}`);
+          logger.debug(`Logs in date range: ${logsInRange.length} of ${logs.length}`);
+          // Sort by time (then by sn) so we process oldest-first — correct check-in/check-out order
+          const allLogsToProcess = [...logsInRange].sort((a, b) => {
+            const tA = new Date(a.record_time || a.timestamp || 0).getTime();
+            const tB = new Date(b.record_time || b.timestamp || 0).getTime();
+            if (tA !== tB) return tA - tB;
+            return (Number(a.sn ?? a.SN ?? 0) - Number(b.sn ?? b.SN ?? 0));
+          });
+          // Process ALL logs in range so we backfill any missing (e.g. 6020 on device vs 5975 in DB).
+          const newLogs = allLogsToProcess.filter(log => log.sn > lastProcessedSN);
+          logger.debug(`Logs in range: ${allLogsToProcess.length}, new since last SN: ${newLogs.length} (last SN was ${lastProcessedSN})`);
+          if (allLogsToProcess.length > 0 && !firstLogShapePrinted) {
+            logger.debug(`Example log object: ${JSON.stringify(allLogsToProcess[allLogsToProcess.length - 1], null, 2)}`);
             firstLogShapePrinted = true;
           }
           let inserted = 0;
           let skipped = 0;
-          for (const rawLog of newLogs) {
+          let maxSN = lastProcessedSN;
+          for (const rawLog of allLogsToProcess) {
+            const sn = Number(rawLog.sn ?? rawLog.SN ?? 0);
+            if (sn > maxSN) maxSN = sn;
             const doc = mapZkLogToDoc(rawLog);
             if (!doc) {
               skipped++;
@@ -542,7 +571,8 @@ async function pollDeviceOnce() {
               skipped++;
             }
           }
-          if (newLogs.length > 0) {
+          if (allLogsToProcess.length > 0) {
+            lastProcessedSN = maxSN;
             logger.debug(`Processed logs. Inserted: ${inserted}, Skipped (existing/invalid): ${skipped}, Last SN: ${lastProcessedSN}`);
             await saveLastProcessedSN(lastProcessedSN);
           }
@@ -553,14 +583,25 @@ async function pollDeviceOnce() {
           }
         } catch (err) {
           logger.error(`Error processing device data: ${err.message || err}`, { stack: err.stack });
-          try { await device.disconnect(); } catch (_) {}
+          try { await device.disconnect(); } catch (_) { }
         }
         isPolling = false;
       }
-
-
-
-
+      // Actually run the processing (inner pollDeviceOnce was only defined above; call it now)
+      isPolling = false; // allow inner pollDeviceOnce to run (it checks isPolling)
+      await pollDeviceOnce();
+      try { await device.disconnect(); } catch (_) { }
+    } catch (innerErr) {
+      logger.error(`Error processing device data: ${innerErr.message || innerErr}`, { stack: innerErr.stack });
+      try { await device.disconnect(); } catch (_) { }
+      isPolling = false;
+    }
+  } catch (err) {
+    logger.error(`Error processing device data: ${err.message || err}`, { stack: err.stack });
+    try { await device.disconnect(); } catch (_) { }
+  }
+  isPolling = false;
+}
 
 /**
  * Sync device time with server time (with retry logic)
@@ -574,10 +615,10 @@ export const syncDeviceTime = async () => {
     try {
       logger.info(`Syncing device time with server... (attempt ${retryCount + 1}/${maxRetries})`);
       await device.createSocket();
-      
+
       // Set device time to current server time
       const result = await device.setTime(new Date());
-      
+
       logger.info('Device time synced successfully');
       await device.disconnect();
       return true;
@@ -585,16 +626,15 @@ export const syncDeviceTime = async () => {
       retryCount++;
       if (retryCount < maxRetries) {
         logger.warn(`Time sync failed (attempt ${retryCount}/${maxRetries}): ${error.message}. Retrying in ${DEVICE.RETRY_DELAY || 2000}ms...`);
-        try { await device.disconnect(); } catch (_) {}
+        try { await device.disconnect(); } catch (_) { }
         await new Promise(resolve => setTimeout(resolve, DEVICE.RETRY_DELAY || 2000));
       } else {
         logger.error(`Failed to sync device time after ${maxRetries} attempts: ${error.message}`);
-        try { await device.disconnect(); } catch (_) {}
+        try { await device.disconnect(); } catch (_) { }
         return false;
       }
     }
   }
-}
 }
 
 /**
@@ -621,13 +661,13 @@ export const connectToDevice = async () => {
 export const startPolling = async () => {
   try {
     logger.info(`Starting attendance polling - Polling interval: ${POLL_INTERVAL_MS / 1000}s`);
-    
+
     // Do an initial poll immediately to initialize lastProcessedSN
     await pollDeviceOnce();
 
     // Then schedule recurring polls
     pollingInterval = setInterval(pollDeviceOnce, POLL_INTERVAL_MS);
-    
+
     logger.info('ZKTeco biometric integration active - monitoring for new punches');
   } catch (error) {
     logger.error(`Failed to start polling: ${error.message}`, { stack: error.stack });
@@ -647,3 +687,4 @@ export const disconnectFromDevice = async () => {
   } catch (error) {
     logger.error(`Disconnect error: ${error.message}`, { stack: error.stack });
   }
+};

@@ -325,10 +325,25 @@ export const getAllAttendance = async (req, res) => {
         filter.department = req.query.department;
     }
 
-    // For superAdmin and attendanceDepartment: show all attendance (same as Excel export), including all employees with shifts.
-    // For regular users (not superAdmin or attendanceDepartment): only show their own attendance.
     const requestingUserRole = req.user?.role?.name || req.user?.role;
-    if (requestingUserRole !== "superAdmin" && requestingUserRole !== "attendanceDepartment") {
+    if (requestingUserRole === "superAdmin") {
+      // SuperAdmin sees all attendance
+    } else if (requestingUserRole === "attendanceDepartment") {
+      // Admin (attendanceDepartment) only sees attendance of employees in departments they created.
+      // If employee has 2 shifts, only show the attendance row for the department created by this admin.
+      if (!hasDepartmentFilter) {
+        const departmentsCreatedByUser = await Department.find({
+          createdBy: req.user._id,
+          isActive: true
+        }).select('_id');
+        const deptIds = departmentsCreatedByUser.map(d => d._id);
+        if (deptIds.length > 0) {
+          filter.department = { $in: deptIds };
+        } else {
+          filter.department = { $in: [] }; // no departments created -> no attendance
+        }
+      }
+    } else {
       // Regular users see only their own attendance
       filter.employee = req.user._id;
     }
@@ -367,20 +382,22 @@ export const getAttendanceById = async (req, res) => {
       });
     }
 
-    // For attendanceDepartment role, only allow viewing attendance of employees they created or their own
+    // For attendanceDepartment role: allow only if this attendance record's department was created by them
     const requestingUserRole = req.user?.role?.name || req.user?.role;
     if (requestingUserRole === "attendanceDepartment") {
-      const attendanceEmployeeId = attendance.employee?._id || attendance.employee;
-      const employeeCreatedBy = attendance.employee?.createdBy?._id || attendance.employee?.createdBy;
-      
-      // Allow if it's their own attendance OR if they created the employee
-      const isOwnAttendance = String(attendanceEmployeeId) === String(req.user._id);
-      const isCreatedByUser = String(employeeCreatedBy) === String(req.user._id);
-      
-      if (!isOwnAttendance && !isCreatedByUser) {
+      const attDeptId = attendance.department?._id || attendance.department;
+      if (!attDeptId) {
         return res.status(403).json({
           success: false,
-          message: "Access denied. You can only view attendance of employees you created.",
+          message: "Access denied. You can only view attendance for departments you created.",
+        });
+      }
+      const dept = await Department.findById(attDeptId).select('createdBy');
+      const isOwnDept = dept && String(dept.createdBy) === String(req.user._id);
+      if (!isOwnDept) {
+        return res.status(403).json({
+          success: false,
+          message: "Access denied. You can only view attendance for departments you created.",
         });
       }
     }
@@ -411,21 +428,19 @@ export const getTodayAttendance = async (req, res) => {
       }
     };
 
-    // For attendanceDepartment role, only show attendance of employees they created + their own attendance
+    // For attendanceDepartment role: only show attendance for departments they created (same as list page)
     const requestingUserRole = req.user?.role?.name || req.user?.role;
     if (requestingUserRole === "attendanceDepartment") {
-      // Get all employees created by this user
-      const employeesCreatedByUser = await Employee.find({
+      const departmentsCreatedByUser = await Department.find({
         createdBy: req.user._id,
         isActive: true
       }).select('_id');
-      
-      const employeeIds = employeesCreatedByUser.map(emp => emp._id);
-      
-      // Also add the logged-in user's own ID to see their own attendance
-      employeeIds.push(req.user._id);
-      
-      filter.employee = { $in: employeeIds };
+      const deptIds = departmentsCreatedByUser.map(d => d._id);
+      if (deptIds.length > 0) {
+        filter.department = { $in: deptIds };
+      } else {
+        filter.department = { $in: [] };
+      }
     }
 
     const attendanceRecords = await Attendance.find(filter)

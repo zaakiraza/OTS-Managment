@@ -85,10 +85,13 @@ export const DEVICE = {
   
   // Polling interval (30 seconds)
   DEFAULT_POLL_INTERVAL: 30000,
-  
+
+  // How many months back to fetch logs from device (old logs)
+  LOG_FETCH_MONTHS: 2,
+
   // Rapid punch threshold (3 hours)
   RAPID_PUNCH_THRESHOLD: 3 * 60 * 60 * 1000,
-  
+
   // iClock protocol
   ICLOCK_MIN_PARTS: 2,
 };
