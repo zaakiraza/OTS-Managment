@@ -777,12 +777,41 @@ const Employees = () => {
         ...new Set((formData.additionalDepartments || []).map((id) => String(id))),
       ].filter((id) => id && id !== String(formData.department));
 
+      // Get department IDs already covered by existing shifts
+      const existingShiftDeptIds = new Set(allShifts.map(s => String(s.department)));
+
+      // Create default shifts for additional departments that don't have a shift yet
+      const additionalShiftsFromDepts = additionalDepartmentIds
+        .filter(deptId => !existingShiftDeptIds.has(deptId))
+        .map(deptId => ({
+          department: deptId,
+          isPrimary: false,
+          position: "",
+          monthlySalary: null,
+          currency: "PKR",
+          leaveThreshold: 0,
+          joiningDate: null,
+          workSchedule: {
+            checkInTime: "09:00",
+            checkOutTime: "17:00",
+            workingDaysPerWeek: 5,
+            workingHoursPerWeek: 40,
+            weeklyOffs: ["Saturday", "Sunday"],
+            daySchedules: {},
+          },
+          isActive: true,
+          daysOfWeek: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
+        }));
+
+      // Merge all shifts
+      const finalShifts = [...allShifts, ...additionalShiftsFromDepts];
+
       // Ensure department is a valid string (not empty)
       const submitData = {
         ...formData,
         department: formData.department || null,
         additionalDepartments: additionalDepartmentIds,
-        shifts: allShifts,
+        shifts: finalShifts,
       };
 
       // Remove old individual fields that are now in shifts (but keep position at top level for validation)
@@ -1709,7 +1738,7 @@ const Employees = () => {
                             onChange={() => handleMultiDeptToggle(String(dept._id), 'additionalDepartments')}
                           />
                           <span className="dept-name">
-                            {"—".repeat(dept.level || 0)} {dept.name}
+                            {dept.name}
                           </span>
                           <span className="dept-code">({dept.code})</span>
                         </label>
