@@ -17,6 +17,8 @@ function Tasks() {
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [selectedTask, setSelectedTask] = useState(null);
   const [newComment, setNewComment] = useState("");
+  const [leaveConflicts, setLeaveConflicts] = useState([]);
+  const [checkingLeaves, setCheckingLeaves] = useState(false);
   const [filter, setFilter] = useState({
     status: "all", // 'all', 'overdue', 'todo', 'in-progress', 'completed'
     dateRange: "week", // 'week', 'month', 'range', 'all'
@@ -212,8 +214,48 @@ function Tasks() {
     setFormData({ ...formData, assignedTo: newAssigned });
   };
 
+  // Check for leave conflicts when due date or assigned employees change
+  const checkLeaveConflicts = async (employeeIds, dueDate) => {
+    if (!employeeIds || employeeIds.length === 0 || !dueDate) {
+      setLeaveConflicts([]);
+      return;
+    }
+
+    try {
+      setCheckingLeaves(true);
+      const response = await taskAPI.checkEmployeeLeaves(employeeIds, dueDate);
+      if (response.data.success) {
+        setLeaveConflicts(response.data.employeesOnLeave || []);
+      }
+    } catch (error) {
+      console.error("Error checking leaves:", error);
+      setLeaveConflicts([]);
+    } finally {
+      setCheckingLeaves(false);
+    }
+  };
+
+  // Effect to check leaves when due date or assignedTo changes
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      if (formData.assignedTo?.length > 0 && formData.dueDate) {
+        checkLeaveConflicts(formData.assignedTo, formData.dueDate);
+      } else {
+        setLeaveConflicts([]);
+      }
+    }, 300);
+    return () => clearTimeout(timeoutId);
+  }, [formData.assignedTo, formData.dueDate]);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // Prevent submission if there are leave conflicts
+    if (leaveConflicts.length > 0) {
+      toast.error("Cannot create task: Due date conflicts with employee leave(s)");
+      return;
+    }
+    
     try {
       setLoading(true);
       if (selectedTask) {
@@ -324,6 +366,7 @@ function Tasks() {
     setFilteredEmployees([]);
     setSelectedTask(null);
     setShowModal(false);
+    setLeaveConflicts([]);
   };
 
   const openCreateTaskModal = () => {
@@ -846,7 +889,28 @@ function Tasks() {
                         }
                         required
                         min={new Date().toISOString().split("T")[0]}
+                        className={leaveConflicts.length > 0 ? "input-error" : ""}
                       />
+                      {checkingLeaves && (
+                        <small style={{color: '#64748b', fontSize: '12px', marginTop: '4px', display: 'block'}}>
+                          <i className="fas fa-spinner fa-spin"></i> Checking employee leaves...
+                        </small>
+                      )}
+                      {leaveConflicts.length > 0 && (
+                        <div className="leave-conflict-warning">
+                          <i className="fas fa-exclamation-triangle"></i>
+                          <div>
+                            <strong>Due date conflicts with approved leave:</strong>
+                            <ul>
+                              {leaveConflicts.map((conflict, idx) => (
+                                <li key={idx}>
+                                  {conflict.name} ({conflict.empCode}) - {conflict.leaveType} leave
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     <div className="form-group">
@@ -918,8 +982,12 @@ function Tasks() {
                     >
                       Cancel
                     </button>
-                    <button type="submit" className="btn-primary" disabled={loading}>
-                      {loading ? "Saving..." : selectedTask ? "Update" : "Create"}
+                    <button 
+                      type="submit" 
+                      className="btn-primary" 
+                      disabled={loading || checkingLeaves || leaveConflicts.length > 0}
+                    >
+                      {loading ? "Saving..." : checkingLeaves ? "Checking..." : selectedTask ? "Update" : "Create"}
                     </button>
                   </div>
                 </form>

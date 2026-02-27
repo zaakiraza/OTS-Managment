@@ -430,6 +430,52 @@
   resize: vertical;
 }
 
+/* Leave conflict warning */
+.leave-conflict-warning {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  background: linear-gradient(135deg, #fef3cd 0%, #fff3cd 100%);
+  border: 1px solid #ffc107;
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-top: 10px;
+  color: #856404;
+  font-size: 13px;
+}
+
+.leave-conflict-warning i {
+  color: #e67e22;
+  font-size: 16px;
+  margin-top: 2px;
+}
+
+.leave-conflict-warning strong {
+  display: block;
+  margin-bottom: 6px;
+  color: #7a5700;
+}
+
+.leave-conflict-warning ul {
+  margin: 0;
+  padding-left: 18px;
+  list-style: disc;
+}
+
+.leave-conflict-warning ul li {
+  margin-bottom: 4px;
+}
+
+.form-group input.input-error {
+  border-color: #ef4444;
+  background: #fef2f2;
+}
+
+.form-group input.input-error:focus {
+  border-color: #ef4444;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.12);
+}
+
 .form-row {
   display: grid;
   grid-template-columns: repeat(2, 1fr);

@@ -335,6 +335,7 @@
   
   .nav-item {
     flex: 0 0 auto;
+    width: auto;
     padding: 6px 8px;
     margin: 0;
     flex-direction: column;

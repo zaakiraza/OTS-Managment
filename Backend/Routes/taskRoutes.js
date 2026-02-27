@@ -11,6 +11,7 @@ import {
   getTaskStats,
   getTaskReport,
   getEmployeesForTaskAssignment,
+  checkEmployeeLeavesForDate,
 } from "../Controller/taskController.js";
 import { verifyToken, hasRole } from "../Middleware/auth.js";
 import { taskAttachmentUpload, handleUploadError } from "../Middleware/fileUpload.js";
@@ -26,6 +27,9 @@ router.patch("/:id/status", updateTaskStatus);
 
 // Get employees available for task assignment in a department (consider shifts)
 router.get("/employees/for-assignment", hasRole("superAdmin", "teamLead", "attendanceDepartment"), getEmployeesForTaskAssignment);
+
+// Check employee leaves for a specific date (for due date validation)
+router.get("/check-leaves", hasRole("superAdmin", "teamLead", "attendanceDepartment"), checkEmployeeLeavesForDate);
 
 // Team leads, attendance department, and above can create and manage tasks
 router.post("/", hasRole("superAdmin", "teamLead", "attendanceDepartment"), taskAttachmentUpload, handleUploadError, createTask);

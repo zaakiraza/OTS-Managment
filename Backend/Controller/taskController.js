@@ -1,5 +1,6 @@
 import Task from "../Model/Task.js";
 import Employee from "../Model/Employee.js";
+import Leave from "../Model/Leave.js";
 import { notifyTaskAssigned, notifyTaskStatusChange } from "../Utils/emailNotifications.js";
 import { logTaskAction } from "../Utils/auditLogger.js";
 import { getFileInfo } from "../Middleware/fileUpload.js";
@@ -219,7 +220,7 @@ export const getTaskById = async (req, res) => {
 // Create new task (Team leads and above)
 export const createTask = async (req, res) => {
   try {
-    const { assignedTo, department, ...otherData } = req.body;
+    const { assignedTo, department, dueDate, ...otherData } = req.body;
     
     // Ensure assignedTo is an array
     const assignees = Array.isArray(assignedTo) ? assignedTo : [assignedTo];
@@ -240,6 +241,38 @@ export const createTask = async (req, res) => {
         success: false,
         message: "One or more employees not found",
       });
+    }
+
+    // Check if due date falls on any assignee's approved leave
+    if (dueDate) {
+      const dueDateObj = new Date(dueDate);
+      dueDateObj.setHours(0, 0, 0, 0);
+      const dueDateEnd = new Date(dueDate);
+      dueDateEnd.setHours(23, 59, 59, 999);
+
+      const leavesOnDueDate = await Leave.find({
+        employee: { $in: assignees },
+        status: "approved",
+        startDate: { $lte: dueDateEnd },
+        endDate: { $gte: dueDateObj },
+      }).populate("employee", "name employeeId");
+
+      if (leavesOnDueDate.length > 0) {
+        const employeesOnLeave = leavesOnDueDate.map(
+          (leave) => `${leave.employee.name} (${leave.employee.employeeId})`
+        );
+        return res.status(400).json({
+          success: false,
+          message: `Cannot set due date to ${new Date(dueDate).toLocaleDateString()} - the following employee(s) have approved leave: ${employeesOnLeave.join(", ")}`,
+          employeesOnLeave: leavesOnDueDate.map((l) => ({
+            employeeId: l.employee._id,
+            name: l.employee.name,
+            leaveType: l.leaveType,
+            startDate: l.startDate,
+            endDate: l.endDate,
+          })),
+        });
+      }
     }
 
     // Determine task department
@@ -272,6 +305,7 @@ export const createTask = async (req, res) => {
 
     const taskData = {
       ...otherData,
+      dueDate,
       assignedTo: assignees,
       department: taskDept,
       assignedBy: req.user._id,
@@ -822,6 +856,53 @@ export const getEmployeesForTaskAssignment = async (req, res) => {
       success: true,
       count: enrichedEmployees.length,
       data: enrichedEmployees,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// Check if employees have approved leave on a specific date
+export const checkEmployeeLeavesForDate = async (req, res) => {
+  try {
+    const { employeeIds, date } = req.query;
+
+    if (!employeeIds || !date) {
+      return res.status(400).json({
+        success: false,
+        message: "employeeIds and date are required",
+      });
+    }
+
+    const empIds = Array.isArray(employeeIds) ? employeeIds : employeeIds.split(",");
+    const checkDate = new Date(date);
+    checkDate.setHours(0, 0, 0, 0);
+    const checkDateEnd = new Date(date);
+    checkDateEnd.setHours(23, 59, 59, 999);
+
+    const leavesOnDate = await Leave.find({
+      employee: { $in: empIds },
+      status: "approved",
+      startDate: { $lte: checkDateEnd },
+      endDate: { $gte: checkDate },
+    }).populate("employee", "name employeeId");
+
+    const employeesOnLeave = leavesOnDate.map((leave) => ({
+      employeeId: leave.employee._id,
+      name: leave.employee.name,
+      empCode: leave.employee.employeeId,
+      leaveType: leave.leaveType,
+      startDate: leave.startDate,
+      endDate: leave.endDate,
+    }));
+
+    res.status(200).json({
+      success: true,
+      hasConflicts: employeesOnLeave.length > 0,
+      employeesOnLeave,
     });
   } catch (error) {
     res.status(500).json({
