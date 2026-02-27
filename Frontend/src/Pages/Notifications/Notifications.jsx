@@ -105,11 +105,27 @@ const Notifications = () => {
 
     // Navigate based on notification type (more specific than referenceType)
     const type = notification.type;
-    const referenceId = notification?.data?.referenceId;
+    const rawRef =
+      notification?.data?.referenceId ??
+      notification?.referenceId ??
+      notification?.data?.extra?.taskId;
+    const taskIdParam =
+      rawRef != null
+        ? typeof rawRef === "object" && rawRef.$oid
+          ? rawRef.$oid
+          : String(rawRef)
+        : null;
 
     // Deep-link task comments to open specific task with comments focused
-    if (type === "task_comment" && referenceId) {
-      navigate(`/my-tasks?taskId=${referenceId}&focus=comments`);
+    if (type === "task_comment" && taskIdParam) {
+      navigate(`/my-tasks?taskId=${taskIdParam}&focus=comments`);
+      return;
+    }
+
+    // Task notifications: navigate to my-tasks and open that task's modal
+    const taskTypes = ["task_assigned", "task_status_changed", "task_completed", "task_updated"];
+    if (taskTypes.includes(type) && taskIdParam) {
+      navigate(`/my-tasks?taskId=${taskIdParam}`);
       return;
     }
     
@@ -120,7 +136,7 @@ const Notifications = () => {
       leave_approved: "/my-attendance",
       leave_rejected: "/my-attendance",
       leave_cancelled: "/my-attendance",
-      // Task notifications
+      // Task notifications (fallback when no referenceId)
       task_assigned: "/my-tasks",
       task_status_changed: "/my-tasks",
       task_completed: "/my-tasks",

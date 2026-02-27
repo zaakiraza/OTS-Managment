@@ -349,11 +349,9 @@ export const createTask = async (req, res) => {
         type: "task_assigned",
         title: "New Task Assigned",
         message: `${req.user.name} assigned you a task: ${populatedTask.title}`,
-        data: {
-          referenceId: populatedTask._id,
-          referenceType: "Task",
-          extra: { priority: populatedTask.priority, dueDate: populatedTask.dueDate },
-        },
+        referenceId: populatedTask._id,
+        referenceType: "Task",
+        extra: { priority: populatedTask.priority, dueDate: populatedTask.dueDate },
         sender: req.user._id,
       });
     } catch (notifError) {
@@ -418,11 +416,9 @@ export const updateTaskStatus = async (req, res) => {
           type: "task_status_changed",
           title: "Task Status Updated",
           message: `${req.user.name} changed task "${updatedTask.title}" status to ${status}`,
-          data: {
-            referenceId: updatedTask._id,
-            referenceType: "Task",
-            extra: { status },
-          },
+          referenceId: updatedTask._id,
+          referenceType: "Task",
+          extra: { status },
           sender: req.user._id,
         });
       }

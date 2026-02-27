@@ -15,11 +15,27 @@ export const getMyNotifications = async (req, res) => {
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
-    const notifications = await Notification.find(filter)
+    const raw = await Notification.find(filter)
       .populate("sender", "name employeeId")
       .sort({ createdAt: -1 })
       .skip(skip)
-      .limit(parseInt(limit));
+      .limit(parseInt(limit))
+      .lean();
+
+    // Ensure data.referenceId is always a string when present (for deep-links)
+    const notifications = raw.map((n) => {
+      if (n.data?.referenceId != null) {
+        const ref = n.data.referenceId;
+        return {
+          ...n,
+          data: {
+            ...n.data,
+            referenceId: typeof ref === "object" && ref.toString ? ref.toString() : String(ref),
+          },
+        };
+      }
+      return n;
+    });
 
     const total = await Notification.countDocuments(filter);
     const unreadCount = await Notification.getUnreadCount(userId);

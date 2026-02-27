@@ -92,31 +92,37 @@ function MyTasks() {
     }
   };
 
-  const handleViewTask = async (task) => {
-    await openTaskById(task._id, false);
+  const handleViewTask = (task) => {
+    handledDeepLinkRef.current = false;
+    navigate(`/my-tasks?taskId=${task._id}`, { replace: true });
   };
 
+  // Open task modal when URL has taskId (e.g. from notification or in-page link)
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const taskId = params.get("taskId");
     const focus = params.get("focus");
 
-    if (!taskId || handledDeepLinkRef.current) return;
+    if (!taskId) return;
+    const taskIdStr = String(taskId);
+    const currentOpenId = selectedTask?._id != null ? String(selectedTask._id) : null;
+    if (currentOpenId === taskIdStr && showDetailModal) return;
+    if (handledDeepLinkRef.current && currentOpenId === taskIdStr) return;
 
     handledDeepLinkRef.current = true;
-    openTaskById(taskId, focus === "comments");
+    openTaskById(taskIdStr, focus === "comments");
+  }, [location.pathname, location.search]);
 
+  const closeTaskModal = () => {
+    setShowDetailModal(false);
+    setSelectedTask(null);
+    handledDeepLinkRef.current = false;
+    const params = new URLSearchParams(location.search);
     params.delete("taskId");
     params.delete("focus");
     const newSearch = params.toString();
-    navigate(
-      {
-        pathname: location.pathname,
-        search: newSearch ? `?${newSearch}` : "",
-      },
-      { replace: true }
-    );
-  }, [location.pathname, location.search, navigate]);
+    navigate({ pathname: location.pathname, search: newSearch ? `?${newSearch}` : "" }, { replace: true });
+  };
 
   const handleStatusChange = async (status) => {
     try {
@@ -579,7 +585,7 @@ function MyTasks() {
 
           {/* Task Detail Modal */}
           {showDetailModal && selectedTask && (
-            <div className="modal-overlay" onClick={() => setShowDetailModal(false)}>
+            <div className="modal-overlay" onClick={closeTaskModal}>
               <div className="modal-content task-detail-modal" onClick={(e) => e.stopPropagation()}>
                 <div className="modal-header">
                   <div className="task-detail-header-info">
@@ -591,7 +597,7 @@ function MyTasks() {
                       {selectedTask.priority}
                     </span>
                   </div>
-                  <button className="close-btn" onClick={() => setShowDetailModal(false)}>
+                  <button className="close-btn" onClick={closeTaskModal}>
                     ×
                   </button>
                 </div>
