@@ -95,6 +95,8 @@
   color: var(--text-dark, #0D0D0D);
   margin: 0;
   flex: 1;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .todo-card h3.completed {
